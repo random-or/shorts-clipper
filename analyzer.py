@@ -12,15 +12,15 @@ def find_best_segment(transcript_text):
     You are an expert short-form video editor for TikTok, YouTube Shorts, and Instagram Reels.
     Review the following video transcript which contains [start_time -> end_time]: text mappings.
     
-    Find the absolute most engaging, self-contained segment that lasts between 30 to 50 seconds. 
+    Analyze the transcript and select the single highest-value, high-energy sequence that fits ideally within 30 to 45 seconds, and strictly no longer than 60 seconds total.
     It should have a strong hook at the beginning and end cleanly without cutting off mid-sentence.
     
     Transcript:
     {transcript_text}
     
-    CRITICAL INPUT: You must respond ONLY with the start and end times separated by a comma. 
-    Do not add text, formatting, markdown, or words. 
-    Example Output format: 40.00,85.00
+    CRITICAL INPUT: You must respond ONLY with the raw start and end times separated by a comma. 
+    Do not add any extra text, formatting, markdown, or explanation. 
+    Example Output format: 41.62,75.20
     """
     
     try:

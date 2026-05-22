@@ -12,8 +12,19 @@ def download_video(url, output_path="raw_video.mp4"):
     Downloads the full video from the given URL using yt-dlp.
     """
     print(f"--- Downloading video: {url} ---")
+    
+    # Clean up any leftover partial files
+    partial_path = f"{output_path}.part"
+    if os.path.exists(partial_path):
+        os.remove(partial_path)
+    if os.path.exists(output_path):
+        os.remove(output_path)
+
     command = [
         "yt-dlp",
+        "--retries", "10",
+        "--fragment-retries", "10",
+        "--no-part",
         "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "-o", output_path,
         url

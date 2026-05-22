@@ -5,6 +5,7 @@ from transcribe import download_audio, transcribe_audio
 from analyzer import find_best_segment
 from editor import download_video, process_video
 from subtitles import generate_subtitles
+from scout import get_trending_link
 
 def run_pipeline(url):
     print(f"🚀 STARTING PIPELINE FOR: {url}")
@@ -64,7 +65,10 @@ def run_pipeline(url):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python pipeline.py <youtube_url>")
+        # No link provided? Autopilot engaged.
+        video_url = get_trending_link()
     else:
+        # Manual override for specific target sniping.
         video_url = sys.argv[1]
-        run_pipeline(video_url)
+    
+    run_pipeline(video_url)

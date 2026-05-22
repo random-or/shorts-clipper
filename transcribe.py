@@ -4,9 +4,20 @@ from faster_whisper import WhisperModel
 
 def download_audio(youtube_url):
     print("--- 1. DOWNLOADING AUDIO STREAM ---")
+    
+    # Clean up any leftover partial files from previous failed runs
+    for f in ["temp_audio.mp3", "temp_audio.webm", "temp_audio.webm.part", "temp_audio.m4a", "temp_audio.m4a.part"]:
+        if os.path.exists(f):
+            os.remove(f)
+
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
+        'retries': 10,
+        'fragment_retries': 10,
+        'file_access_retries': 5,
+        'retry_sleep_functions': {'http': lambda n: 5}, # Sleep 5s between retries
+        'nopart': True, # Don't use .part files, download directly
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -22,16 +33,20 @@ def transcribe_audio(audio_file):
     # Using the light 'tiny' model so it runs incredibly fast on regular CPUs
     model = WhisperModel("tiny.en", device="cpu", compute_type="int8", download_root="./models")
     
-    segments, info = model.transcribe(audio_file, beam_size=5, word_timestamps=True)
+    # vad_filter=True skips silent parts, massively speeding up CPU processing
+    segments, info = model.transcribe(audio_file, beam_size=5, word_timestamps=True, vad_filter=True)
     print(f"Detected language: '{info.language}' with probability {info.language_probability:.2f}")
     
-    segments = list(segments)  # Convert generator to list to use it later
+    print("\n--- ⚡ REAL-TIME TRANSCRIPTION STREAM ---")
+    processed_segments = []
     
-    print("\n--- TRANSCRIPT WITH TIMESTAMPS ---")
+    # By iterating directly over the generator, we stream the output to the console 
+    # as soon as it's processed, instead of freezing while waiting for the whole video.
     for segment in segments:
         print(f"[{segment.start:.2f}s -> {segment.end:.2f}s]: {segment.text}")
-    
-    return segments
+        processed_segments.append(segment)
+        
+    return processed_segments
 
 if __name__ == "__main__":
     # Feel free to change this URL to any short YouTube video you want to try!
