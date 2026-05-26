@@ -1,0 +1,10 @@
+services:
+  shorts-clipper:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./outputs:/app/outputs
+      - ./models:/app/models
+      - ./.cache:/app/.cache
+    command: ["python", "pipeline.py"]

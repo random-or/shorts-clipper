@@ -3,6 +3,7 @@ name = "shorts-clipper"
 version = "0.1.0"
 description = "Open-source AI shorts clipping pipeline."
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
 dependencies = [
   "faster-whisper>=1.0",
