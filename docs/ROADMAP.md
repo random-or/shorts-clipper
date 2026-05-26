@@ -48,18 +48,18 @@ There are no tracked tests, dependency metadata, README, package structure, sett
 - Add deterministic transcript formatting, timestamp parsing, and highlight scoring helpers.
 - Add unit tests for pure logic.
 
-### Phase 2: Modular pipeline
+### Phase 2: Modular pipeline [IN PROGRESS]
 
 - Move orchestration into `shorts_clipper.pipeline` services.
-- Replace global temp filenames with per-job work directories.
+- Replace global temp filenames with per-job work directories. [DONE]
 - Add a job manifest so interrupted jobs can resume.
-- Make existing top-level scripts thin compatibility wrappers.
+- Make existing top-level scripts thin compatibility wrappers. [DONE]
 - Add dry-run and JSON export modes.
 
-### Phase 3: Performance/rendering
+### Phase 3: Performance/rendering [IN PROGRESS]
 
-- Introduce an ffmpeg command builder that uses argument lists, not shell strings.
-- Combine trim, crop, scale, captions, and audio into a single ffmpeg pass where possible.
+- Introduce an ffmpeg command builder that uses argument lists, not shell strings. [DONE]
+- Combine trim, crop, scale, captions, and audio into a single ffmpeg pass where possible. [DONE]
 - Add hardware encoder selection (`h264_nvenc`, `h264_vaapi`, `h264_videotoolbox`, fallback `libx264`).
 - Add multiprocessing for multiple candidate renders or batch URLs.
 - Cache transcripts and scene metadata by source fingerprint.

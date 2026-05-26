@@ -23,6 +23,8 @@ class FfmpegRenderOptions:
     overwrite: bool = True
     extra_input_args: tuple[str, ...] = ()
     extra_output_args: tuple[str, ...] = ()
+    font_name: str = "DejaVu Sans"
+    font_size: int = 24
 
 
 def build_vertical_render_command(
@@ -33,6 +35,7 @@ def build_vertical_render_command(
     end: float,
     source_width: int,
     source_height: int,
+    subtitles_path: str | Path | None = None,
     options: FfmpegRenderOptions | None = None,
 ) -> list[str]:
     if start < 0:
@@ -47,7 +50,27 @@ def build_vertical_render_command(
         target_width=opts.target_width,
         target_height=opts.target_height,
     )
-    video_filter = f"{crop.as_ffmpeg_filter()},scale={opts.target_width}:{opts.target_height}"
+    
+    filters = [
+        crop.as_ffmpeg_filter(),
+        f"scale={opts.target_width}:{opts.target_height}"
+    ]
+    
+    if subtitles_path:
+        # ffmpeg subtitles filter is notoriously difficult with paths.
+        # We use a double-escaped path for the filter.
+        # On Linux, we just need to escape the colon if it's there (rare) 
+        # and wrap it in single quotes if it has spaces.
+        path_str = str(subtitles_path).replace("\\", "/").replace(":", "\\:")
+        
+        subtitle_style = (
+            f"force_style='FontName={opts.font_name},FontSize={opts.font_size},"
+            "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,"
+            "Alignment=2,MarginV=140'"
+        )
+        filters.append(f"subtitles='{path_str}':{subtitle_style}")
+
+    video_filter = ",".join(filters)
 
     command = ["ffmpeg"]
     if opts.overwrite:

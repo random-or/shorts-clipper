@@ -25,7 +25,8 @@ def download_video(url, output_path="raw_video.mp4"):
         "--retries", "10",
         "--fragment-retries", "10",
         "--no-part",
-        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "-f", "bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "--merge-output-format", "mp4",
         "-o", output_path,
         url
     ]

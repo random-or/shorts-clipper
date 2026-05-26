@@ -2,17 +2,15 @@ import os
 from yt_dlp import YoutubeDL
 from faster_whisper import WhisperModel
 
-def download_audio(youtube_url):
+def download_audio(youtube_url, output_path="temp_audio.mp3"):
     print("--- 1. DOWNLOADING AUDIO STREAM ---")
     
-    # Clean up any leftover partial files from previous failed runs
-    for f in ["temp_audio.mp3", "temp_audio.webm", "temp_audio.webm.part", "temp_audio.m4a", "temp_audio.m4a.part"]:
-        if os.path.exists(f):
-            os.remove(f)
+    # Base name without extension for outtmpl
+    base_name = os.path.splitext(output_path)[0]
 
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': 'temp_audio.%(ext)s',
+        'outtmpl': f'{base_name}.%(ext)s',
         'retries': 10,
         'fragment_retries': 10,
         'file_access_retries': 5,
@@ -26,7 +24,7 @@ def download_audio(youtube_url):
     }
     with YoutubeDL(ydl_opts) as ydl:
         ydl.download([youtube_url])
-    return "temp_audio.mp3"
+    return output_path
 
 def transcribe_audio(audio_file):
     print("\n--- 2. TRANSCRIBING AUDIO LOCALLY (FREE) ---")
