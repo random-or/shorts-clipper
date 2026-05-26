@@ -2,103 +2,121 @@ import os
 import sys
 import tempfile
 import subprocess
+import re
 from pathlib import Path
 
-from transcribe import download_audio, transcribe_audio
 from analyzer import find_best_segment
-from editor import download_video
+from editor import download_video, process_video
 from scout import get_trending_link
-from shorts_clipper.transcription.formatting import format_transcript, to_srt
-from shorts_clipper.utils.video import get_video_metadata
-from shorts_clipper.rendering.ffmpeg import build_vertical_render_command, FfmpegRenderOptions
+from subtitles import generate_subtitles
+from shorts_clipper.core.models import TranscriptSegment
+
+def srt_time_to_seconds(time_str):
+    """Converts HH:MM:SS,mmm to float seconds."""
+    h, m, s_ms = time_str.split(':')
+    s, ms = s_ms.split(',')
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
+
+def get_youtube_subtitles(url, work_path):
+    """Downloads English auto-generated or manual subtitles from YouTube and parses them."""
+    print("\n--- 1. FETCHING NATIVE ENGLISH SUBTITLES ---")
+    output_base = work_path / "subs"
+    command = [
+        "yt-dlp",
+        "--write-auto-subs",
+        "--write-subs",
+        "--sub-lang", "en,en-orig",
+        "--sub-format", "srt",
+        "--skip-download",
+        "-o", str(output_base),
+        url
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        print("⚠️ No English auto-subtitles found. Pipeline cannot proceed safely.")
+        return []
+    
+    # Find any .en.srt or .en-orig.srt file
+    subs_files = list(work_path.glob("subs.en*.srt"))
+    if not subs_files:
+        return []
+    
+    srt_path = subs_files[0]
+    with open(srt_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # Basic SRT parser
+    blocks = re.split(r'\n\s*\n', content.strip())
+    segments = []
+    for block in blocks:
+        lines = block.split('\n')
+        if len(lines) >= 3:
+            times = re.findall(r'(\d+:\d+:\d+,\d+)', lines[1])
+            if len(times) == 2:
+                start = srt_time_to_seconds(times[0])
+                end = srt_time_to_seconds(times[1])
+                text = " ".join(lines[2:]).strip()
+                segments.append(TranscriptSegment(start=start, end=end, text=text))
+    
+    print(f"✅ Loaded {len(segments)} English subtitle segments.")
+    return segments
 
 def run_pipeline(url):
-    print(f"🚀 STARTING PRODUCTION PIPELINE FOR: {url}")
+    print(f"🚀 STARTING AUTONOMOUS ENGLISH FACTORY FOR: {url}")
     
-    # Use a unique work directory per job
     with tempfile.TemporaryDirectory(prefix="shorts_clipper_") as work_dir:
         work_path = Path(work_dir)
-        print(f"📁 Work directory: {work_path}")
         
         try:
-            # 1. Download and Transcribe
-            audio_path = str(work_path / "temp_audio.mp3")
-            download_audio(url, audio_path)
-            segments = transcribe_audio(audio_path)
+            # 1. Fetch transcript
+            segments = get_youtube_subtitles(url, work_path)
             
-            # 2. Prepare transcript for Gemini
-            transcript_text = format_transcript(segments)
+            micro_clip_path = work_path / "micro_clip.mp4"
             
-            # 3. Analyze with Gemini / Fallback
-            raw_video_path = work_path / "raw_video.mp4"
-            
-            # We need metadata to validate timestamps
-            print(f"--- Downloading source video for metadata and rendering ---")
-            download_video(url, str(raw_video_path))
-            metadata = get_video_metadata(str(raw_video_path))
-            print(f"Source video: {metadata.width}x{metadata.height}, {metadata.duration:.2f}s")
-
             if not segments:
-                print("⚠️ NO SPEECH DETECTED. Using duration-based fallback.")
-                start_time = 0.0
-                end_time = min(metadata.duration, 30.0)
+                print("⚠️ No English auto-subtitles found. Engaging Local Whisper Fallback.")
+                # If no transcript, we pick a default 30s window (e.g., 10s to 40s)
+                start_time, end_time = 10.0, 40.0
+                visual_layout = "crop_center"
+                download_video(url, str(micro_clip_path), start_time=start_time, end_time=end_time)
+                
+                # Transcribe ONLY the 30s micro-clip locally
+                segments = get_local_transcription(str(micro_clip_path))
             else:
-                time_range = find_best_segment(transcript_text)
-                try:
-                    start_time, end_time = map(float, time_range.split(','))
-                except ValueError:
-                    print(f"ERROR: Gemini returned invalid format: {time_range}")
-                    return
-                
-                # Sanity check timestamps
-                if start_time >= metadata.duration:
-                    print(f"⚠️ Start time {start_time} exceeds duration {metadata.duration}. Resetting to 0.")
-                    start_time = 0.0
-                
-                if end_time <= start_time:
-                    print(f"⚠️ End time {end_time} is before start time {start_time}. Using 30s window.")
-                    end_time = min(start_time + 30.0, metadata.duration)
-                
-                end_time = min(end_time, metadata.duration)
+                transcript_text = "\n".join([f"[{seg.start:.1f}s - {seg.end:.1f}s] {seg.text}" for seg in segments])
 
-            # 4. Generate SRT if there are segments
-            srt_path = None
-            if segments:
-                srt_path = work_path / "subtitles.srt"
-                srt_content = to_srt(segments, start_offset=start_time)
-                srt_path.write_text(srt_content)
+                # 2. Analyze with Gemini
+                analysis_result = find_best_segment(transcript_text)
+                try:
+                    parts = analysis_result.split(',')
+                    start_time, end_time = float(parts[0]), float(parts[1])
+                    visual_layout = parts[2] if len(parts) > 2 else "crop_center"
+                except (ValueError, IndexError):
+                    print(f"❌ ERROR: Gemini returned invalid format: {analysis_result}")
+                    return
+
+                # 3. Download micro-clip using yt-dlp sections
+                download_video(url, str(micro_clip_path), start_time=start_time, end_time=end_time)
             
-            # 5. Single-Pass Render with Ffmpeg
+            # 4. Vertical Crop (No subclipping here as it's already pre-snipped)
+            print("\n--- 4. PROCESSING VERTICAL CROP ---")
+            cropped_clip_path = work_path / "cropped.mp4"
+            process_video(str(micro_clip_path), start_time, end_time, str(cropped_clip_path), visual_layout)
+            
+            # 5. Burn Subtitles and Finalize
+            print("\n--- 5. ASSEMBLING FINAL MOVIEPY COMPILATION ---")
             final_output = Path("final_output.mp4").absolute()
-            render_opts = FfmpegRenderOptions(
-                target_width=1080,
-                target_height=1920,
-                preset="fast",
-                font_size=24
+            generate_subtitles(
+                str(cropped_clip_path), 
+                segments, 
+                start_time, 
+                end_time, 
+                str(final_output)
             )
             
-            # We change to work_dir to make subtitle path relative for ffmpeg
-            old_cwd = os.getcwd()
-            os.chdir(work_dir)
-            try:
-                render_cmd = build_vertical_render_command(
-                    input_path="raw_video.mp4",
-                    output_path=final_output,
-                    start=start_time,
-                    end=end_time,
-                    source_width=metadata.width,
-                    source_height=metadata.height,
-                    subtitles_path="subtitles.srt" if srt_path else None,
-                    options=render_opts
-                )
-                
-                print(f"\n--- 🎬 RENDERING SINGLE PASS: {start_time:.2f}s to {end_time:.2f}s ---")
-                print(f"Command: {' '.join(render_cmd)}")
-                subprocess.run(render_cmd, check=True)
-            finally:
-                os.chdir(old_cwd)
-            
-            print(f"\n✅ SUCCESS! Sexy video ready at: {final_output}")
+            print(f"\n✅ SUCCESS! Autonomous English Factory is LIVE.")
+            print(f"🔥 Viral clip ready at: {final_output}")
             
         except Exception as e:
             print(f"❌ PIPELINE FAILED: {e}")
