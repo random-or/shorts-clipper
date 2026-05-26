@@ -1,6 +1,7 @@
 import os
 from google import genai
 from google.genai import types, errors
+from shorts_clipper.providers.base import parse_clip_window
 
 def find_best_segment(transcript_text):
     print("\n--- 3. CONSULTING THE ORACLE (GEMINI) FOR BEST HIGH LIGHT ---")
@@ -29,7 +30,9 @@ def find_best_segment(transcript_text):
             contents=prompt,
         )
         result = response.text.strip()
-    except (errors.ClientError, Exception) as e:
+        window = parse_clip_window(result)
+        result = f"{window.start:.2f},{window.end:.2f}"
+    except (errors.ClientError, ValueError, Exception) as e:
         print("[Fallback Mode Activated: Using manual timestamp override]")
         result = "41.62,81.84"
     

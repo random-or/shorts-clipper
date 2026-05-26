@@ -6,6 +6,7 @@ from analyzer import find_best_segment
 from editor import download_video, process_video
 from subtitles import generate_subtitles
 from scout import get_trending_link
+from shorts_clipper.transcription.formatting import format_transcript
 
 def run_pipeline(url):
     print(f"🚀 STARTING PIPELINE FOR: {url}")
@@ -21,9 +22,7 @@ def run_pipeline(url):
         segments = transcribe_audio(audio_path)
         
         # 2. Prepare transcript for Gemini
-        transcript_text = ""
-        for segment in segments:
-            transcript_text += f"[{segment.start:.2f}s -> {segment.end:.2f}s]: {segment.text}\n"
+        transcript_text = format_transcript(segments)
             
         # 3. Analyze with Gemini
         # Ensure API key is present
