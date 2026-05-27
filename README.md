@@ -80,7 +80,10 @@ cd shorts-clipper
 python -m venv env
 source env/bin/activate  # On Windows use `env\Scripts\activate`
 
-# Install the package and dependencies
+# Install the required dependencies
+pip install -r requirements.txt
+
+# Install the package itself
 pip install -e .
 ```
 
