@@ -45,7 +45,7 @@ class Settings:
     enable_gpu: bool = False
 
     @classmethod
-    def from_env(cls, env_path: str | Path = ".env") -> "Settings":
+    def from_env(cls, env_path: str | Path = ".env") -> Settings:
         path = Path(env_path)
         file_values = _parse_env_file(path)
         return cls(
@@ -59,7 +59,13 @@ class Settings:
             whisper_compute_type=_env("SHORTS_WHISPER_COMPUTE_TYPE", file_values, "int8") or "int8",
             models_dir=Path(_env("SHORTS_MODELS_DIR", file_values, "models") or "models"),
             output_dir=Path(_env("SHORTS_OUTPUT_DIR", file_values, "outputs") or "outputs"),
-            cache_dir=Path(_env("SHORTS_CACHE_DIR", file_values, ".cache/shorts-clipper") or ".cache/shorts-clipper"),
+            cache_dir=Path(
+                _env("SHORTS_CACHE_DIR", file_values, ".cache/shorts-clipper")
+                or ".cache/shorts-clipper"
+            ),
             log_level=(_env("SHORTS_LOG_LEVEL", file_values, "INFO") or "INFO").upper(),
-            enable_gpu=(_env("SHORTS_ENABLE_GPU", file_values, "false") or "false").lower() in {"1", "true", "yes", "on"},
+            enable_gpu=(
+                (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false")
+                .lower() in {"1", "true", "yes", "on"}
+            ),
         )

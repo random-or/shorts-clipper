@@ -13,15 +13,15 @@ def segment_from_any(segment: Any) -> TranscriptSegment:
     for word in getattr(segment, "words", None) or []:
         words.append(
             TranscriptWord(
-                start=float(getattr(word, "start")),
-                end=float(getattr(word, "end")),
-                word=str(getattr(word, "word")),
+                start=float(word.start),
+                end=float(word.end),
+                word=str(word.word),
                 probability=getattr(word, "probability", None),
             )
         )
     return TranscriptSegment(
-        start=float(getattr(segment, "start")),
-        end=float(getattr(segment, "end")),
+        start=float(segment.start),
+        end=float(segment.end),
         text=str(getattr(segment, "text", "")).strip(),
         words=words,
     )

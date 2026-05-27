@@ -12,6 +12,9 @@ dependencies = [
   "yt-dlp>=2024.1.0",
 ]
 
+[project.scripts]
+shorts-clipper = "shorts_clipper.__main__:main"
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

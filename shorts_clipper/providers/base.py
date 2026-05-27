@@ -11,7 +11,9 @@ from shorts_clipper.core.models import ClipWindow, TranscriptSegment
 _NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
 
 
-def parse_clip_window(text: str, *, min_start: float = 0.0, max_end: float | None = None) -> ClipWindow:
+def parse_clip_window(
+    text: str, *, min_start: float = 0.0, max_end: float | None = None
+) -> ClipWindow:
     numbers = [float(match.group(0)) for match in _NUMBER_RE.finditer(text)]
     if len(numbers) < 2:
         raise ValueError(f"expected at least two timestamps, got: {text!r}")

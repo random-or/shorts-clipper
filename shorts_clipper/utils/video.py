@@ -2,6 +2,7 @@ import json
 import subprocess
 from dataclasses import dataclass
 
+
 @dataclass
 class VideoMetadata:
     width: int
