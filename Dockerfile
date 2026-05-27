@@ -12,7 +12,7 @@ RUN apt-get update \
 
 COPY pyproject.toml README.md ./
 COPY shorts_clipper ./shorts_clipper
-COPY analyzer.py editor.py pipeline.py scout.py subtitles.py transcribe.py ./
+COPY analyzer.py editor.py pipeline.py scout.py subtitles.py ./
 COPY tests ./tests
 
 RUN python -m pip install --upgrade pip \

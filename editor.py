@@ -1,9 +1,9 @@
 import os
-import sys
 import subprocess
+import sys
+
 try:
-    from moviepy import VideoFileClip, CompositeVideoClip
-    import moviepy.video.fx as vfx
+    from moviepy import CompositeVideoClip, VideoFileClip
 except ImportError:
     print("Error: moviepy not found. Please install it using 'pip install moviepy'.")
     sys.exit(1)
@@ -43,11 +43,16 @@ def download_video(url, output_path="raw_video.mp4", start_time=None, end_time=N
     subprocess.run(command, check=True)
     return output_path
 
-def process_video(input_path, start_time, end_time, output_path="output_short.mp4", visual_layout="crop_center"):
+def process_video(
+    input_path, start_time, end_time, output_path="output_short.mp4", visual_layout="crop_center"
+):
     """
     Crops the video to a 9:16 vertical layout dynamically based on visual_layout.
     """
-    print(f"--- Processing vertical layout: {start_time}s to {end_time}s (Layout: {visual_layout}) ---")
+    print(
+        f"--- Processing vertical layout: {start_time}s to {end_time}s"
+        f" (Layout: {visual_layout}) ---"
+    )
     
     # 1. Load the video
     clip = VideoFileClip(input_path)

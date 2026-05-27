@@ -1,6 +1,7 @@
-import subprocess
 import json
+import subprocess
 import sys
+
 
 def get_trending_link():
     """
@@ -9,7 +10,10 @@ def get_trending_link():
     """
     print("\n🚀 SCOUTING THE GLOBAL ENGLISH RADAR: HUNTING FOR ALPHA...")
     
-    search_query = 'ytsearch10:viral podcast clips english OR trending gaming clip OR mrbeast speed streams'
+    search_query = (
+        "ytsearch10:viral podcast clips english "
+        "OR trending gaming clip OR mrbeast speed streams"
+    )
     
     command = [
         'yt-dlp',
@@ -49,7 +53,10 @@ def get_trending_link():
             # Filters: 
             # 1. Long-form (> 120s) - effectively excludes Shorts
             # 2. English subtitles (manual or auto)
-            has_en = 'en' in subtitles or 'en-orig' in subtitles or 'en' in auto_subs or 'en-orig' in auto_subs
+            has_en = (
+                "en" in subtitles or "en-orig" in subtitles
+                or "en" in auto_subs or "en-orig" in auto_subs
+            )
             
             if duration > 120 and has_en:
                 print(f"🎯 GLOBAL ALPHA TARGET ACQUIRED: {url}")

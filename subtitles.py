@@ -1,7 +1,8 @@
-import os
-from moviepy import VideoFileClip, TextClip, CompositeVideoClip
 from faster_whisper import WhisperModel
+from moviepy import CompositeVideoClip, TextClip, VideoFileClip
+
 from shorts_clipper.core.models import TranscriptSegment, TranscriptWord
+
 
 def get_local_transcription(video_path):
     """
@@ -82,7 +83,8 @@ def generate_subtitles(video_path, segments, start_time, end_time, output_path="
         else:
             # Fallback to splitting text if no word-level data
             words = seg.text.split()
-            if not words: continue
+            if not words:
+                continue
             
             chunk_count = (len(words) + 1) // 2
             duration_per_chunk = (seg.end - seg.start) / chunk_count
