@@ -13,3 +13,4 @@ outputs/
 .ruff_cache/
 .env
 !.env.example
+*.egg-info/
