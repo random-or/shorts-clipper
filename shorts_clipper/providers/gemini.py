@@ -58,13 +58,9 @@ class GeminiProvider(HighlightProvider):
 
         from google import genai  # type: ignore[import]
 
-        self._client = genai.Client(
-            api_key=api_key or os.environ.get("GEMINI_API_KEY")
-        )
+        self._client = genai.Client(api_key=api_key or os.environ.get("GEMINI_API_KEY"))
 
-    def select_clip(
-        self, segments: Sequence[TranscriptSegment]
-    ) -> ClipWindow:
+    def select_clip(self, segments: Sequence[TranscriptSegment]) -> ClipWindow:
         """Return the best clip window. Falls back to a heuristic on failure."""
         transcript_text = format_transcript(segments)
         prompt = _PROMPT_TEMPLATE.format(transcript=transcript_text)
@@ -78,9 +74,7 @@ class GeminiProvider(HighlightProvider):
             raw = response.text.strip()
             log.debug("Gemini raw response: %r", raw)
 
-            match = re.search(
-                r"(\d+\.?\d*),\s*(\d+\.?\d*),\s*([a-zA-Z_]+)", raw
-            )
+            match = re.search(r"(\d+\.?\d*),\s*(\d+\.?\d*),\s*([a-zA-Z_]+)", raw)
             if not match:
                 raise ProviderError(f"Unrecognisable format: {raw!r}")
 
@@ -91,7 +85,9 @@ class GeminiProvider(HighlightProvider):
             window = ClipWindow(start=start, end=end)
             log.info(
                 "Gemini selected: %.1fs \u2192 %.1fs [%s]",
-                window.start, window.end, layout,
+                window.start,
+                window.end,
+                layout,
             )
             return window, layout  # type: ignore[return-value]
 
@@ -99,13 +95,14 @@ class GeminiProvider(HighlightProvider):
             fb_start, fb_end = self._fallback_window
             log.warning(
                 "Gemini failed (%s). Using fallback %.1fs\u2192%.1fs [%s]",
-                exc, fb_start, fb_end, self._fallback_layout,
+                exc,
+                fb_start,
+                fb_end,
+                self._fallback_layout,
             )
             return ClipWindow(start=fb_start, end=fb_end), self._fallback_layout  # type: ignore[return-value]
 
-    def select_clip_raw(
-        self, segments: Sequence[TranscriptSegment]
-    ) -> tuple[ClipWindow, str]:
+    def select_clip_raw(self, segments: Sequence[TranscriptSegment]) -> tuple[ClipWindow, str]:
         """Same as select_clip but always returns (ClipWindow, layout_str)."""
         result = self.select_clip(segments)
         if isinstance(result, tuple):

@@ -65,12 +65,14 @@ def transcribe_clip(
             )
             for w in (seg.words or [])
         ]
-        segments.append(TranscriptSegment(
-            start=float(seg.start),
-            end=float(seg.end),
-            text=seg.text.strip(),
-            words=words,
-        ))
+        segments.append(
+            TranscriptSegment(
+                start=float(seg.start),
+                end=float(seg.end),
+                text=seg.text.strip(),
+                words=words,
+            )
+        )
 
     log.info("✅ Transcription done: %d segments (lang=%s)", len(segments), info.language)
     return segments

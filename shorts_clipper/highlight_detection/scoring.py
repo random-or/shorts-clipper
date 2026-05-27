@@ -18,8 +18,20 @@ HOOK_PATTERNS = (
     "the truth",
 )
 EMOTION_WORDS = {
-    "amazing", "insane", "crazy", "shocking", "unbelievable", "love", "hate",
-    "angry", "terrified", "secret", "best", "worst", "changed", "everything",
+    "amazing",
+    "insane",
+    "crazy",
+    "shocking",
+    "unbelievable",
+    "love",
+    "hate",
+    "angry",
+    "terrified",
+    "secret",
+    "best",
+    "worst",
+    "changed",
+    "everything",
 }
 VIRAL_WORDS = {"secret", "hack", "trick", "mistake", "truth", "viral", "million", "money"}
 
@@ -45,15 +57,13 @@ class RuleBasedHighlightScorer:
         emotion = min(2.0, emotion_hits * 0.35 + text.count("!") * 0.25)
         virality = min(2.0, virality_hits * 0.4)
         retention = (
-            1.0 if 15 <= segment.duration <= 60
-            else max(0.0, 1.0 - abs(segment.duration - 35) / 35)
+            1.0 if 15 <= segment.duration <= 60 else max(0.0, 1.0 - abs(segment.duration - 35) / 35)
         )
         silence = 1.0 if words_per_second >= 1.6 else words_per_second / 1.6
         topic = min(1.0, max(0.0, word_count / 20))
         speaker_emphasis = min(1.0, text.count("!") * 0.3 + text.count("?") * 0.2)
         caption_density = (
-            min(1.0, len(segment.words) / max(1, word_count))
-            if segment.words else 0.0
+            min(1.0, len(segment.words) / max(1, word_count)) if segment.words else 0.0
         )
 
         return HighlightScore(

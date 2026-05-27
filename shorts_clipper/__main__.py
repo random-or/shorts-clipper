@@ -87,7 +87,8 @@ def build_parser() -> argparse.ArgumentParser:
     clip_p = sub.add_parser("clip", help="Clip a specific YouTube video.")
     clip_p.add_argument("url", help="YouTube video URL.")
     clip_p.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         metavar="PATH",
         help="Output file path (default: outputs/clip_TIMESTAMP.mp4)",
     )
@@ -101,8 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
     # ── scout ─────────────────────────────────────────────────────────────
     scout_p = sub.add_parser("scout", help="Print trending video URLs and exit.")
     scout_p.add_argument(
-        "-n", "--count",
-        type=int, default=1,
+        "-n",
+        "--count",
+        type=int,
+        default=1,
         help="Number of URLs to find (default: 1)",
     )
 

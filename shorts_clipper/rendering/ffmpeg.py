@@ -50,19 +50,16 @@ def build_vertical_render_command(
         target_width=opts.target_width,
         target_height=opts.target_height,
     )
-    
-    filters = [
-        crop.as_ffmpeg_filter(),
-        f"scale={opts.target_width}:{opts.target_height}"
-    ]
-    
+
+    filters = [crop.as_ffmpeg_filter(), f"scale={opts.target_width}:{opts.target_height}"]
+
     if subtitles_path:
         # ffmpeg subtitles filter is notoriously difficult with paths.
         # We use a double-escaped path for the filter.
-        # On Linux, we just need to escape the colon if it's there (rare) 
+        # On Linux, we just need to escape the colon if it's there (rare)
         # and wrap it in single quotes if it has spaces.
         path_str = str(subtitles_path).replace("\\", "/").replace(":", "\\:")
-        
+
         subtitle_style = (
             f"force_style='FontName={opts.font_name},FontSize={opts.font_size},"
             "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,"
@@ -75,31 +72,37 @@ def build_vertical_render_command(
     command = ["ffmpeg"]
     if opts.overwrite:
         command.append("-y")
-    command.extend([
-        "-ss",
-        f"{start:.3f}",
-        "-to",
-        f"{end:.3f}",
-    ])
+    command.extend(
+        [
+            "-ss",
+            f"{start:.3f}",
+            "-to",
+            f"{end:.3f}",
+        ]
+    )
     command.extend(opts.extra_input_args)
-    command.extend([
-        "-i",
-        str(input_path),
-        "-vf",
-        video_filter,
-        "-c:v",
-        opts.video_codec,
-    ])
+    command.extend(
+        [
+            "-i",
+            str(input_path),
+            "-vf",
+            video_filter,
+            "-c:v",
+            opts.video_codec,
+        ]
+    )
     if opts.video_codec == "libx264":
         command.extend(["-crf", str(opts.crf), "-preset", opts.preset])
     else:
         command.extend(["-preset", opts.preset])
-    command.extend([
-        "-c:a",
-        opts.audio_codec,
-        "-movflags",
-        "+faststart",
-    ])
+    command.extend(
+        [
+            "-c:a",
+            opts.audio_codec,
+            "-movflags",
+            "+faststart",
+        ]
+    )
     command.extend(opts.extra_output_args)
     command.append(str(output_path))
     return command

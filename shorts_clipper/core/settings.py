@@ -18,7 +18,7 @@ def _parse_env_file(env_path: Path) -> dict[str, str]:
             continue
         key, value = line.split("=", 1)
         key = key.strip()
-        value = value.strip().strip('\"').strip("'")
+        value = value.strip().strip('"').strip("'")
         if key:
             values[key] = value
     return values
@@ -52,7 +52,8 @@ class Settings:
             gemini_api_key=_env("GEMINI_API_KEY", file_values),
             openai_api_key=_env("OPENAI_API_KEY", file_values),
             anthropic_api_key=_env("ANTHROPIC_API_KEY", file_values),
-            ollama_base_url=_env("OLLAMA_BASE_URL", file_values, "http://localhost:11434") or "http://localhost:11434",
+            ollama_base_url=_env("OLLAMA_BASE_URL", file_values, "http://localhost:11434")
+            or "http://localhost:11434",
             default_provider=_env("SHORTS_PROVIDER", file_values, "gemini") or "gemini",
             whisper_model=_env("SHORTS_WHISPER_MODEL", file_values, "tiny.en") or "tiny.en",
             whisper_device=_env("SHORTS_WHISPER_DEVICE", file_values, "cpu") or "cpu",
@@ -65,7 +66,7 @@ class Settings:
             ),
             log_level=(_env("SHORTS_LOG_LEVEL", file_values, "INFO") or "INFO").upper(),
             enable_gpu=(
-                (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false")
-                .lower() in {"1", "true", "yes", "on"}
+                (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false").lower()
+                in {"1", "true", "yes", "on"}
             ),
         )

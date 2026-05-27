@@ -46,10 +46,7 @@ def _build_crop_filter(
         scale_w = max(_TARGET_W, round(half_h * src_ratio))
         x_c = (scale_w - _TARGET_W) // 2
         top = f"scale={scale_w}:{half_h},crop={_TARGET_W}:{half_h}:{x_c}:0"
-        bot = (
-            f"scale={scale_w}:{half_h},"
-            f"crop={_TARGET_W}:{half_h}:{x_c}:{half_h // 2}"
-        )
+        bot = f"scale={scale_w}:{half_h},crop={_TARGET_W}:{half_h}:{x_c}:{half_h // 2}"
         return (
             f"[0:v]split=2[top][bot];"
             f"[top]{top}[top_out];"
@@ -59,8 +56,10 @@ def _build_crop_filter(
 
     # Default: crop_center
     crop = compute_center_crop(
-        width=src_w, height=src_h,
-        target_width=_TARGET_W, target_height=_TARGET_H,
+        width=src_w,
+        height=src_h,
+        target_width=_TARGET_W,
+        target_height=_TARGET_H,
     )
     scale_factor_w = _TARGET_W / crop.width
     scale_factor_h = _TARGET_H / crop.height
@@ -104,28 +103,56 @@ def process_to_vertical(
 
     log.info(
         "\n--- VERTICAL CROP [%s] %dx%d → %dx%d ---",
-        layout, meta.width, meta.height, _TARGET_W, _TARGET_H,
+        layout,
+        meta.width,
+        meta.height,
+        _TARGET_W,
+        _TARGET_H,
     )
 
     # split_screen uses complex filter (-filter_complex), others use -vf
     if layout == "split_screen":
         cmd = [
-            "ffmpeg", "-y",
-            "-i", str(input_path),
-            "-filter_complex", vf,
-            "-c:v", "libx264", "-crf", str(crf), "-preset", preset,
-            "-c:a", "aac", "-b:a", "192k",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(input_path),
+            "-filter_complex",
+            vf,
+            "-c:v",
+            "libx264",
+            "-crf",
+            str(crf),
+            "-preset",
+            preset,
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
             str(output_path),
         ]
     else:
         cmd = [
-            "ffmpeg", "-y",
-            "-i", str(input_path),
-            "-vf", vf,
-            "-c:v", "libx264", "-crf", str(crf), "-preset", preset,
-            "-c:a", "aac", "-b:a", "192k",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(input_path),
+            "-vf",
+            vf,
+            "-c:v",
+            "libx264",
+            "-crf",
+            str(crf),
+            "-preset",
+            preset,
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
             str(output_path),
         ]
 

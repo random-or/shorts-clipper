@@ -59,6 +59,7 @@ class VideoCandidate(NamedTuple):
 # Cache helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_cache() -> set[str]:
     try:
         _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -72,9 +73,7 @@ def _load_cache() -> set[str]:
 def _save_cache(seen: set[str]) -> None:
     try:
         _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _CACHE_FILE.write_text(
-            json.dumps(sorted(seen), indent=2), encoding="utf-8"
-        )
+        _CACHE_FILE.write_text(json.dumps(sorted(seen), indent=2), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
         log.warning("Cache save failed: %s", exc)
 
@@ -83,6 +82,7 @@ def _save_cache(seen: set[str]) -> None:
 # yt-dlp helpers
 # ---------------------------------------------------------------------------
 
+
 def _search_entries(query: str) -> list[dict]:
     """Return flat playlist entries for a yt-dlp search query."""
     cmd = [
@@ -90,13 +90,12 @@ def _search_entries(query: str) -> list[dict]:
         query,
         "--flat-playlist",
         "--dump-single-json",
-        "--retries", "5",
+        "--retries",
+        "5",
         "--quiet",
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, check=True, timeout=30
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
         data = json.loads(result.stdout)
         return data.get("entries") or []
     except Exception as exc:  # noqa: BLE001
@@ -115,9 +114,7 @@ def _fetch_video_info(video_id: str) -> dict | None:
         url,
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, check=True, timeout=20
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=20)
         return json.loads(result.stdout)
     except Exception as exc:  # noqa: BLE001
         log.debug("Info fetch failed for %s: %s", video_id, exc)
@@ -127,25 +124,19 @@ def _fetch_video_info(video_id: str) -> dict | None:
 def _has_english(info: dict) -> bool:
     subs = info.get("subtitles") or {}
     auto = info.get("automatic_captions") or {}
-    return bool(
-        "en" in subs or "en-orig" in subs
-        or "en" in auto or "en-orig" in auto
-    )
+    return bool("en" in subs or "en-orig" in subs or "en" in auto or "en-orig" in auto)
 
 
 def _is_suitable(info: dict, seen: set[str]) -> bool:
     vid_id = info.get("id", "")
     duration = float(info.get("duration") or 0)
-    return (
-        vid_id not in seen
-        and _MIN_DURATION <= duration <= _MAX_DURATION
-        and _has_english(info)
-    )
+    return vid_id not in seen and _MIN_DURATION <= duration <= _MAX_DURATION and _has_english(info)
 
 
 # ---------------------------------------------------------------------------
 # Core scout logic
 # ---------------------------------------------------------------------------
+
 
 def _scout_pool(query: str, seen: set[str]) -> VideoCandidate | None:
     """Search one query pool and return the first suitable candidate."""
@@ -172,9 +163,7 @@ def _scout_pool(query: str, seen: set[str]) -> VideoCandidate | None:
                 title = info.get("title", "Unknown")
                 duration = float(info.get("duration") or 0)
                 log.info("🎯 Found candidate: [%s] %s", vid_id, title)
-                return VideoCandidate(
-                    url=url, video_id=vid_id, duration=duration, title=title
-                )
+                return VideoCandidate(url=url, video_id=vid_id, duration=duration, title=title)
     return None
 
 
@@ -213,14 +202,18 @@ def get_trending_link(
                     _save_cache(seen)
                 log.info(
                     "✅ ACQUIRED: %s (%.0fs) — %s",
-                    candidate.video_id, candidate.duration, candidate.title,
+                    candidate.video_id,
+                    candidate.duration,
+                    candidate.title,
                 )
                 return candidate.url
 
-        wait = 2 ** attempt
+        wait = 2**attempt
         log.warning(
             "Attempt %d/%d failed. Waiting %ds before retry...",
-            attempt, max_retries, wait,
+            attempt,
+            max_retries,
+            wait,
         )
         time.sleep(wait)
 

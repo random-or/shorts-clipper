@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 # ASS file generation
 # ---------------------------------------------------------------------------
 
+
 def _ass_header() -> str:
     """Build the ASS subtitle file header (spec lines are intentionally long)."""
     style_format = (
@@ -38,21 +39,23 @@ def _ass_header() -> str:
         "-1,0,0,0,100,100,0.5,0,1,4,2,2,40,40,160,1"
     )
     event_format = "Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
-    return "\n".join([
-        "[Script Info]",
-        "ScriptType: v4.00+",
-        "PlayResX: 1080",
-        "PlayResY: 1920",
-        "ScaledBorderAndShadow: yes",
-        "",
-        "[V4+ Styles]",
-        f"Format: {style_format}",
-        f"Style: {style_def}",
-        "",
-        "[Events]",
-        f"Format: {event_format}",
-        "",
-    ])
+    return "\n".join(
+        [
+            "[Script Info]",
+            "ScriptType: v4.00+",
+            "PlayResX: 1080",
+            "PlayResY: 1920",
+            "ScaledBorderAndShadow: yes",
+            "",
+            "[V4+ Styles]",
+            f"Format: {style_format}",
+            f"Style: {style_def}",
+            "",
+            "[Events]",
+            f"Format: {event_format}",
+            "",
+        ]
+    )
 
 
 def _seconds_to_ass_time(seconds: float) -> str:
@@ -78,11 +81,13 @@ def _build_ass_chunks(
             for i in range(0, len(words), words_per_chunk):
                 group = words[i : i + words_per_chunk]
                 text = " ".join(w.word for w in group).upper()
-                chunks.append({
-                    "text": text,
-                    "start": max(0.0, group[0].start - start_offset),
-                    "end": max(0.01, group[-1].end - start_offset),
-                })
+                chunks.append(
+                    {
+                        "text": text,
+                        "start": max(0.0, group[0].start - start_offset),
+                        "end": max(0.01, group[-1].end - start_offset),
+                    }
+                )
         else:
             # Fallback: split by word count, distribute time evenly
             words_list = seg.text.split()
@@ -118,10 +123,7 @@ def generate_ass_file(
         end = _seconds_to_ass_time(chunk["end"])
         # \an2 = bottom-center alignment; {\bord4} adds thick border
         text = chunk["text"]
-        lines.append(
-            f"Dialogue: 0,{start},{end},Default,,0,0,0,,"
-            f"{{\\an2\\bord4\\shad2}}{text}"
-        )
+        lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{{\\an2\\bord4\\shad2}}{text}")
 
     out.write_text("\n".join(lines), encoding="utf-8")
     log.debug("ASS file written: %s (%d chunks)", out, len(chunks))
@@ -131,6 +133,7 @@ def generate_ass_file(
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 def burn_subtitles(
     video_path: str | Path,
@@ -171,15 +174,24 @@ def burn_subtitles(
         escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
 
         cmd = [
-            "ffmpeg", "-y",
-            "-i", str(video_path),
-            "-vf", f"ass='{escaped}'",
-            "-c:v", "libx264",
-            "-crf", str(crf),
-            "-preset", preset,
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-vf",
+            f"ass='{escaped}'",
+            "-c:v",
+            "libx264",
+            "-crf",
+            str(crf),
+            "-preset",
+            preset,
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
             str(output_path),
         ]
 
@@ -191,9 +203,7 @@ def burn_subtitles(
         )
         if result.returncode != 0:
             log.error("FFmpeg stderr: %s", result.stderr[-2000:])
-            raise RuntimeError(
-                f"FFmpeg subtitle burn failed (exit {result.returncode})"
-            )
+            raise RuntimeError(f"FFmpeg subtitle burn failed (exit {result.returncode})")
 
     log.info("✅ Subtitles burned → %s", output_path)
     return output_path

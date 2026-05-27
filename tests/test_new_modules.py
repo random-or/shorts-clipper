@@ -53,7 +53,9 @@ class ASSChunkTests(unittest.TestCase):
 
     def test_word_level_chunks_use_actual_timing(self):
         seg = self._make_segment(
-            10.0, 14.0, "this is great",
+            10.0,
+            14.0,
+            "this is great",
             words=[(10.0, 10.5, "this"), (10.6, 11.0, "is"), (11.1, 11.8, "great")],
         )
         chunks = _build_ass_chunks([seg], start_offset=10.0, words_per_chunk=2)

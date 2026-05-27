@@ -58,7 +58,7 @@ def to_srt(segments: Iterable[TranscriptSegment | Any], start_offset: float = 0.
         # Shift timestamps relative to the clip start
         start = max(0, segment.start - start_offset)
         end = max(0, segment.end - start_offset)
-        
+
         if end <= start:
             continue
 

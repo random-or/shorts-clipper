@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 # Per-step helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_segments_and_window(
     url: str,
     work_path: Path,
@@ -70,6 +71,7 @@ def _get_segments_and_window(
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
+
 
 def run(
     url: str,
@@ -112,15 +114,19 @@ def run(
             )
             log.info(
                 "📍 Clip window: %.1fs → %.1fs [%s]",
-                start_time, end_time, layout,
+                start_time,
+                end_time,
+                layout,
             )
 
             # ── Step 3: Download the exact clip section ───────────────────
             micro_path = work_path / "micro_clip.mp4"
             if not micro_path.exists():
                 download_clip(
-                    url, micro_path,
-                    start_time=start_time, end_time=end_time,
+                    url,
+                    micro_path,
+                    start_time=start_time,
+                    end_time=end_time,
                 )
 
             # ── Step 4: Vertical crop (pure FFmpeg, no MoviePy) ──────────

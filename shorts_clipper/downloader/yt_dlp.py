@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 # Subtitle fetching + SRT parsing
 # ---------------------------------------------------------------------------
 
+
 def _srt_time_to_seconds(t: str) -> float:
     h, m, s_ms = t.split(":")
     s, ms = s_ms.split(",")
@@ -34,10 +35,13 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
         "yt-dlp",
         "--write-auto-subs",
         "--write-subs",
-        "--sub-lang", "en,en-orig",
-        "--sub-format", "srt",
+        "--sub-lang",
+        "en,en-orig",
+        "--sub-format",
+        "srt",
         "--skip-download",
-        "-o", str(output_base),
+        "-o",
+        str(output_base),
         url,
     ]
     try:
@@ -72,6 +76,7 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
 # ---------------------------------------------------------------------------
 # Video download
 # ---------------------------------------------------------------------------
+
 
 def download_clip(
     url: str,
@@ -116,12 +121,17 @@ def download_clip(
     )
     cmd = [
         "yt-dlp",
-        "--retries", "10",
-        "--fragment-retries", "10",
+        "--retries",
+        "10",
+        "--fragment-retries",
+        "10",
         "--no-part",
-        "-f", fmt,
-        "--merge-output-format", "mp4",
-        "-o", str(output_path),
+        "-f",
+        fmt,
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        str(output_path),
     ]
 
     if start_time is not None and end_time is not None:
