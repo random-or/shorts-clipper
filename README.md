@@ -1,115 +1,146 @@
+<div align="center">
+  
 # 🎬 Shorts Clipper
+**The Autonomous AI Video Factory**
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://github.com/random-or/shorts-clipper/actions/workflows/ci.yml/badge.svg)](https://github.com/random-or/shorts-clipper/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-production--ready-success.svg)](#)
+[![Status: Beta](https://img.shields.io/badge/status-active_development-success.svg)](#)
 
-**Shorts Clipper** is a high-performance, AI-driven automation factory for transforming long-form video into viral, high-retention vertical clips for TikTok, YouTube Shorts, and Instagram Reels.
+*Transform long-form YouTube content into highly-engaging, viral vertical clips—completely autonomously.*
 
-It combines autonomous content scouting, intelligent transcript analysis, and professional-grade video editing into a seamless, single-command pipeline.
-
----
-
-## ⚡ Core Capabilities
-
-- 🛰️ **Autonomous Scouting:** Automatically identifies trending, high-signal global English content from YouTube using advanced filtering.
-- 🧠 **AI Oracle (Gemini):** Leverages Gemini 2.5 Flash to identify the most engaging hooks and viral moments with pinpoint accuracy.
-- 📝 **Hybrid Transcription:** 
-    - **Smart Fetch:** Pulls native high-quality English subtitles directly from the source.
-    - **Local Whisper:** Seamless fallback to `faster-whisper` for word-level precision when native subs are unavailable.
-- 📐 **Dynamic Visual Framing:** Supports multiple AI-selected layouts:
-    - `crop_center` (Standard)
-    - `crop_left` / `crop_right` (Focus)
-    - `split_screen` (Maximum Retention)
-- 🚀 **Production Pipeline:** 
-    - **Isolated Workdirs:** Each job runs in a clean, temporary environment for safe batch processing.
-    - **Single-Pass Rendering:** Optimized ffmpeg/MoviePy paths to preserve video quality.
-    - **Type-Safe Core:** Built on a modular Python package under `shorts_clipper/`.
+</div>
 
 ---
 
-## 🏗️ Architecture
+## 🚀 The Vision: Why Shorts Clipper?
 
-The project follows a modular domain-driven design:
+The creator economy demands high-volume, high-retention content. However, manually scrubbing through hours of podcasts or streams to find the perfect 45-second hook is tedious and unscalable. 
 
-```text
-shorts_clipper/
-├── core/                # Data models (TranscriptSegment), settings, and exceptions.
-├── rendering/           # Ffmpeg command builders and layout logic.
-├── transcription/       # Whisper adapters and SRT formatting.
-├── highlight_detection/ # Scoring models and AI provider adapters.
-├── cropping/            # Geometry calculations and smart-crop logic.
-└── utils/               # Video metadata and filesystem helpers.
+**Shorts Clipper** is designed to solve this. It is a professional-grade, AI-driven automation pipeline that handles the entire lifecycle of clip creation: from scouting trending videos, to analyzing transcripts with LLMs for viral hooks, down to the final rendering of a polished 9:16 vertical video.
+
+Whether you're a creator looking to scale your reach on TikTok, YouTube Shorts, and Instagram Reels, or a developer interested in building fully autonomous content agents, Shorts Clipper provides the modular foundation you need.
+
+---
+
+## ✨ Core Capabilities
+
+- 🤖 **Autonomous Content Scouting**: Automatically hunts for high-signal, trending YouTube videos, avoiding duplicates and noise.
+- 🧠 **AI-Powered Hook Detection**: Utilizes **Gemini 2.5 Flash** to semantically analyze transcripts, scoring and extracting segments that guarantee high audience retention.
+- 🎙️ **Hybrid Transcription Engine**: 
+  - Prefers high-quality native YouTube subtitles for lightning-fast processing.
+  - Seamlessly falls back to local `faster-whisper` for precise, word-level timestamps when native subs aren't available.
+- 📐 **Dynamic Smart Cropping**: Intelligently frames subjects using adaptive layouts:
+  - `crop_center`, `crop_left`, `crop_right`
+  - `split_screen` (Perfect for podcasts and reaction videos)
+- ⚡ **Production-Ready Rendering**: Built on highly optimized `ffmpeg` and `MoviePy` pipelines. Each job runs in isolated workspaces to ensure clean batch processing.
+
+---
+
+## 🏗️ System Architecture
+
+The architecture follows a robust, Domain-Driven Design (DDD) to ensure scalability from a CLI tool to a massive cloud-native backend.
+
+```mermaid
+graph TD;
+    A[Scout/Input] -->|URL| B(Transcription Engine)
+    B -->|SRT / JSON| C{AI Oracle - Gemini}
+    C -->|Viral Segments| D[Highlight Extractor]
+    D -->|Timestamps| E(Smart Crop & Layout)
+    E -->|FFmpeg Pipeline| F[Final Vertical Video]
+    
+    subgraph Modular Core
+    B
+    C
+    D
+    E
+    end
 ```
 
 ---
 
-## 🚀 Quick Start
+## 🛠️ Quick Start Guide
 
 ### 1. Prerequisites
 
-- **FFmpeg** (with `libass` support)
+Ensure your system has the following installed:
 - **Python 3.11+**
-- **yt-dlp**
+- **FFmpeg** (must be compiled with `libass` support for subtitles)
+- **yt-dlp** (for high-speed video/audio acquisition)
 
 ### 2. Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/random-or/shorts-clipper.git
-cd shorts_clipper
+Clone the repository and set up your virtual environment:
 
-# Setup environment
+```bash
+git clone https://github.com/random-or/shorts-clipper.git
+cd shorts-clipper
+
+# Create and activate a virtual environment
 python -m venv env
-source env/bin/activate
+source env/bin/activate  # On Windows use `env\Scripts\activate`
+
+# Install the package and dependencies
 pip install -e .
 ```
 
 ### 3. Configuration
 
-Create a `.env` file from the example:
+Shorts Clipper relies on AI for its hook generation. You need to configure your environment variables:
 
 ```bash
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+```
+Edit the `.env` file and insert your `GEMINI_API_KEY`.
+
+### 4. Running the Factory
+
+You can run Shorts Clipper in two powerful modes:
+
+**Targeted Mode (Single Video):**
+```bash
+python pipeline.py "https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
 ```
 
-### 4. Run the Factory
-
+**Autonomous Mode (Scout & Clip):**
+Let the system find trending content and process it automatically.
 ```bash
-# Clip a specific video
-python pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID"
-
-# Engage Autonomous Mode (Scouts trending content automatically)
 python pipeline.py
 ```
 
-The final viral clip will be saved as `final_output.mp4`.
+The resulting viral clips are saved automatically in the `outputs/` directory.
 
 ---
 
-## 🧪 Development & Quality
+## 🗺️ Roadmap & Huge Potential
 
-We maintain high standards through automated testing and linting:
+Shorts Clipper is evolving from a powerful CLI into a **full-stack autonomous AI agent**. Our roadmap includes:
 
-- **Run Tests:** `python -m unittest discover -v`
+- **Phase 1 (Current):** Rock-solid CLI pipeline, advanced transcript analysis, and basic layout rendering.
+- **Phase 2:** Integration of B-Roll, automated dynamic captions (Alex Hormozi style), and face-tracking algorithms.
+- **Phase 3:** Full FastAPI backend backend, allowing for cloud deployment, parallel distributed processing, and a Next.js web dashboard.
+- **Phase 4:** Direct social media integration for 100% hands-free publishing.
+
+For a detailed breakdown of our technical trajectory, check out the [AUDIT_ROADMAP.md](AUDIT_ROADMAP.md).
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions from developers, AI enthusiasts, and creators! Whether you're optimizing ffmpeg commands, improving the Gemini prompts, or building out the upcoming API, your help is valued.
+
+Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
+
+- **Run tests:** `python -m unittest discover -v`
 - **Linting:** `pre-commit run --all-files`
-- **Docker:** `docker-compose up --build`
 
 ---
 
-## 🗺️ Roadmap & Contributing
+## 🛡️ License & Security
 
-We are actively refactoring toward a fully asynchronous FastAPI backend. See [docs/ROADMAP.md](docs/ROADMAP.md) for planned features and [CONTRIBUTING.md](CONTRIBUTING.md) for our development standards.
-
----
-
-## 🛡️ Security & License
-
-- **Security:** Please see [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
-- **License:** Distributed under the MIT License. See `LICENSE` for more information.
+This project is open-sourced under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+For security policies, please review [SECURITY.md](SECURITY.md).
 
 <div align="center">
-  <sub>Built with ❤️ by the Shorts Clipper Contributors</sub>
+  <i>Empowering creators to scale through AI. Let's build the future of content automation together.</i>
 </div>
