@@ -105,6 +105,19 @@ def _build_ass_chunks(
                 c_start = seg_start + idx * chunk_dur
                 c_end = min(c_start + chunk_dur, seg_end)
                 chunks.append({"text": text, "start": c_start, "end": c_end})
+
+    # Fix overlaps and enforce maximum duration
+    MAX_CHUNK_DURATION = 2.5
+    for i in range(len(chunks)):
+        # Enforce maximum duration so subtitles don't linger during silence
+        if chunks[i]["end"] - chunks[i]["start"] > MAX_CHUNK_DURATION:
+            chunks[i]["end"] = chunks[i]["start"] + MAX_CHUNK_DURATION
+        
+        # Prevent overlapping with the next chunk
+        if i < len(chunks) - 1:
+            if chunks[i]["end"] > chunks[i+1]["start"]:
+                chunks[i]["end"] = max(chunks[i]["start"], chunks[i+1]["start"])
+
     return chunks
 
 

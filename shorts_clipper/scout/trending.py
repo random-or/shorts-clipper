@@ -60,20 +60,28 @@ class VideoCandidate(NamedTuple):
 # ---------------------------------------------------------------------------
 
 
-def _load_cache() -> set[str]:
+def _load_cache() -> dict[str, float]:
     try:
         _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         if _CACHE_FILE.exists():
-            return set(json.loads(_CACHE_FILE.read_text(encoding="utf-8")))
+            data = json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
+            now = time.time()
+            if isinstance(data, list):
+                # Migrate old list format to dict with current timestamp
+                return {vid: now for vid in data}
+            elif isinstance(data, dict):
+                # Filter out entries older than 7 days (7 * 24 * 3600 seconds)
+                SEVEN_DAYS = 7 * 24 * 3600
+                return {vid: ts for vid, ts in data.items() if now - ts < SEVEN_DAYS}
     except Exception as exc:  # noqa: BLE001
         log.warning("Cache load failed, starting fresh: %s", exc)
-    return set()
+    return {}
 
 
-def _save_cache(seen: set[str]) -> None:
+def _save_cache(seen: dict[str, float]) -> None:
     try:
         _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _CACHE_FILE.write_text(json.dumps(sorted(seen), indent=2), encoding="utf-8")
+        _CACHE_FILE.write_text(json.dumps(seen, indent=2), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
         log.warning("Cache save failed: %s", exc)
 
@@ -127,7 +135,7 @@ def _has_english(info: dict) -> bool:
     return bool("en" in subs or "en-orig" in subs or "en" in auto or "en-orig" in auto)
 
 
-def _is_suitable(info: dict, seen: set[str]) -> bool:
+def _is_suitable(info: dict, seen: dict[str, float]) -> bool:
     vid_id = info.get("id", "")
     duration = float(info.get("duration") or 0)
     return vid_id not in seen and _MIN_DURATION <= duration <= _MAX_DURATION and _has_english(info)
@@ -138,8 +146,25 @@ def _is_suitable(info: dict, seen: set[str]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _scout_pool(query: str, seen: set[str]) -> VideoCandidate | None:
-    """Search one query pool and return the first suitable candidate."""
+def _calculate_virality_score(info: dict) -> float:
+    """Calculate a virality score for a video."""
+    view_count = float(info.get("view_count") or 0)
+    upload_date = info.get("upload_date")
+    if not upload_date:
+        return view_count
+    
+    try:
+        from datetime import datetime
+        # upload_date is YYYYMMDD
+        upload_dt = datetime.strptime(upload_date, "%Y%m%d")
+        age_days = max(1.0, (datetime.now() - upload_dt).days)
+        return view_count / age_days
+    except Exception:
+        return view_count
+
+
+def _scout_pool(query: str, seen: dict[str, float]) -> VideoCandidate | None:
+    """Search one query pool, rank suitable candidates, and return the best one."""
     log.info("🔍 Searching: %s", query)
     entries = _search_entries(query)
     if not entries:
@@ -153,6 +178,8 @@ def _scout_pool(query: str, seen: set[str]) -> VideoCandidate | None:
 
     # Fetch all info in parallel
     log.info("⚡ Fetching info for %d candidates in parallel...", len(ids))
+    candidates = []
+
     with ThreadPoolExecutor(max_workers=min(_MAX_WORKERS, len(ids))) as pool:
         futures = {pool.submit(_fetch_video_info, vid): vid for vid in ids}
         for future in as_completed(futures):
@@ -162,9 +189,18 @@ def _scout_pool(query: str, seen: set[str]) -> VideoCandidate | None:
                 url = f"https://www.youtube.com/watch?v={vid_id}"
                 title = info.get("title", "Unknown")
                 duration = float(info.get("duration") or 0)
-                log.info("🎯 Found candidate: [%s] %s", vid_id, title)
-                return VideoCandidate(url=url, video_id=vid_id, duration=duration, title=title)
-    return None
+                score = _calculate_virality_score(info)
+                candidates.append((score, VideoCandidate(url=url, video_id=vid_id, duration=duration, title=title)))
+                log.info("🎯 Found valid candidate: [%s] %s (Virality: %.2f)", vid_id, title, score)
+
+    if not candidates:
+        return None
+
+    # Sort by score descending and pick the best
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    best_score, best_candidate = candidates[0]
+    log.info("🌟 Selected best candidate in pool: [%s] %s", best_candidate.video_id, best_candidate.title)
+    return best_candidate
 
 
 def get_trending_link(
@@ -186,7 +222,7 @@ def get_trending_link(
     """
     import random
 
-    seen = _load_cache() if cache else set()
+    seen = _load_cache() if cache else {}
     log.info("\n🚀 SELF-HEALING SCOUT ENGAGED — %d seen IDs cached", len(seen))
 
     pools = list(categories or _PRIMARY_POOLS)
@@ -198,7 +234,7 @@ def get_trending_link(
             candidate = _scout_pool(query, seen)
             if candidate:
                 if cache:
-                    seen.add(candidate.video_id)
+                    seen[candidate.video_id] = time.time()
                     _save_cache(seen)
                 log.info(
                     "✅ ACQUIRED: %s (%.0fs) — %s",
