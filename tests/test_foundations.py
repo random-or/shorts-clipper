@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from shorts_clipper.core.settings import Settings
 from shorts_clipper.core.models import ClipWindow, TranscriptSegment, TranscriptWord
+from shorts_clipper.core.settings import Settings
 from shorts_clipper.highlight_detection.scoring import RuleBasedHighlightScorer
 from shorts_clipper.providers.base import parse_clip_window
 from shorts_clipper.transcription.formatting import format_transcript

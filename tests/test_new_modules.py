@@ -1,10 +1,9 @@
 """Tests for the new package modules added in session 2."""
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from shorts_clipper.captions.generator import (
     _ass_header,
