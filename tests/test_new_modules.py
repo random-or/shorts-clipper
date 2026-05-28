@@ -66,13 +66,38 @@ class ASSChunkTests(unittest.TestCase):
     def test_fallback_chunks_distribute_time_evenly(self):
         seg = self._make_segment(0.0, 6.0, "one two three four five six")
         chunks = _build_ass_chunks([seg], start_offset=0.0)
-        self.assertEqual(len(chunks), 1)
-        self.assertEqual(chunks[0]["text"], "ONE TWO THREE FOUR FIVE SIX")
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual(chunks[0]["text"], "ONE TWO THREE")
+        self.assertAlmostEqual(chunks[0]["start"], 0.0)
+        self.assertAlmostEqual(chunks[0]["end"], 3.0)
+        self.assertEqual(chunks[1]["text"], "FOUR FIVE SIX")
+        self.assertAlmostEqual(chunks[1]["start"], 3.0)
+        self.assertAlmostEqual(chunks[1]["end"], 6.0)
 
     def test_empty_segment_produces_no_chunks(self):
         seg = self._make_segment(0.0, 1.0, "")
         chunks = _build_ass_chunks([seg], start_offset=0.0)
         self.assertEqual(chunks, [])
+
+    def test_pacing_scales_timing(self):
+        seg = self._make_segment(
+            10.0,
+            14.0,
+            "this is great",
+            words=[(10.0, 11.15, "this"), (11.15, 12.3, "is"), (12.3, 13.45, "great")],
+        )
+        chunks = _build_ass_chunks([seg], start_offset=10.0, pacing=1.15)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0]["text"], "THIS IS GREAT")
+        self.assertAlmostEqual(chunks[0]["start"], 0.0)
+        self.assertAlmostEqual(chunks[0]["end"], 3.0)
+
+        # Fallback path pacing test
+        seg_fallback = self._make_segment(10.0, 15.75, "hello world")
+        chunks_fb = _build_ass_chunks([seg_fallback], start_offset=10.0, pacing=1.15)
+        self.assertEqual(len(chunks_fb), 1)
+        self.assertEqual(chunks_fb[0]["text"], "HELLO WORLD")
+        self.assertAlmostEqual(chunks_fb[0]["end"], 5.0)
 
 
 class ScoutCacheTests(unittest.TestCase):
@@ -113,6 +138,16 @@ class ScoutFilterTests(unittest.TestCase):
         self.assertTrue(_has_english({"subtitles": {"en-orig": []}}))
         self.assertFalse(_has_english({"automatic_captions": {"fr": []}, "subtitles": {}}))
 
+    def test_has_english_rejects_non_english_language_field(self):
+        self.assertFalse(_has_english({"language": "hi", "automatic_captions": {"en": []}}))
+        self.assertFalse(_has_english({"language": "es", "subtitles": {"en": []}}))
+        self.assertTrue(_has_english({"language": "en-US", "automatic_captions": {"en": []}}))
+
+    def test_has_english_rejects_non_english_orig(self):
+        self.assertFalse(_has_english({"automatic_captions": {"es-orig": [], "en": []}}))
+        self.assertFalse(_has_english({"automatic_captions": {"hi-orig": [], "en": []}}))
+        self.assertTrue(_has_english({"automatic_captions": {"en-orig": [], "en": []}}))
+
     def test_is_suitable_rejects_seen_ids(self):
         info = self._make_info()
         self.assertFalse(_is_suitable(info, seen={"abc123": 1.0}))
@@ -132,6 +167,47 @@ class ScoutFilterTests(unittest.TestCase):
     def test_is_suitable_passes_valid_video(self):
         info = self._make_info(duration=300, en_subs=True, vid_id="xyz789")
         self.assertTrue(_is_suitable(info, seen={}))
+
+
+class DownloaderTests(unittest.TestCase):
+    @patch("shorts_clipper.downloader.yt_dlp.subprocess.run")
+    def test_download_audio_full(self, mock_run):
+        from shorts_clipper.downloader.yt_dlp import download_audio
+
+        url = "https://www.youtube.com/watch?v=test"
+        output_path = "/tmp/test_audio.m4a"
+        download_audio(url, output_path)
+
+        # Check command structure
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        self.assertIn("yt-dlp", args)
+        self.assertIn("--extract-audio", args)
+        self.assertIn("--audio-format", args)
+        self.assertIn("m4a", args)
+        self.assertIn(output_path, args)
+        self.assertIn(url, args)
+        self.assertNotIn("--download-sections", args)
+
+    @patch("shorts_clipper.downloader.yt_dlp.subprocess.run")
+    def test_download_audio_section(self, mock_run):
+        from shorts_clipper.downloader.yt_dlp import download_audio
+
+        url = "https://www.youtube.com/watch?v=test"
+        output_path = "/tmp/test_audio.m4a"
+        download_audio(url, output_path, start_time=10.0, end_time=120.0)
+
+        # Check command structure
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        self.assertIn("yt-dlp", args)
+        self.assertIn("--extract-audio", args)
+        self.assertIn("--audio-format", args)
+        self.assertIn("m4a", args)
+        self.assertIn(output_path, args)
+        self.assertIn(url, args)
+        self.assertIn("--download-sections", args)
+        self.assertIn("*10.0-120.0", args)
 
 
 if __name__ == "__main__":

@@ -70,6 +70,21 @@ _MAX_DURATION = 3600  # 1 hour cap
 _MAX_WORKERS = 6  # parallel yt-dlp info fetches
 _CACHE_TTL = 7 * 24 * 3600  # 7 days in seconds
 
+# ---------------------------------------------------------------------------
+# Curated fallback videos — used when all yt-dlp searches fail (rate limiting)
+# ---------------------------------------------------------------------------
+
+FALLBACK_VIDEOS: list[str] = [
+    "https://www.youtube.com/watch?v=tJxfA5HJVAc",  # Top 200 Elden Ring Rage Moments
+    "https://www.youtube.com/watch?v=Uq5SxQGW2HU",  # MrBeast intense challenge
+    "https://www.youtube.com/watch?v=AzFBFHSqoKY",  # Heated debate compilation
+    "https://www.youtube.com/watch?v=lTTajzrSkCU",  # Viral sports moments
+    "https://www.youtube.com/watch?v=QJO3ROT-A4E",  # Streamer rage moments
+    "https://www.youtube.com/watch?v=xm3YgoEiEDc",  # Podcast argument compilation
+    "https://www.youtube.com/watch?v=jNQXAC9IVRw",  # Me at the zoo (classic)
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",  # Never gonna give you up
+]
+
 
 class VideoCandidate(NamedTuple):
     url: str
@@ -125,9 +140,9 @@ def _generate_dynamic_queries(pool_name: str, count: int = 5) -> list[str]:
         # 50 % chance to spice the query with a trending vocab word
         if random.random() > 0.5:
             vocab = random.choice(VIRAL_VOCABULARY)
-            results.add(f"ytsearch20:{base} {vocab}")
+            results.add(f"ytsearch5:{base} {vocab}")
         else:
-            results.add(f"ytsearch20:{base}")
+            results.add(f"ytsearch5:{base}")
     return list(results)
 
 
@@ -139,11 +154,13 @@ def _search_entries(query: str) -> list[dict]:
         "--flat-playlist",
         "--dump-single-json",
         "--retries",
-        "5",
+        "2",
+        "--socket-timeout",
+        "10",
         "--quiet",
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=20)
         data = json.loads(result.stdout)
         return data.get("entries") or []
     except Exception as exc:  # noqa: BLE001
@@ -158,6 +175,8 @@ def _fetch_video_info(video_id: str) -> dict | None:
         "yt-dlp",
         "--dump-json",
         "--skip-download",
+        "--socket-timeout",
+        "10",
         "--quiet",
         url,
     ]
@@ -170,16 +189,29 @@ def _fetch_video_info(video_id: str) -> dict | None:
 
 
 def _has_english(info: dict) -> bool:
-    """Return True only if the video has English subtitles/auto-captions."""
+    """Return True only if the video is primarily English (ignoring auto-translated captions)."""
     subs = info.get("subtitles") or {}
     auto = info.get("automatic_captions") or {}
     title = info.get("title", "").lower()
 
+    # 1. Check yt-dlp language field if present
+    lang = info.get("language")
+    if lang:
+        if not str(lang).lower().startswith("en"):
+            return False
+
+    # 2. If there's an original auto-caption that is NOT English, reject it
+    # YouTube lists the original language auto-caption as '[lang]-orig' (e.g. 'es-orig', 'hi-orig')
+    has_non_en_orig = any(k.endswith("-orig") and not k.startswith("en") for k in auto)
+    if has_non_en_orig:
+        return False
+
+    # 3. Must have English manual subtitles or English auto-captions
     has_en_sub = bool("en" in subs or "en-orig" in subs or "en" in auto or "en-orig" in auto)
     if not has_en_sub:
         return False
 
-    # Reject obvious non-English titles (non-ASCII alpha chars)
+    # 4. Reject obvious non-English titles (non-ASCII alpha chars)
     if any(ord(c) > 127 for c in title if c.isalpha()):
         return False
 
@@ -332,16 +364,15 @@ def get_trending_link(
         return None
 
     for attempt in range(1, max_retries + 1):
-        # Build ~40 randomised queries across all active pools
+        # Build queries across all active pools — fewer queries, run throttled
         queries: list[str] = []
-        for _ in range(8):
-            pool_name = random.choice(pools_to_search)
-            queries.extend(_generate_dynamic_queries(pool_name, count=5))
-        # Deduplicate
-        queries = list(set(queries))
+        for pool_name in pools_to_search:
+            queries.extend(_generate_dynamic_queries(pool_name, count=3))
+        random.shuffle(queries)
+        queries = list(dict.fromkeys(queries))  # deduplicate, preserve shuffle order
 
         log.info(
-            "🔥 Parallel hunting: %d unique queries (attempt %d/%d)",
+            "🔥 Throttled hunting: %d unique queries (attempt %d/%d)",
             len(queries),
             attempt,
             max_retries,
@@ -349,11 +380,19 @@ def get_trending_link(
 
         all_candidates: list[tuple[float, VideoCandidate]] = []
 
-        # Run all pool searches in parallel
-        with ThreadPoolExecutor(max_workers=min(len(queries), 10)) as executor:
+        # Run at most 2 searches concurrently to avoid YouTube rate-limiting.
+        # Exit early as soon as we have at least one viable candidate.
+        with ThreadPoolExecutor(max_workers=2) as executor:
             futures = {executor.submit(_scout_pool, q, seen): q for q in queries}
             for future in as_completed(futures):
-                all_candidates.extend(future.result())
+                results = future.result()
+                all_candidates.extend(results)
+                if all_candidates:
+                    # Cancel remaining pending futures — we have what we need
+                    for f in futures:
+                        f.cancel()
+                    log.info("⚡ Early exit — candidate found, skipping remaining queries.")
+                    break
 
         if all_candidates:
             all_candidates.sort(key=lambda x: x[0], reverse=True)
@@ -387,4 +426,20 @@ def get_trending_link(
         time.sleep(wait)
 
     log.error("❌ Scout exhausted all pools after %d attempts.", max_retries)
+
+    # Last resort: pick a random unseen video from the curated fallback list
+    unseen_fallbacks = [
+        url for url in FALLBACK_VIDEOS
+        if url.split("v=")[-1] not in seen
+    ]
+    if unseen_fallbacks:
+        fallback_url = random.choice(unseen_fallbacks)
+        vid_id = fallback_url.split("v=")[-1]
+        log.warning("⚠️  Using curated fallback video: %s", fallback_url)
+        if cache:
+            seen[vid_id] = time.time()
+            _save_cache(seen)
+        return fallback_url
+
+    log.error("All fallback videos already seen. Giving up.")
     return None

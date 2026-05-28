@@ -71,6 +71,7 @@ def _seconds_to_ass_time(seconds: float) -> str:
 def _build_ass_chunks(
     segments: list[TranscriptSegment],
     start_offset: float,
+    pacing: float = 1.0,
 ) -> list[dict]:
     """Break segments into timed chunks based on emotional rhythm (max 4 words)."""
     chunks: list[dict] = []
@@ -88,8 +89,8 @@ def _build_ass_chunks(
                     chunks.append(
                         {
                             "text": text,
-                            "start": max(0.0, current_group[0].start - start_offset - 0.05),
-                            "end": max(0.01, current_group[-1].end - start_offset),
+                            "start": max(0.0, (current_group[0].start - start_offset) / pacing - 0.05),
+                            "end": max(0.01, (current_group[-1].end - start_offset) / pacing),
                         }
                     )
                     current_group = []
@@ -98,20 +99,37 @@ def _build_ass_chunks(
                 chunks.append(
                     {
                         "text": text,
-                        "start": max(0.0, current_group[0].start - start_offset - 0.05),
-                        "end": max(0.01, current_group[-1].end - start_offset),
+                        "start": max(0.0, (current_group[0].start - start_offset) / pacing - 0.05),
+                        "end": max(0.01, (current_group[-1].end - start_offset) / pacing),
                     }
                 )
         else:
-            # Fallback if words missing
+            # Fallback if words missing — split into smaller chunks (max 3 words) and distribute time proportionally
             words_list = seg.text.split()
             if not words_list:
                 continue
-            seg_start = max(0.0, seg.start - start_offset - 0.05)
-            seg_end = max(0.01, seg.end - start_offset)
-            chunks.append(
-                {"text": " ".join(words_list).upper(), "start": seg_start, "end": seg_end}
-            )
+            seg_start = max(0.0, (seg.start - start_offset) / pacing - 0.05)
+            seg_end = max(0.01, (seg.end - start_offset) / pacing)
+            duration = seg_end - seg_start
+            
+            # Group words into chunks of max 3 words
+            chunk_size = 3
+            word_groups = [words_list[i:i+chunk_size] for i in range(0, len(words_list), chunk_size)]
+            
+            total_words = len(words_list)
+            current_start = seg_start
+            
+            for group in word_groups:
+                group_text = " ".join(group).upper()
+                group_duration = (len(group) / total_words) * duration
+                group_end = current_start + group_duration
+                
+                chunks.append({
+                    "text": group_text,
+                    "start": current_start,
+                    "end": group_end
+                })
+                current_start = group_end
 
     # Prevent overlapping with the previous chunk due to the 50ms early start
     for i in range(1, len(chunks)):
@@ -125,10 +143,11 @@ def generate_ass_file(
     segments: list[TranscriptSegment],
     start_offset: float,
     output_path: str | Path,
+    pacing: float = 1.0,
 ) -> Path:
     """Generate an ASS subtitle file from transcript segments."""
     out = Path(output_path)
-    chunks = _build_ass_chunks(segments, start_offset)
+    chunks = _build_ass_chunks(segments, start_offset, pacing=pacing)
 
     lines = [_ass_header(), ""]
 
@@ -193,7 +212,7 @@ def burn_subtitles(
     start_offset: float,
     output_path: str | Path,
     crf: int = 18,
-    preset: str = "fast",
+    preset: str = "ultrafast",
     pacing: float = 1.0,
 ) -> Path:
     """
@@ -221,7 +240,7 @@ def burn_subtitles(
 
     with tempfile.TemporaryDirectory(prefix="ass_") as tmp:
         ass_path = Path(tmp) / "subs.ass"
-        generate_ass_file(segments, start_offset, ass_path)
+        generate_ass_file(segments, start_offset, ass_path, pacing=pacing)
 
         # FFmpeg ASS filter — libass renders directly during encode
         # On Linux the path needs colons escaped

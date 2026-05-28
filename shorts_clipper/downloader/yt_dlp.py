@@ -39,12 +39,19 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
         "--sub-format",
         "srt",
         "--skip-download",
+        "--socket-timeout",
+        "15",
+        "--retries",
+        "3",
         "-o",
         str(output_base),
         url,
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, timeout=60)
+        subprocess.run(cmd, check=True, capture_output=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        log.warning("Subtitle fetch timed out for %s — will rely on Whisper", url)
+        return []
     except subprocess.CalledProcessError:
         log.warning("No English auto-subtitles found for %s", url)
         return []
@@ -72,21 +79,44 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
     return segments
 
 
-def download_audio(url: str, output_path: str | Path) -> Path:
+def download_audio(
+    url: str,
+    output_path: str | Path,
+    *,
+    start_time: float | None = None,
+    end_time: float | None = None,
+) -> Path:
     """Download best audio only for transcription."""
     output_path = Path(output_path)
-    log.info("⬇ Downloading audio from %s", url)
+
+    # Clean up leftovers from previous partial downloads
+    part_path = Path(str(output_path) + ".part")
+    for p in (output_path, part_path):
+        if p.exists():
+            p.unlink()
+
+    if start_time is not None and end_time is not None:
+        log.info("⬇ Downloading audio section %.1fs–%.1fs from %s", start_time, end_time, url)
+    else:
+        log.info("⬇ Downloading full audio from %s", url)
+
     cmd = [
         "yt-dlp",
         "--retries",
-        "10",
+        "5",
+        "--socket-timeout",
+        "15",
         "--extract-audio",
         "--audio-format",
         "m4a",
         "-o",
         str(output_path),
-        url,
     ]
+
+    if start_time is not None and end_time is not None:
+        cmd.extend(["--download-sections", f"*{start_time}-{end_time}"])
+
+    cmd.append(url)
     subprocess.run(cmd, check=True)
     log.info("✅ Audio download complete: %s", output_path)
     return output_path
@@ -141,9 +171,11 @@ def download_clip(
     cmd = [
         "yt-dlp",
         "--retries",
-        "10",
+        "5",
         "--fragment-retries",
-        "10",
+        "5",
+        "--socket-timeout",
+        "15",
         "--no-part",
         "-f",
         fmt,

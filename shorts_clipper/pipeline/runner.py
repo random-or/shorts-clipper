@@ -23,7 +23,7 @@ from shorts_clipper.core.exceptions import MediaProcessingError
 from shorts_clipper.core.logging import configure_logging
 from shorts_clipper.core.models import TranscriptSegment
 from shorts_clipper.core.settings import Settings
-from shorts_clipper.downloader.yt_dlp import download_clip, fetch_subtitles
+from shorts_clipper.downloader.yt_dlp import download_audio, download_clip, fetch_subtitles
 from shorts_clipper.providers.gemini import GeminiProvider
 from shorts_clipper.rendering.crop import process_to_vertical
 from shorts_clipper.scout.trending import get_trending_link
@@ -61,7 +61,7 @@ def _get_window_and_segments(
             "⚠️  No native subtitles. Downloading 5-min audio sample for rough transcript..."
         )
         audio_path = work_path / "rough_audio.m4a"
-        download_clip(url, audio_path, start_time=0.0, end_time=300.0)
+        download_audio(url, audio_path, start_time=0.0, end_time=300.0)
         rough_segments = transcribe_clip(
             audio_path,
             model_size="tiny.en",

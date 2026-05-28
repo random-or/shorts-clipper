@@ -15,8 +15,8 @@ from shorts_clipper.utils.video import get_video_metadata
 
 log = logging.getLogger(__name__)
 
-_TARGET_W = 1080
-_TARGET_H = 1920
+_TARGET_W = 608
+_TARGET_H = 1080
 
 
 def _build_crop_filter(src_w: int, src_h: int, layout: str) -> str:
@@ -70,7 +70,7 @@ def process_to_vertical(
     *,
     layout: str = "crop_center",
     crf: int = 18,
-    preset: str = "fast",
+    preset: str = "ultrafast",
 ) -> Path:
     """
     Crop and scale a video to 1080×1920 vertical using pure FFmpeg.

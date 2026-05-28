@@ -71,14 +71,14 @@ Return ONLY valid JSON, no markdown, no commentary:
 
 
 class GeminiProvider(HighlightProvider):
-    """Uses Gemini 2.5 Pro to select the best clip window from a transcript."""
+    """Uses Gemini 2.5 Flash to select the best clip window from a transcript."""
 
     def __init__(
         self,
         *,
         api_key: str | None = None,
-        model: str = "gemini-2.5-pro",
-        fallback_window: tuple[float, float] = (60.0, 100.0),
+        model: str = "gemini-2.5-flash",
+        fallback_window: tuple[float, float] = (60.0, 95.0),
         fallback_layout: str = "crop_center",
     ) -> None:
         self._model = model

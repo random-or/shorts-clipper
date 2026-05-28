@@ -14,3 +14,5 @@ outputs/
 .env
 !.env.example
 *.egg-info/
+.agent/
+.agents/
