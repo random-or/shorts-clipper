@@ -23,7 +23,7 @@ def _get_model(model_size: str, device: str, compute_type: str):
 def transcribe_clip(
     video_path: str | Path,
     *,
-    model_size: str = "tiny.en",
+    model_size: str = "large-v3",
     device: str = "cpu",
     compute_type: str = "int8",
     beam_size: int = 5,
@@ -53,6 +53,13 @@ def transcribe_clip(
         beam_size=beam_size,
         word_timestamps=True,
     )
+
+    if info.language != "en":
+        log.warning(
+            "⚠️  Whisper detected language '%s' (expected 'en'). "
+            "Transcript may be inaccurate — continuing anyway.",
+            info.language,
+        )
 
     segments: list[TranscriptSegment] = []
     for seg in raw_segments:

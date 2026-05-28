@@ -35,7 +35,7 @@ class Settings:
     anthropic_api_key: str | None = None
     ollama_base_url: str = "http://localhost:11434"
     default_provider: str = "gemini"
-    whisper_model: str = "tiny.en"
+    whisper_model: str = "large-v3"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
     models_dir: Path = Path("models")
@@ -55,7 +55,7 @@ class Settings:
             ollama_base_url=_env("OLLAMA_BASE_URL", file_values, "http://localhost:11434")
             or "http://localhost:11434",
             default_provider=_env("SHORTS_PROVIDER", file_values, "gemini") or "gemini",
-            whisper_model=_env("SHORTS_WHISPER_MODEL", file_values, "tiny.en") or "tiny.en",
+            whisper_model=_env("SHORTS_WHISPER_MODEL", file_values, "large-v3") or "large-v3",
             whisper_device=_env("SHORTS_WHISPER_DEVICE", file_values, "cpu") or "cpu",
             whisper_compute_type=_env("SHORTS_WHISPER_COMPUTE_TYPE", file_values, "int8") or "int8",
             models_dir=Path(_env("SHORTS_MODELS_DIR", file_values, "models") or "models"),

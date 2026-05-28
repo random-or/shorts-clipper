@@ -58,6 +58,12 @@ class HighlightScore:
     topic: float = 0.0
     speaker_emphasis: float = 0.0
     caption_density: float = 0.0
+    # New AI Metrics
+    emotional_category: str = "unknown"
+    hook_strength: float = 0.0
+    pacing_score: float = 0.0
+    replayability_score: float = 0.0
+    strongest_caption_phrase: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property

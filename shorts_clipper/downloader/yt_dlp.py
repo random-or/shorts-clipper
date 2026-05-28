@@ -11,7 +11,6 @@ from shorts_clipper.core.models import TranscriptSegment
 
 log = logging.getLogger(__name__)
 
-
 # ---------------------------------------------------------------------------
 # Subtitle fetching + SRT parsing
 # ---------------------------------------------------------------------------
@@ -71,6 +70,26 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
 
     log.info("✅ Loaded %d English subtitle segments.", len(segments))
     return segments
+
+
+def download_audio(url: str, output_path: str | Path) -> Path:
+    """Download best audio only for transcription."""
+    output_path = Path(output_path)
+    log.info("⬇ Downloading audio from %s", url)
+    cmd = [
+        "yt-dlp",
+        "--retries",
+        "10",
+        "--extract-audio",
+        "--audio-format",
+        "m4a",
+        "-o",
+        str(output_path),
+        url,
+    ]
+    subprocess.run(cmd, check=True)
+    log.info("✅ Audio download complete: %s", output_path)
+    return output_path
 
 
 # ---------------------------------------------------------------------------

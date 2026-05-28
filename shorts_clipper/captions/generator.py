@@ -12,6 +12,7 @@ Why ASS over MoviePy TextClip:
 from __future__ import annotations
 
 import logging
+import random
 import subprocess
 import tempfile
 from pathlib import Path
@@ -34,9 +35,9 @@ def _ass_header() -> str:
         " Alignment, MarginL, MarginR, MarginV, Encoding"
     )
     style_def = (
-        "Default,Arial Black,85,"
-        "&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
-        "-1,0,0,0,100,100,0.5,0,1,4,2,2,40,40,160,1"
+        "Default,Inter Bold,58,"
+        "&H00F2F2F2&,&H000000FF,&H00000000,&H80000000,"
+        "-1,0,0,0,100,100,0,0,1,2.5,1,2,40,40,180,1"
     )
     event_format = "Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     return "\n".join(
@@ -70,53 +71,52 @@ def _seconds_to_ass_time(seconds: float) -> str:
 def _build_ass_chunks(
     segments: list[TranscriptSegment],
     start_offset: float,
-    words_per_chunk: int = 3,
 ) -> list[dict]:
-    """Break segments into timed 2-3 word chunks for punchy subtitle display."""
+    """Break segments into timed chunks based on emotional rhythm (max 4 words)."""
     chunks: list[dict] = []
     for seg in segments:
         if seg.words:
-            # Word-level timing available — most accurate
-            words = seg.words
-            for i in range(0, len(words), words_per_chunk):
-                group = words[i : i + words_per_chunk]
-                text = " ".join(w.word for w in group).upper()
+            # Word-level timing available — exact sync
+            current_group = []
+            for w in seg.words:
+                current_group.append(w)
+                word_text = w.word.strip()
+                # Split if we reach 4 words OR if there's a cadence marker (punctuation)
+                if len(current_group) >= 4 or any(p in word_text for p in ".!?,-"):
+                    text = " ".join(g.word for g in current_group).upper()
+                    # Start 50ms early for visual punch, end exactly on the word
+                    chunks.append(
+                        {
+                            "text": text,
+                            "start": max(0.0, current_group[0].start - start_offset - 0.05),
+                            "end": max(0.01, current_group[-1].end - start_offset),
+                        }
+                    )
+                    current_group = []
+            if current_group:
+                text = " ".join(g.word for g in current_group).upper()
                 chunks.append(
                     {
                         "text": text,
-                        "start": max(0.0, group[0].start - start_offset),
-                        "end": max(0.01, group[-1].end - start_offset),
+                        "start": max(0.0, current_group[0].start - start_offset - 0.05),
+                        "end": max(0.01, current_group[-1].end - start_offset),
                     }
                 )
         else:
-            # Fallback: split by word count, distribute time evenly
+            # Fallback if words missing
             words_list = seg.text.split()
             if not words_list:
                 continue
-            seg_start = max(0.0, seg.start - start_offset)
+            seg_start = max(0.0, seg.start - start_offset - 0.05)
             seg_end = max(0.01, seg.end - start_offset)
-            seg_dur = seg_end - seg_start
-            n_chunks = max(1, (len(words_list) + words_per_chunk - 1) // words_per_chunk)
-            chunk_dur = seg_dur / n_chunks
-            for i in range(0, len(words_list), words_per_chunk):
-                group = words_list[i : i + words_per_chunk]
-                idx = i // words_per_chunk
-                text = " ".join(group).upper()
-                c_start = seg_start + idx * chunk_dur
-                c_end = min(c_start + chunk_dur, seg_end)
-                chunks.append({"text": text, "start": c_start, "end": c_end})
+            chunks.append(
+                {"text": " ".join(words_list).upper(), "start": seg_start, "end": seg_end}
+            )
 
-    # Fix overlaps and enforce maximum duration
-    MAX_CHUNK_DURATION = 2.5
-    for i in range(len(chunks)):
-        # Enforce maximum duration so subtitles don't linger during silence
-        if chunks[i]["end"] - chunks[i]["start"] > MAX_CHUNK_DURATION:
-            chunks[i]["end"] = chunks[i]["start"] + MAX_CHUNK_DURATION
-        
-        # Prevent overlapping with the next chunk
-        if i < len(chunks) - 1:
-            if chunks[i]["end"] > chunks[i+1]["start"]:
-                chunks[i]["end"] = max(chunks[i]["start"], chunks[i+1]["start"])
+    # Prevent overlapping with the previous chunk due to the 50ms early start
+    for i in range(1, len(chunks)):
+        if chunks[i]["start"] < chunks[i - 1]["end"]:
+            chunks[i]["start"] = chunks[i - 1]["end"]
 
     return chunks
 
@@ -131,12 +131,51 @@ def generate_ass_file(
     chunks = _build_ass_chunks(segments, start_offset)
 
     lines = [_ass_header(), ""]
+
+    highlight_colors = [
+        "&H00E6E64D&",  # Soft Cyan (BGR)
+        "&H0000FF00&",  # Lime
+        "&H0000FFFF&",  # Warm Yellow
+        "&H00FF00BF&",  # Electric Purple
+    ]
+
+    emotional_triggers = {
+        "NEVER",
+        "INSANE",
+        "BRO",
+        "NO WAY",
+        "LISTEN",
+        "WAIT",
+        "CRAZY",
+        "DESTROYED",
+        "CRASHOUT",
+        "WTF",
+        "OMG",
+        "TRUTH",
+        "SECRET",
+    }
+
     for chunk in chunks:
         start = _seconds_to_ass_time(chunk["start"])
         end = _seconds_to_ass_time(chunk["end"])
-        # \an2 = bottom-center alignment; {\bord4} adds thick border
-        text = chunk["text"]
-        lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{{\\an2\\bord4\\shad2}}{text}")
+
+        words = chunk["text"].split()
+        if not words:
+            continue
+
+        colored_words = []
+        for w in words:
+            clean_word = "".join(c for c in w if c.isalpha())
+            if clean_word in emotional_triggers:
+                color = random.choice(highlight_colors)
+                colored_words.append(f"{{\\c{color}}}{w}{{\\c&H00F2F2F2&}}")
+            else:
+                colored_words.append(w)
+        text = " ".join(colored_words)
+
+        # Micro scale pop, fade in, and slight blur for premium feel
+        effect = "{\\blur0.5\\fad(50,50)\\fscx110\\fscy110\\t(0,50,\\fscx100\\fscy100)}"
+        lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{effect}{text}")
 
     out.write_text("\n".join(lines), encoding="utf-8")
     log.debug("ASS file written: %s (%d chunks)", out, len(chunks))
@@ -155,20 +194,22 @@ def burn_subtitles(
     output_path: str | Path,
     crf: int = 18,
     preset: str = "fast",
+    pacing: float = 1.0,
 ) -> Path:
     """
     Burn subtitles into a video using FFmpeg's native ASS filter.
 
-    This replaces the MoviePy TextClip approach entirely.
-    Speed improvement: typically 3-8x faster on CPU, 10x+ with GPU.
+    Optionally applies a pacing speedup (e.g. 1.15×) in the same FFmpeg
+    pass — no extra re-encode step needed.
 
     Args:
-        video_path: Input video file.
-        segments: Transcript segments with timing information.
+        video_path:   Input video file.
+        segments:     Transcript segments with timing information.
         start_offset: Start time offset for computing relative timestamps.
-        output_path: Where to write the final video.
-        crf: FFmpeg CRF quality (18 = near-lossless, 23 = default).
-        preset: FFmpeg encode preset (fast, medium, slow).
+        output_path:  Where to write the final video.
+        crf:          FFmpeg CRF quality (18 = near-lossless, 23 = default).
+        preset:       FFmpeg encode preset (fast, medium, slow).
+        pacing:       Speed multiplier (1.0 = no change, 1.15 = 15% faster).
 
     Returns:
         Path to the output video.
@@ -186,19 +227,34 @@ def burn_subtitles(
         # On Linux the path needs colons escaped
         escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
 
+        # Build video + audio filters
+        vf = f"ass='{escaped}'"
+        af_parts = [
+            "acompressor=threshold=-20dB:ratio=4:makeup=4",
+            "aformat=channel_layouts=stereo",
+        ]
+
+        if pacing != 1.0:
+            # Bake pacing into this pass — setpts speeds video, atempo speeds audio
+            pts_factor = round(1.0 / pacing, 6)
+            vf = f"setpts={pts_factor}*PTS,{vf}"
+            af_parts.insert(0, f"atempo={pacing}")
+
         cmd = [
             "ffmpeg",
             "-y",
             "-i",
             str(video_path),
             "-vf",
-            f"ass='{escaped}'",
+            vf,
             "-c:v",
             "libx264",
             "-crf",
             str(crf),
             "-preset",
             preset,
+            "-af",
+            ",".join(af_parts),
             "-c:a",
             "aac",
             "-b:a",

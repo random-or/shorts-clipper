@@ -58,18 +58,16 @@ class ASSChunkTests(unittest.TestCase):
             "this is great",
             words=[(10.0, 10.5, "this"), (10.6, 11.0, "is"), (11.1, 11.8, "great")],
         )
-        chunks = _build_ass_chunks([seg], start_offset=10.0, words_per_chunk=2)
-        self.assertEqual(len(chunks), 2)
-        self.assertEqual(chunks[0]["text"], "THIS IS")
+        chunks = _build_ass_chunks([seg], start_offset=10.0)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0]["text"], "THIS IS GREAT")
         self.assertAlmostEqual(chunks[0]["start"], 0.0)
 
     def test_fallback_chunks_distribute_time_evenly(self):
         seg = self._make_segment(0.0, 6.0, "one two three four five six")
-        chunks = _build_ass_chunks([seg], start_offset=0.0, words_per_chunk=2)
-        self.assertEqual(len(chunks), 3)
-        # Each chunk should span 2 seconds
-        for chunk in chunks:
-            self.assertAlmostEqual(chunk["end"] - chunk["start"], 2.0, places=5)
+        chunks = _build_ass_chunks([seg], start_offset=0.0)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0]["text"], "ONE TWO THREE FOUR FIVE SIX")
 
     def test_empty_segment_produces_no_chunks(self):
         seg = self._make_segment(0.0, 1.0, "")
@@ -82,7 +80,10 @@ class ScoutCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache_path = Path(tmp) / "cache.json"
             with patch("shorts_clipper.scout.trending._CACHE_FILE", cache_path):
-                seen = {"abc123", "def456"}
+                import time
+
+                now = time.time()
+                seen = {"abc123": now, "def456": now}
                 _save_cache(seen)
                 loaded = _load_cache()
             self.assertEqual(loaded, seen)
@@ -93,7 +94,7 @@ class ScoutCacheTests(unittest.TestCase):
             Path("/nonexistent/path/cache.json"),
         ):
             result = _load_cache()
-        self.assertIsInstance(result, set)
+        self.assertIsInstance(result, dict)
         self.assertEqual(len(result), 0)
 
 
@@ -114,23 +115,23 @@ class ScoutFilterTests(unittest.TestCase):
 
     def test_is_suitable_rejects_seen_ids(self):
         info = self._make_info()
-        self.assertFalse(_is_suitable(info, seen={"abc123"}))
+        self.assertFalse(_is_suitable(info, seen={"abc123": 1.0}))
 
     def test_is_suitable_rejects_short_videos(self):
         info = self._make_info(duration=60)
-        self.assertFalse(_is_suitable(info, seen=set()))
+        self.assertFalse(_is_suitable(info, seen={}))
 
     def test_is_suitable_rejects_very_long_videos(self):
         info = self._make_info(duration=7200)
-        self.assertFalse(_is_suitable(info, seen=set()))
+        self.assertFalse(_is_suitable(info, seen={}))
 
     def test_is_suitable_rejects_no_english(self):
         info = self._make_info(en_subs=False)
-        self.assertFalse(_is_suitable(info, seen=set()))
+        self.assertFalse(_is_suitable(info, seen={}))
 
     def test_is_suitable_passes_valid_video(self):
         info = self._make_info(duration=300, en_subs=True, vid_id="xyz789")
-        self.assertTrue(_is_suitable(info, seen=set()))
+        self.assertTrue(_is_suitable(info, seen={}))
 
 
 if __name__ == "__main__":

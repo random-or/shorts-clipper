@@ -25,6 +25,7 @@ class FfmpegRenderOptions:
     extra_output_args: tuple[str, ...] = ()
     font_name: str = "DejaVu Sans"
     font_size: int = 24
+    zoom_effect: bool = False  # Disabled by default to prevent over-editing
 
 
 def build_vertical_render_command(
@@ -52,6 +53,12 @@ def build_vertical_render_command(
     )
 
     filters = [crop.as_ffmpeg_filter(), f"scale={opts.target_width}:{opts.target_height}"]
+
+    if opts.zoom_effect:
+        # Subtle slow zoom in for emotional intensity
+        filters.append(
+            f"zoompan=z='min(zoom+0.001,1.15)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={opts.target_width}x{opts.target_height}"
+        )
 
     if subtitles_path:
         # ffmpeg subtitles filter is notoriously difficult with paths.

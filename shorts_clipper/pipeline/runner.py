@@ -3,8 +3,12 @@
 Wires together every module into a single clean flow:
   Scout → Subtitles → Gemini → Download → Crop → Burn Subs → Output
 
-Every step uses the package modules, Settings, and structured logging.
-No more root-level flat scripts doing everything.
+Pipeline encode passes:
+  Pass 1 — crop + scale to vertical (lossless-ish CRF 18)
+  Pass 2 — burn ASS subtitles + 1.15× pacing in ONE combined ffmpeg call
+
+No intermediate re-encode for pacing; it is baked into the subtitle step
+so we never triple-encode the video.
 """
 
 from __future__ import annotations
@@ -33,39 +37,54 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _get_segments_and_window(
+def _get_window_and_segments(
     url: str,
     work_path: Path,
     settings: Settings,
 ) -> tuple[list[TranscriptSegment], float, float, str]:
     """
-    Obtain transcript segments + best clip window via Gemini.
+    Two-pass architecture for maximum speed and precision.
 
-    Returns (segments, start_time, end_time, visual_layout).
-    If native subtitles aren't available, falls back to local Whisper
-    on a pre-downloaded micro-clip.
+    Pass 1 — fetch native subtitles (or tiny Whisper) so Gemini can pick
+              the best window without downloading the whole video.
+    Pass 2 — download only the selected micro-clip, then run the full
+              Whisper model for word-level timestamps.
+
+    Returns:
+        (precision_segments, window_start, window_end, layout_str)
     """
-    segments = fetch_subtitles(url, work_path)
+    log.info("\n--- PASS 1: ROUGH TRANSCRIPT FOR AI SELECTION ---")
+    rough_segments = fetch_subtitles(url, work_path)
 
-    if segments:
-        # Fast path: use native YouTube subtitles + Gemini
-        provider = GeminiProvider(api_key=settings.gemini_api_key)
-        window, layout = provider.select_clip_raw(segments)
-        return segments, window.start, window.end, layout
+    if not rough_segments:
+        log.warning(
+            "⚠️  No native subtitles. Downloading 5-min audio sample for rough transcript..."
+        )
+        audio_path = work_path / "rough_audio.m4a"
+        download_clip(url, audio_path, start_time=0.0, end_time=300.0)
+        rough_segments = transcribe_clip(
+            audio_path,
+            model_size="tiny.en",
+            device=settings.whisper_device,
+            compute_type=settings.whisper_compute_type,
+        )
 
-    # Slow path: download a 30s sample and transcribe locally
-    log.warning("⚠️  No native subtitles. Engaging local Whisper fallback...")
+    provider = GeminiProvider(api_key=settings.gemini_api_key)
+    window, layout = provider.select_clip_raw(rough_segments)
+
+    log.info("\n--- PASS 2: PRECISION TRANSCRIPTION ---")
     micro_path = work_path / "micro_clip.mp4"
-    start_time, end_time = 10.0, 40.0
-    download_clip(url, micro_path, start_time=start_time, end_time=end_time)
+    download_clip(url, micro_path, start_time=window.start, end_time=window.end)
 
-    segments = transcribe_clip(
+    log.info("Running Whisper (%s) on micro-clip for word-level timing...", settings.whisper_model)
+    precision_segments = transcribe_clip(
         micro_path,
         model_size=settings.whisper_model,
         device=settings.whisper_device,
         compute_type=settings.whisper_compute_type,
     )
-    return segments, start_time, end_time, "crop_center"
+
+    return precision_segments, window.start, window.end, layout
 
 
 # ---------------------------------------------------------------------------
@@ -82,9 +101,13 @@ def run(
     """
     Run the full shorts clipping pipeline for a given YouTube URL.
 
+    Encode flow (2 passes — no triple re-encode):
+      1. process_to_vertical   — scale + crop to 1080×1920
+      2. burn_subtitles        — ASS subtitles + 1.15× pacing in one pass
+
     Args:
-        url: YouTube video URL.
-        settings: App settings (loaded from .env if not provided).
+        url:         YouTube video URL.
+        settings:    App settings (loaded from .env if not provided).
         output_path: Override output path (default: outputs/clip_TIMESTAMP.mp4).
 
     Returns:
@@ -108,39 +131,33 @@ def run(
         work_path = Path(work_dir)
 
         try:
-            # ── Step 1 + 2: Subtitles + Gemini window selection ──────────
-            segments, start_time, end_time, layout = _get_segments_and_window(
+            # ── Steps 1-2: Two-pass transcript + AI selection ─────────────
+            segments, start_time, end_time, layout = _get_window_and_segments(
                 url, work_path, settings
             )
             log.info(
-                "📍 Clip window: %.1fs → %.1fs [%s]",
+                "📍 Clip window: %.1fs → %.1fs (%.1fs) [%s]",
                 start_time,
                 end_time,
+                end_time - start_time,
                 layout,
             )
 
-            # ── Step 3: Download the exact clip section ───────────────────
             micro_path = work_path / "micro_clip.mp4"
-            if not micro_path.exists():
-                download_clip(
-                    url,
-                    micro_path,
-                    start_time=start_time,
-                    end_time=end_time,
-                )
 
-            # ── Step 4: Vertical crop (pure FFmpeg, no MoviePy) ──────────
+            # ── Step 3: Vertical crop ─────────────────────────────────────
             log.info("\n--- VERTICAL CROP ---")
             cropped_path = work_path / "cropped.mp4"
             process_to_vertical(micro_path, cropped_path, layout=layout)
 
-            # ── Step 5: Burn subtitles (FFmpeg ASS, not MoviePy) ─────────
-            log.info("\n--- BURNING SUBTITLES ---")
+            # ── Step 4: Burn subtitles + 1.15× pacing (single pass) ───────
+            log.info("\n--- BURNING SUBTITLES + PACING ---")
             burn_subtitles(
                 cropped_path,
                 segments,
-                start_offset=start_time,
+                start_offset=0.0,  # precision segments are relative to micro_clip
                 output_path=output_path,
+                pacing=1.15,
             )
 
         except Exception as exc:
@@ -155,7 +172,8 @@ def run_autopilot(settings: Settings | None = None) -> Path | None:
     """
     Autopilot mode: scout a trending video, then run the full pipeline.
 
-    Returns the output path, or None if no suitable video was found.
+    Returns:
+        Output path on success, or None if no suitable video was found.
     """
     if settings is None:
         settings = Settings.from_env()
