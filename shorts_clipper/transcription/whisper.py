@@ -1,4 +1,4 @@
-"""Local Whisper transcription using faster-whisper with transparent Gemini 3.5 Flash acceleration."""
+"""Local Whisper transcription using faster-whisper with Gemini Flash acceleration."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import os
 import re
 import subprocess
 import tempfile
-import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -29,14 +28,9 @@ def _get_audio_bytes(media_path: Path) -> tuple[bytes, str]:
     # If it is a video or other format, extract audio to a temporary m4a file
     with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as tmp:
         tmp_path = Path(tmp.name)
-    
+
     try:
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(media_path),
-            "-vn", "-acodec", "copy",
-            str(tmp_path)
-        ]
+        cmd = ["ffmpeg", "-y", "-i", str(media_path), "-vn", "-acodec", "copy", str(tmp_path)]
         subprocess.run(cmd, check=True, capture_output=True)
         return tmp_path.read_bytes(), "audio/m4a"
     finally:
@@ -52,46 +46,45 @@ def _transcribe_with_gemini(
     try:
         from google import genai
         from google.genai import types
-        
+
         api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not api_key:
             log.warning("Gemini API key not found. Skipping Gemini transcription.")
             return None
-            
+
         log.info("🚀 Attempting fast transcription with Gemini 3.5 Flash...")
         audio_bytes, mime_type = _get_audio_bytes(media_path)
-        
-        client = genai.Client(api_key=api_key)
-        
-        prompt = """
-        Transcribe this audio file. Format the response as a JSON array of objects, where each object represents a segment:
-        - "start": float representing segment start in seconds
-        - "end": float representing segment end in seconds
-        - "text": string representing segment text
-        - "words": list of objects representing each word in the segment, where each object has:
-          - "word": string representing the word
-          - "start": float representing when the word starts in seconds
-          - "end": float representing when the word ends in seconds
 
-        Do NOT include any markdown code blocks, introductory, or concluding text. Return ONLY the raw valid JSON.
-        """
-        
+        client = genai.Client(api_key=api_key)
+
+        prompt = (
+            "Transcribe this audio file. Format the response as a JSON array of objects, "
+            "where each object represents a segment:\n"
+            '- "start": float representing segment start in seconds\n'
+            '- "end": float representing segment end in seconds\n'
+            '- "text": string representing segment text\n'
+            '- "words": list of objects representing each word in the segment, '
+            "where each object has:\n"
+            '  - "word": string representing the word\n'
+            '  - "start": float representing when the word starts in seconds\n'
+            '  - "end": float representing when the word ends in seconds\n\n'
+            "Do NOT include any markdown code blocks, introductory, or concluding text. "
+            "Return ONLY the raw valid JSON."
+        )
+
         response = client.models.generate_content(
             model="gemini-3.5-flash",
-            contents=[
-                types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
-                prompt
-            ],
+            contents=[types.Part.from_bytes(data=audio_bytes, mime_type=mime_type), prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
             ),
         )
-        
+
         raw_text = response.text.strip()
         json_match = re.search(r"```(?:json)?(.*?)```", raw_text, re.DOTALL)
         if json_match:
             raw_text = json_match.group(1).strip()
-            
+
         data = json.loads(raw_text)
         segments: list[TranscriptSegment] = []
         for item in data:
@@ -112,7 +105,7 @@ def _transcribe_with_gemini(
                     words=words,
                 )
             )
-            
+
         log.info("✅ Gemini transcription successful: %d segments", len(segments))
         return segments
     except Exception as exc:
@@ -154,7 +147,7 @@ def transcribe_clip(
         List of TranscriptSegment with word-level timestamps where available.
     """
     video_path = Path(video_path)
-    
+
     # Try Gemini first for ultra-fast, premium transcription
     gemini_segments = _transcribe_with_gemini(video_path)
     if gemini_segments is not None:

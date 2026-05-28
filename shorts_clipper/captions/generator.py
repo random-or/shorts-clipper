@@ -89,7 +89,10 @@ def _build_ass_chunks(
                     chunks.append(
                         {
                             "text": text,
-                            "start": max(0.0, (current_group[0].start - start_offset) / pacing - 0.05),
+                            "start": max(
+                                0.0,
+                                (current_group[0].start - start_offset) / pacing - 0.05,
+                            ),
                             "end": max(0.01, (current_group[-1].end - start_offset) / pacing),
                         }
                     )
@@ -99,36 +102,38 @@ def _build_ass_chunks(
                 chunks.append(
                     {
                         "text": text,
-                        "start": max(0.0, (current_group[0].start - start_offset) / pacing - 0.05),
+                        "start": max(
+                            0.0,
+                            (current_group[0].start - start_offset) / pacing - 0.05,
+                        ),
                         "end": max(0.01, (current_group[-1].end - start_offset) / pacing),
                     }
                 )
         else:
-            # Fallback if words missing — split into smaller chunks (max 3 words) and distribute time proportionally
+            # Fallback if words missing — split into smaller chunks (max 3 words)
+            # and distribute time proportionally
             words_list = seg.text.split()
             if not words_list:
                 continue
             seg_start = max(0.0, (seg.start - start_offset) / pacing - 0.05)
             seg_end = max(0.01, (seg.end - start_offset) / pacing)
             duration = seg_end - seg_start
-            
+
             # Group words into chunks of max 3 words
             chunk_size = 3
-            word_groups = [words_list[i:i+chunk_size] for i in range(0, len(words_list), chunk_size)]
-            
+            word_groups = [
+                words_list[i : i + chunk_size] for i in range(0, len(words_list), chunk_size)
+            ]
+
             total_words = len(words_list)
             current_start = seg_start
-            
+
             for group in word_groups:
                 group_text = " ".join(group).upper()
                 group_duration = (len(group) / total_words) * duration
                 group_end = current_start + group_duration
-                
-                chunks.append({
-                    "text": group_text,
-                    "start": current_start,
-                    "end": group_end
-                })
+
+                chunks.append({"text": group_text, "start": current_start, "end": group_end})
                 current_start = group_end
 
     # Prevent overlapping with the previous chunk due to the 50ms early start

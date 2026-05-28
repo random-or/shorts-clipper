@@ -1,34 +1,25 @@
-<div align="center">
-
 # 🎬 Shorts Clipper
-**The Ultimate Autonomous AI Video Factory**
+### *The Ultimate Autonomous AI Video Factory*
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Status: Production-Ready](https://img.shields.io/badge/status-production--ready-success.svg)](#)
-
-*Transform long-form landscape YouTube content into highly-engaging, viral vertical clips—completely autonomously with Gemini & local Whisper.*
-
-</div>
+Shorts Clipper is an industrial-grade, AI-driven automation pipeline designed to autonomously transform long-form landscape video content (such as podcasts, live streams, talk shows, and video essays) into highly-engaging, viral, 9:16 vertical clips perfect for TikTok, YouTube Shorts, and Instagram Reels.
 
 ---
 
-## 🎯 The Final Goal (What the Project Achieves)
+## 🎯 Core Capabilities & Goal
 
-Manually finding, cutting, cropping, and captioning video content for modern short-form feeds (TikTok, YouTube Shorts, Instagram Reels) is highly tedious, repetitive, and unscalable.
+Manually scrubbing hours of video to locate highlights, cropping coordinates, generating styled captions, and editing pacing is tedious. **Shorts Clipper** automates the entire lifecycle:
 
-**Shorts Clipper** is an industrial-grade, AI-driven automation pipeline that handles the entire lifecycle of viral clip creation. The system takes a landscape video (16:9) and outputs a production-ready, vertical (9:16) MP4 video with:
-1. **AI-Driven Smart Hook Detection**: A reasoning-based LLM evaluates video transcripts to identify the single best high-engagement 30-to-60-second segment containing strong hooks in the first 2 seconds, high emotional tension, and independent narrative coherence.
-2. **Dynamic Aspect Ratio Conversion**: Intelligent conversion of landscape footage into 9:16 vertical formats, supporting center-crop, smart left/right crops, and dual-subject split-screen formats (perfect for podcast exchanges and interviews).
-3. **Dual-Color Animated Subtitles**: Highly stylized, modern, burned-in Advanced SubStation Alpha (`.ass`) captions rendered at word-level timing precision.
-4. **Pacing Optimization**: A native FFmpeg filter speed-up (1.15× pacing) seamlessly merged into the subtitle rendering step, removing dead air without introducing audio pitch distortions or requiring triple-encoding.
+* **🤖 Autonomous Scouting Engine**: Periodically hunts for high-virality videos across drama, debate, podcast, and motivational search pools. Uses a view-velocity scoring algorithm to select target candidates while maintaining a cache of already-processed video IDs to prevent duplicates.
+* **🧠 Gemini Smart Highlight Finder**: Evaluates transcripts using modern reasoning models (`gemini-2.5-flash`) via the official `google-genai` SDK to isolate the single best 30-to-60-second window containing high emotional density and a hook within the first 2 seconds.
+* **🎙️ Hybrid Dual-Engine Transcription**: transparently falls back to a highly optimized local **faster-whisper** model (`tiny.en` up to `large-v3`) if external APIs are unavailable, running with optional GPU-accelerated quantization (`float16`).
+* **📐 Dynamic Aspect-Ratio Layouts**: Intelligent geometry math converts widescreen footage to vertical formats. Supports `crop_center` (single subject), `crop_left`/`crop_right` (offset subjects), and `split_screen` (dual subjects for podcasts/debates).
+* **⚡ Turbocharged FFmpeg Rendering**: Burns highly styled, dual-color, word-level animated Advanced SubStation Alpha (`.ass`) subtitles and applies a 1.15× pacing increase to remove dead air—in **one single FFmpeg pass** to prevent multi-encode degradation.
 
 ---
 
 ## 🏗️ System Architecture & Data Flow
 
-Shorts Clipper relies on a clean, modular Domain-Driven Design (DDD) backend:
+The project follows a modular, domain-driven structure to maximize testability and allow components (e.g., transcription or highlight discovery) to be easily swapped.
 
 ```mermaid
 graph TD;
@@ -41,19 +32,44 @@ graph TD;
     Burn -->|1.15x Pacing + Burned ASS Subtitles| Out[8. Final Polished Vertical Short]
 ```
 
-### The 2-Pass Performance Advantage
-To maximize execution speed and minimize local network bandwidth:
-* **Pass 1 (Selection)**: The pipeline fetches only native subtitles (or downloads a low-bandwidth 5-minute audio sample) to run a fast transcript analysis. The LLM evaluates this transcript to choose the exact timestamps of the best clip window.
-* **Pass 2 (Extraction)**: Only the selected micro-clip (typically 30–60s) is downloaded in high resolution. This is followed by high-accuracy, word-level Whisper transcription and FFmpeg cropping. This architecture saves gigabytes of network bandwidth and cuts rendering time per video by up to 90%.
+### The 2-Pass Network and CPU Optimization
+To minimize network bandwidth and API cost:
+* **Pass 1 (Analysis)**: The pipeline acquires native subtitles (or downloads a low-bandwidth 5-minute audio slice) for initial transcript analysis. Gemini evaluates this text to define the high-virality window.
+* **Pass 2 (Execution)**: The downloader uses yt-dlp section-clipping (`--download-sections`) to grab only the selected 30–60s clip in high resolution. Word-level transcription and vertical rendering are performed on this micro-clip, cutting processing time by up to 90%.
+
+---
+
+## 📁 Repository Directory Map
+
+The directory structure separates business domains, settings, and render adapters:
+
+```
+shorts-clipper/
+├── shorts_clipper/
+│   ├── core/                  # Settings parser, logging configurations, exceptions
+│   ├── scout/                 # Trending searches, view-velocity, and candidate selection
+│   ├── downloader/            # Sectioned yt-dlp downloader & subtitle extraction
+│   ├── transcription/         # Whisper and Gemini Flash audio transcription engines
+│   ├── highlight_detection/   # Rule-based fallback highlight scoring
+│   ├── providers/             # Gemini API client interface and response parsing contracts
+│   ├── cropping/              # Aspect-ratio geometry calculators
+│   ├── captions/              # ASS subtitle generation & word-level timing offsets
+│   ├── rendering/             # Core FFmpeg execution adapters for cropping & burning
+│   └── pipeline/              # Runner orchestrator (coordinating data flow)
+├── tests/                     # Comprehensive unittest suites
+├── requirements.txt           # Main production requirements
+├── pyproject.toml             # Standard package metadata and optional dev extras
+└── .env.example               # Template environment configuration file
+```
 
 ---
 
 ## 🛠️ System Prerequisites
 
-Your system must have the following system-level dependencies installed:
+Your system must have the following tools installed and available in your environment path:
 
 1. **Python 3.11+**
-2. **FFmpeg**: Must be compiled with **`libass` support** to enable advanced subtitle burning.
+2. **FFmpeg**: Must be compiled with **`libass` support** to burn high-fidelity, styled subtitle tracks.
    * **Ubuntu/Debian**:
      ```bash
      sudo apt update && sudo apt install ffmpeg libass-dev -y
@@ -62,134 +78,164 @@ Your system must have the following system-level dependencies installed:
      ```bash
      brew install ffmpeg
      ```
-   * **Windows**: Download a full static build from [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/) or install via package manager:
+   * **Windows**: Download a full static build from [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/) or install via winget:
      ```powershell
      winget install Gyan.FFmpeg
      ```
-3. **yt-dlp**: Handled automatically as a Python dependency, but having the system-level binary is highly recommended for high-speed downloads.
+3. **yt-dlp**: Installed as a Python package, but having a system-wide executable is recommended for high-speed segment downloading.
 
 ---
 
-## 📥 Step-by-Step Installation
+## 📥 Installation & Setup
 
-Follow these exact steps to configure your environment:
+Set up your workspace inside a local Python virtual environment:
 
-### 1. Clone the Repository
+### 1. Clone & Navigate to Repository
 ```bash
 git clone https://github.com/random-or/shorts-clipper.git
 cd shorts-clipper
 ```
 
-### 2. Create and Activate a Virtual Environment
+### 2. Configure Virtual Environment
 ```bash
 # Create environment
 python -m venv env
 
-# Activate environment (Linux/macOS)
+# Activate (Linux/macOS)
 source env/bin/activate
 
-# Activate environment (Windows Command Prompt)
+# Activate (Windows Command Prompt)
 env\Scripts\activate.bat
 
-# Activate environment (Windows PowerShell)
+# Activate (Windows PowerShell)
 .\env\Scripts\Activate.ps1
 ```
 
-### 3. Install Python Dependencies
+### 3. Install Dependencies
 ```bash
-# Standard runtime installation
+# Install core package
 pip install -r requirements.txt
 pip install -e .
 
-# OR install with development dependencies (for pytest and linting)
+# OR install with developer dependencies (for tests & lint checks)
 pip install -e ".[dev]"
 ```
 
 ---
 
-## 🔑 AI Provider Setup & API Configuration
+## 🔑 AI Credentials & Configuration
 
-### Why an API Key is Required
-To isolate high-virality highlights and select the optimal cropping layout (e.g., center crop vs. split-screen podcast format), the pipeline integrates with an LLM. By default, it uses **Google Gemini 2.5 Flash** for its exceptional reasoning, fast speeds, and large context windows, accessed through the official `google-genai` SDK.
+### Why is an API Key Required?
+To detect emotional peaks, recognize hooks in the first 2 seconds, and define appropriate visual cropping strategies (e.g., center crop vs. split-screen layouts), the pipeline consults an LLM. By default, it uses **Google Gemini 2.5 Flash** due to its reasoning speeds and broad context.
 
-### Step-by-Step API Key Setup
-1. Duplicate the template environment file:
+### Configure Your Credentials
+1. Copy the example configuration template:
    ```bash
    cp .env.example .env
    ```
-2. Open the newly created `.env` file in your preferred text editor.
-3. Obtain a free API key from [Google AI Studio](https://aistudio.google.com/).
-4. Insert your key next to `GEMINI_API_KEY` in the `.env` file:
+2. Open `.env` in a text editor.
+3. Obtain your API Key from [Google AI Studio](https://aistudio.google.com/).
+4. Insert your credentials:
    ```env
-   # AI providers
    GEMINI_API_KEY=AIzaSyYourActualGeminiApiKeyHere
    SHORTS_PROVIDER=gemini
    ```
 
-Now, the pipeline is fully authorized to consult Gemini during highlight selection!
-
 ---
 
-## 💻 How to Run the Pipeline (Usage)
+## 💻 CLI Commands & Usage
 
-Shorts Clipper provides a simple command-line interface under the `python -m shorts_clipper` command (or the installed binary alias `shorts-clipper`).
+Shorts Clipper exposes three operational subcommands under the `shorts-clipper` alias or `python -m shorts_clipper` entry point.
 
-### 1. Targeted Mode (Clip a Specific Video)
-Provide a direct YouTube link to clip the single best viral segment from that specific video:
+### 1. Target Mode (Clip a Specific Video)
+Fetch, analyze, crop, and burn captions for a single target YouTube video:
 ```bash
 python -m shorts_clipper clip "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
-
-To output the file to a specific directory or custom filename, use the `-o` or `--output` flag:
+Override the default timestamped output destination:
 ```bash
 python -m shorts_clipper clip "https://www.youtube.com/watch?v=VIDEO_ID" -o "./clips/my_viral_short.mp4"
 ```
 
-### 2. Autonomous Mode (Autopilot)
-Let the system scout high-virality trending videos (drama, debate, podcast, or motivational niches), score them using view velocity algorithms, choose the best candidate, select the hook, crop it, and write the output—completely unattended:
+### 2. Autopilot Mode (End-to-End Automation)
+Launches the autonomous workflow: searches the trending pools, filters out non-English content, evaluates virality, downloads the video, highlights the clip, crops it, and writes a vertical video file to the output directory:
 ```bash
 python -m shorts_clipper autopilot
 ```
 
 ### 3. Scout Mode (Dry Run)
-Query the trending pools, score them, and print the URLs of the best candidate videos without clipping or rendering:
+Scan the trending query pools and print the URLs of the best candidate videos to the terminal without running the clipping, cropping, or rendering stages:
 ```bash
 python -m shorts_clipper scout -n 3
 ```
 
 ---
 
-## ⚙️ Advanced Configuration (`.env` Settings)
+## ⚙️ Advanced Settings (`.env` Variables)
 
-Modify these settings in your `.env` file to customize the pipeline's behavior:
+Fine-tune your local pipeline parameters within your `.env` configuration file:
 
-| Variable | Default Value | Description |
+| Variable | Default | Description |
 | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | *(Empty)* | Your Google Gemini API Key. |
-| `SHORTS_PROVIDER` | `gemini` | The active LLM engine provider (`gemini`). |
-| `SHORTS_WHISPER_MODEL` | `tiny.en` | Local Whisper transcription model (choices: `tiny.en`, `base.en`, `small.en`, `medium.en`, `large-v3`). |
-| `SHORTS_WHISPER_DEVICE` | `cpu` | Hardware device for Whisper inference (`cpu` or `cuda` for NVIDIA GPU acceleration). |
-| `SHORTS_WHISPER_COMPUTE_TYPE` | `int8` | Quantization type for Whisper (`int8` for fast CPU execution, `float16` for CUDA GPUs). |
-| `SHORTS_ENABLE_GPU` | `false` | Set to `true` to activate GPU hardware acceleration for both Whisper and FFmpeg. |
-| `SHORTS_MODELS_DIR` | `models` | Directory where local Whisper weights are stored. |
-| `SHORTS_OUTPUT_DIR` | `outputs` | Target directory where completed 9:16 vertical clips are saved. |
-| `SHORTS_CACHE_DIR` | `.cache/shorts-clipper` | Directory for storing scout history cache (to prevent duplicate clip generation). |
-| `SHORTS_LOG_LEVEL` | `INFO` | Terminal log verbosity level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
+| `GEMINI_API_KEY` | *(Empty)* | API key to authorize the Gemini Highlight Detector. |
+| `SHORTS_PROVIDER` | `gemini` | The target LLM engine provider (`gemini`). |
+| `SHORTS_WHISPER_MODEL` | `tiny.en` | Local Whisper model size (`tiny.en`, `base.en`, `small.en`, `medium.en`, `large-v3`). |
+| `SHORTS_WHISPER_DEVICE` | `cpu` | Local execution device for Whisper (`cpu` or `cuda` for NVIDIA GPU support). |
+| `SHORTS_WHISPER_COMPUTE_TYPE` | `int8` | Inference quantization (`int8` for CPU, `float16` for GPUs). |
+| `SHORTS_ENABLE_GPU` | `false` | Set to `true` to run both Whisper inference and FFmpeg rendering on GPU cores. |
+| `SHORTS_MODELS_DIR` | `models` | Directory path where downloaded Whisper weights are stored. |
+| `SHORTS_OUTPUT_DIR` | `outputs` | Target directory where all final vertical shorts are written. |
+| `SHORTS_CACHE_DIR` | `.cache` | Location where seen-video database keys are stored to prevent duplicates. |
+| `SHORTS_LOG_LEVEL` | `INFO` | Verbosity of terminal output logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
+
+---
+
+## 🐳 Docker Deployment
+
+The pipeline is fully containerized. A `Dockerfile` and `docker-compose.yml` are provided in the repository root.
+
+### Build and Run with Docker Compose
+```bash
+# Build the container image
+docker-compose build
+
+# Run the autopilot scouting factory inside Docker
+docker-compose up
+```
+
+---
+
+## 🔧 Verified Troubleshooting
+
+* **Issue: `Cache load failed: [Errno 13] Permission denied`**
+  * *Cause*: The script is attempting to write cache data to `/nonexistent` or a root directory.
+  * *Fix*: Ensure `SHORTS_CACHE_DIR` in your `.env` points to a path within the workspace directory, for example: `SHORTS_CACHE_DIR=.cache/shorts-clipper`.
+
+* **Issue: `ffmpeg: libass not found`**
+  * *Cause*: Your system's FFmpeg binary lacks ASS library extensions required to render styled subtitles.
+  * *Fix*: Re-install FFmpeg from standard system managers (e.g. `apt` on Linux or `brew` on macOS) which include `libass` by default, or download a full static bundle.
+
+* **Issue: `yt-dlp download sections error`**
+  * *Cause*: The version of yt-dlp is outdated and does not support sub-segment extraction.
+  * *Fix*: Upgrade the packages:
+    ```bash
+    pip install --upgrade yt-dlp
+    ```
 
 ---
 
 ## 🧪 Testing & Code Quality
 
-Shorts Clipper maintains a high-coverage unit-test suite checking settings parsing, crop geometry calculation, ASS subtitle formatting, and yt-dlp section generation logic.
+Verify settings parsing, crop geometry calculators, ASS subtitle builders, and yt-dlp section generation logic:
 
-Run the test suite using Python's native test runner:
 ```bash
+# Run unit tests
 python -m unittest discover -s tests -p "test_*.py"
-```
 
-Verify style guidelines and formatting using Ruff:
-```bash
+# Check code linting
 ruff check .
+
+# Check formatting compliance
 ruff format --check .
 ```
 
@@ -197,4 +243,4 @@ ruff format --check .
 
 ## 🛡️ License
 
-Distributed under the **MIT License**. See the [LICENSE](LICENSE) file for more information.
+Distributed under the **MIT License**. See [LICENSE](LICENSE) for more details.

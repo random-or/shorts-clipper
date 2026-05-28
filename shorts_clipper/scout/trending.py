@@ -428,10 +428,7 @@ def get_trending_link(
     log.error("❌ Scout exhausted all pools after %d attempts.", max_retries)
 
     # Last resort: pick a random unseen video from the curated fallback list
-    unseen_fallbacks = [
-        url for url in FALLBACK_VIDEOS
-        if url.split("v=")[-1] not in seen
-    ]
+    unseen_fallbacks = [url for url in FALLBACK_VIDEOS if url.split("v=")[-1] not in seen]
     if unseen_fallbacks:
         fallback_url = random.choice(unseen_fallbacks)
         vid_id = fallback_url.split("v=")[-1]
