@@ -141,6 +141,9 @@ def _build_ass_chunks(
         if chunks[i]["start"] < chunks[i - 1]["end"]:
             chunks[i]["start"] = chunks[i - 1]["end"]
 
+    # Drop chunks where overlap adjustment pushed start past end
+    chunks = [c for c in chunks if c["start"] < c["end"]]
+
     return chunks
 
 

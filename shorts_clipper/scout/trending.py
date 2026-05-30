@@ -388,6 +388,7 @@ def _calculate_virality_score(info: dict) -> float:
     ]
     if any(kw in title for kw in weak_keywords):
         title_intensity -= 10.0
+    title_intensity = max(0.0, title_intensity)
 
     if not upload_date:
         return view_count + (title_intensity * 2_000)

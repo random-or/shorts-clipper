@@ -15,7 +15,9 @@ def get_video_metadata(path: str) -> VideoMetadata:
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     data = json.loads(result.stdout)
 
-    video_stream = next(s for s in data["streams"] if s["codec_type"] == "video")
+    video_stream = next((s for s in data["streams"] if s["codec_type"] == "video"), None)
+    if video_stream is None:
+        raise RuntimeError(f"No video stream found in {path}")
     width = int(video_stream["width"])
     height = int(video_stream["height"])
 

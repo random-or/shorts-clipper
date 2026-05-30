@@ -15,8 +15,8 @@ from shorts_clipper.utils.video import get_video_metadata
 
 log = logging.getLogger(__name__)
 
-_TARGET_W = 608
-_TARGET_H = 1080
+_TARGET_W = 1080
+_TARGET_H = 1920
 
 
 def _build_crop_filter(src_w: int, src_h: int, layout: str) -> str:
@@ -25,12 +25,12 @@ def _build_crop_filter(src_w: int, src_h: int, layout: str) -> str:
 
     if layout == "crop_left":
         scale_h = _TARGET_H
-        scale_w = max(_TARGET_W, round(_TARGET_H * src_ratio))
+        scale_w = max(_TARGET_W, round(_TARGET_H * src_ratio) // 2 * 2)
         return f"scale={scale_w}:{scale_h},crop={_TARGET_W}:{_TARGET_H}:0:0"
 
     if layout == "crop_right":
         scale_h = _TARGET_H
-        scale_w = max(_TARGET_W, round(_TARGET_H * src_ratio))
+        scale_w = max(_TARGET_W, round(_TARGET_H * src_ratio) // 2 * 2)
         x_offset = scale_w - _TARGET_W
         return f"scale={scale_w}:{scale_h},crop={_TARGET_W}:{_TARGET_H}:{x_offset}:0"
 
@@ -43,8 +43,8 @@ def _build_crop_filter(src_w: int, src_h: int, layout: str) -> str:
     )
     # Scale so the crop region exactly fills the target frame
     scale = max(_TARGET_W / crop.width, _TARGET_H / crop.height)
-    scaled_w = round(src_w * scale)
-    scaled_h = round(src_h * scale)
+    scaled_w = round(src_w * scale) // 2 * 2
+    scaled_h = round(src_h * scale) // 2 * 2
     x = (scaled_w - _TARGET_W) // 2
     y = (scaled_h - _TARGET_H) // 2
     return f"scale={scaled_w}:{scaled_h},crop={_TARGET_W}:{_TARGET_H}:{x}:{y}"
