@@ -38,7 +38,12 @@ def _cmd_clip(args: argparse.Namespace, settings: Settings) -> int:
 def _cmd_autopilot(args: argparse.Namespace, settings: Settings) -> int:
     from shorts_clipper.pipeline.runner import run_autopilot
 
-    path = run_autopilot(settings=settings)
+    path = run_autopilot(
+        settings=settings,
+        channel=getattr(args, "channel", None),
+        niche=getattr(args, "niche", None),
+        keyword=getattr(args, "keyword", None),
+    )
     if path:
         print(f"\n🔥 Clip ready: {path}")
         return 0
@@ -52,7 +57,11 @@ def _cmd_scout(args: argparse.Namespace, settings: Settings) -> int:  # noqa: AR
     count = getattr(args, "count", 1)
     found = 0
     while found < count:
-        url = get_trending_link()
+        url = get_trending_link(
+            channel=getattr(args, "channel", None),
+            niche=getattr(args, "niche", None),
+            keyword=getattr(args, "keyword", None),
+        )
         if url:
             print(url)
             found += 1
@@ -94,9 +103,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # ── autopilot ─────────────────────────────────────────────────────────
-    sub.add_parser(
+    autopilot_p = sub.add_parser(
         "autopilot",
         help="Scout a trending video and clip it automatically.",
+    )
+    autopilot_p.add_argument(
+        "--channel",
+        help="Search only this channel's recent videos.",
+    )
+    autopilot_p.add_argument(
+        "--niche",
+        help="Build 5 targeted search queries around this niche and rotate between them.",
+    )
+    autopilot_p.add_argument(
+        "--keyword",
+        help="Search specifically for this term across multiple platforms.",
     )
 
     # ── scout ─────────────────────────────────────────────────────────────
@@ -107,6 +128,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="Number of URLs to find (default: 1)",
+    )
+    scout_p.add_argument(
+        "--channel",
+        help="Search only this channel's recent videos.",
+    )
+    scout_p.add_argument(
+        "--niche",
+        help="Build 5 targeted search queries around this niche and rotate between them.",
+    )
+    scout_p.add_argument(
+        "--keyword",
+        help="Search specifically for this term across multiple platforms.",
     )
 
     return parser

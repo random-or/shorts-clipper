@@ -168,7 +168,13 @@ def run(
     return output_path
 
 
-def run_autopilot(settings: Settings | None = None) -> Path | None:
+def run_autopilot(
+    settings: Settings | None = None,
+    *,
+    channel: str | None = None,
+    niche: str | None = None,
+    keyword: str | None = None,
+) -> Path | None:
     """
     Autopilot mode: scout a trending video, then run the full pipeline.
 
@@ -179,7 +185,7 @@ def run_autopilot(settings: Settings | None = None) -> Path | None:
         settings = Settings.from_env()
 
     log.info("🤖 AUTOPILOT MODE: Scouting trending content...")
-    url = get_trending_link()
+    url = get_trending_link(channel=channel, niche=niche, keyword=keyword)
     if not url:
         log.error("Scout returned no suitable video. Aborting.")
         return None

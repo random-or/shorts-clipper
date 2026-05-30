@@ -210,5 +210,84 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn("*10.0-120.0", args)
 
 
+class ScoutQueryTests(unittest.TestCase):
+    @patch("shorts_clipper.scout.trending._scout_pool")
+    def test_scout_by_channel(self, mock_scout_pool):
+        from shorts_clipper.scout.trending import get_trending_link
+        mock_scout_pool.return_value = []
+
+        # Test with a handle
+        get_trending_link(channel="@MrBeast", cache=False, max_retries=1)
+        mock_scout_pool.assert_called_with("https://www.youtube.com/@MrBeast/videos", {}, 30)
+
+        # Test with a handle string without @
+        get_trending_link(channel="MrBeast", cache=False, max_retries=1)
+        mock_scout_pool.assert_called_with("https://www.youtube.com/@MrBeast/videos", {}, 30)
+
+        # Test with full URL
+        get_trending_link(channel="https://www.youtube.com/c/MrBeast/videos", cache=False, max_retries=1)
+        mock_scout_pool.assert_called_with("https://www.youtube.com/c/MrBeast/videos", {}, 30)
+
+    def test_is_suitable_enforces_max_age_days(self):
+        from shorts_clipper.scout.trending import _is_suitable
+        from datetime import datetime, timedelta
+
+        # Mock video uploaded 10 days ago (suitable under 30 days)
+        date_10_days_ago = (datetime.now() - timedelta(days=10)).strftime("%Y%m%d")
+        info_new = {
+            "id": "vid123",
+            "duration": 300,
+            "upload_date": date_10_days_ago,
+            "automatic_captions": {"en": []}
+        }
+        self.assertTrue(_is_suitable(info_new, {}, max_age_days=30))
+
+        # Mock video uploaded 40 days ago (unsuitable under 30 days)
+        date_40_days_ago = (datetime.now() - timedelta(days=40)).strftime("%Y%m%d")
+        info_old = {
+            "id": "vid456",
+            "duration": 300,
+            "upload_date": date_40_days_ago,
+            "automatic_captions": {"en": []}
+        }
+        self.assertFalse(_is_suitable(info_old, {}, max_age_days=30))
+
+    @patch("shorts_clipper.scout.trending._get_current_trending_keywords")
+    @patch("shorts_clipper.scout.trending._scout_pool")
+    def test_scout_by_niche_rotation(self, mock_scout_pool, mock_get_kws):
+        from shorts_clipper.scout.trending import get_trending_link
+        from datetime import datetime
+        mock_scout_pool.return_value = []
+        mock_get_kws.return_value = ["podcast", "drama"]
+
+        now = datetime.now()
+        day_str = now.strftime("%A")
+        week_str = f"week {now.isocalendar()[1]}"
+
+        # Call first time
+        get_trending_link(niche="cooking", cache=False, max_retries=1)
+        first_call_queries = [call.args[0] for call in mock_scout_pool.call_args_list]
+        self.assertIn(f"ytsearch5:viral cooking podcast english {day_str} today", first_call_queries)
+
+        mock_scout_pool.reset_mock()
+        # Call second time to ensure rotation index changed
+        get_trending_link(niche="cooking", cache=False, max_retries=1)
+        second_call_queries = [call.args[0] for call in mock_scout_pool.call_args_list]
+        self.assertIn(f"ytsearch5:best cooking podcast highlights english this week {week_str}", second_call_queries)
+
+    @patch("shorts_clipper.scout.trending._scout_pool")
+    def test_scout_by_keyword_multi_platform(self, mock_scout_pool):
+        from shorts_clipper.scout.trending import get_trending_link
+        mock_scout_pool.return_value = []
+
+        get_trending_link(keyword="clash", cache=False, max_retries=1)
+        queries = [call.args[0] for call in mock_scout_pool.call_args_list]
+
+        self.assertIn("ytsearch5:clash", queries)
+        self.assertIn("scsearch5:clash", queries)
+        self.assertIn("gvsearch5:clash", queries)
+        self.assertIn("yvsearch5:clash", queries)
+
+
 if __name__ == "__main__":
     unittest.main()

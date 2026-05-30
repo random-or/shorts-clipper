@@ -30,7 +30,7 @@ def _get_audio_bytes(media_path: Path) -> tuple[bytes, str]:
         tmp_path = Path(tmp.name)
 
     try:
-        cmd = ["ffmpeg", "-y", "-i", str(media_path), "-vn", "-acodec", "copy", str(tmp_path)]
+        cmd = ["ffmpeg", "-y", "-i", str(media_path), "-vn", "-c:a", "aac", str(tmp_path)]
         subprocess.run(cmd, check=True, capture_output=True)
         return tmp_path.read_bytes(), "audio/m4a"
     finally:

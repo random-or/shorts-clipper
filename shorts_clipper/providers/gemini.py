@@ -27,29 +27,29 @@ _PROMPT_TEMPLATE = """\
 You are an elite viral shorts editor with 10 years of experience on TikTok,
 Instagram Reels, and YouTube Shorts. Your clips consistently hit 1M+ views.
 
-Analyze the transcript below and identify the SINGLE best clip window.
+Analyze the transcript below, identify the SINGLE best clip window, and score it from 0 to 100 based on the evaluation criteria.
 
 {transcript}
 
-━━━ SELECTION CRITERIA ━━━
+━━━ EVALUATION CRITERIA (Score 0-100) ━━━
 
-MUST HAVE (reject clips that fail any):
-• Duration strictly between 30 and 60 seconds — non-negotiable.
-• Hooks within the FIRST 2 SECONDS — tension, shock, conflict, or confusion.
-• Self-contained: viewer doesn't need prior context to understand it.
-• High emotional density: rapid emotional shifts, confrontation, or revelation.
+Score the clip window strictly based on these 5 dimensions (0 to 100 overall score):
 
-REJECT IMMEDIATELY:
-• Intros / greetings ("Welcome to...", "Today we...")
-• Calm explanations or educational pacing
-• Generic motivational filler
-• Anything that needs setup > 3 seconds
+1. EMOTIONAL PEAK MOMENTS: Genuinely surprising, hilarious, or high-impact moments. Do NOT just select loud or high-volume noise; prioritize authentic humor or shocking surprises.
+2. CLIP-ABILITY: The segment must have a clean, logical start and a satisfying end. It must make perfect sense standing alone as a self-contained video.
+3. NICHE RELEVANCE: The clip must highly align with and fit the specific topic, theme, or channel style.
+4. HOOK QUALITY: The first 3 seconds of the clip must grab attention immediately with extreme hook power (tension, question, mystery, shock, or surprise).
+5. AVOID ENTIRELY (Score < 85 if any of these are present):
+   - Reaction compilations.
+   - Generic motivational filler/pacing.
+   - Anything requiring external context or explanation from the rest of the video to be understood.
 
-FRAMING — choose the best vertical crop:
+Only select and return a clip if its final combined score is 85 or higher. If no clip reaches a score of 85 or above, return a low score under 85 and explain why in the reason.
+
+━━━ FRAMING — choose the best vertical crop ━━━
 • crop_center   — single subject, centered
 • crop_left     — subject is left of frame
 • crop_right    — subject is right of frame
-• split_screen  — two subjects (podcast/debate)
 
 ━━━ RESPONSE FORMAT ━━━
 
@@ -61,7 +61,7 @@ Return ONLY valid JSON, no markdown, no commentary:
   "virality_score": <int 0-100>,
   "emotional_category": "<tension|shock|humor|confrontation|revelation>",
   "strongest_hook_line": "<exact phrase from transcript>",
-  "reason": "<one sentence why this clip will go viral>"
+  "reason": "<one sentence why this clip meets the criteria and how it was scored>"
 }}"""
 
 
@@ -118,6 +118,12 @@ class GeminiProvider(HighlightProvider):
             start = float(data["start"])
             end = float(data["end"])
             layout = str(data.get("layout", self._fallback_layout)).strip()
+            score = int(data.get("virality_score", 0))
+
+            if score < 85:
+                raise ProviderError(
+                    f"Selected clip score ({score}) is below the minimum threshold of 85."
+                )
 
             # Enforce duration bounds — if Gemini goes out of spec, clamp it
             duration = end - start
@@ -137,11 +143,11 @@ class GeminiProvider(HighlightProvider):
                 end = start + 55
 
             log.info(
-                "✅ Gemini selected: %.1fs → %.1fs [%s] | score=%s | %s",
+                "✅ Gemini selected: %.1fs → %.1fs [%s] | score=%d | %s",
                 start,
                 end,
                 layout,
-                data.get("virality_score", "?"),
+                score,
                 data.get("emotional_category", "?"),
             )
             log.info("   Hook: %r", data.get("strongest_hook_line", ""))

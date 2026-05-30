@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -23,6 +24,37 @@ from pathlib import Path
 from typing import NamedTuple
 
 log = logging.getLogger(__name__)
+
+_NICHE_ROTATION_INDEX = 0
+
+TRENDING_TOPICS_FALLBACK = [
+    "podcast", "drama", "gaming", "ai", "streamer", 
+    "interview", "debate", "reaction", "opinion", "expose"
+]
+
+
+def _get_current_trending_keywords() -> list[str]:
+    """Helper to fetch 5 trending videos and extract key noun/topic words."""
+    entries = _search_entries("ytsearch5:trending")
+    if not entries:
+        return []
+
+    words: list[str] = []
+    stop_words = {
+        "to", "in", "and", "the", "a", "of", "for", "on", "with", "how", "start",
+        "trading", "stock", "market", "beginners", "free", "guide", "dubbed",
+        "movie", "full", "hindi", "new", "release", "trending", "viral", "slowed",
+        "reverb", "mashup", "love", "non", "stop", "instagram", "song", "songs",
+        "video", "videos", "shorts", "short", "clip", "clips", "part", "episode",
+        "chera", "tu", "nahi", "aisa", "main", "lo", "fi", "ultra", "4k", "south",
+        "techno", "thriller", "best", "latest", "today", "now"
+    }
+    for entry in entries:
+        title = entry.get("title", "")
+        for word in re.findall(r"[a-zA-Z]{3,}", title.lower()):
+            if word not in stop_words:
+                words.append(word)
+    return list(set(words))
 
 # ---------------------------------------------------------------------------
 # Query pools — rotated on each call, escalated on failure
@@ -159,6 +191,10 @@ def _search_entries(query: str) -> list[dict]:
         "10",
         "--quiet",
     ]
+    # If the query is a channel URL or user page, limit to recent 15 videos to avoid long downloads
+    if "youtube.com/" in query or query.startswith("http"):
+        cmd.extend(["--playlist-end", "15"])
+
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=20)
         data = json.loads(result.stdout)
@@ -218,10 +254,27 @@ def _has_english(info: dict) -> bool:
     return True
 
 
-def _is_suitable(info: dict, seen: dict[str, float]) -> bool:
+def _is_suitable(info: dict, seen: dict[str, float], max_age_days: int | None = None) -> bool:
     vid_id = info.get("id", "")
     duration = float(info.get("duration") or 0)
-    return vid_id not in seen and _MIN_DURATION <= duration <= _MAX_DURATION and _has_english(info)
+    
+    if vid_id in seen or not (_MIN_DURATION <= duration <= _MAX_DURATION) or not _has_english(info):
+        return False
+
+    if max_age_days is not None:
+        upload_date = info.get("upload_date")
+        if not upload_date:
+            return False
+        try:
+            upload_dt = datetime.strptime(upload_date, "%Y%m%d")
+            age_days = (datetime.now() - upload_dt).total_seconds() / 86400.0
+            if age_days > max_age_days:
+                log.info("   [Skip] Candidate %s is too old (age=%.1f days > %d)", vid_id, age_days, max_age_days)
+                return False
+        except Exception:  # noqa: BLE001
+            return False
+
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +341,11 @@ def _calculate_virality_score(info: dict) -> float:
 # ---------------------------------------------------------------------------
 
 
-def _scout_pool(query: str, seen: dict[str, float]) -> list[tuple[float, VideoCandidate]]:
+def _scout_pool(
+    query: str,
+    seen: dict[str, float],
+    max_age_days: int | None = None,
+) -> list[tuple[float, VideoCandidate]]:
     """
     Search one query pool, filter & score candidates.
 
@@ -313,7 +370,7 @@ def _scout_pool(query: str, seen: dict[str, float]) -> list[tuple[float, VideoCa
         futures = {pool.submit(_fetch_video_info, vid): vid for vid in ids}
         for future in as_completed(futures):
             info = future.result()
-            if info and _is_suitable(info, seen):
+            if info and _is_suitable(info, seen, max_age_days):
                 vid_id = info["id"]
                 url = f"https://www.youtube.com/watch?v={vid_id}"
                 title = info.get("title", "Unknown")
@@ -336,6 +393,9 @@ def get_trending_link(
     categories: list[str] | None = None,
     max_retries: int = 3,
     cache: bool = True,
+    channel: str | None = None,
+    niche: str | None = None,
+    keyword: str | None = None,
 ) -> str | None:
     """
     Find a trending YouTube video suitable for clipping.
@@ -347,6 +407,9 @@ def get_trending_link(
         categories: Optional subset of pool names to search (default: all).
         max_retries: Number of retry rounds if no candidate is found.
         cache: Whether to use/update the local seen-video cache.
+        channel: Search only this channel's recent videos.
+        niche: Build 5 targeted search queries around this niche and rotate between them.
+        keyword: Search specifically for this term across multiple platforms.
 
     Returns:
         A YouTube URL string, or None if no suitable video was found.
@@ -354,22 +417,82 @@ def get_trending_link(
     seen = _load_cache() if cache else {}
     log.info("\n🚀 ADVANCED VIRAL SCOUT — %d seen IDs cached", len(seen))
 
+    # Pre-build queries if specific options are provided
+    fixed_queries: list[str] | None = None
+    if channel:
+        if channel.startswith(("http://", "https://")):
+            channel_query = channel
+        elif channel.startswith("@"):
+            channel_query = f"https://www.youtube.com/{channel}/videos"
+        else:
+            channel_query = f"https://www.youtube.com/@{channel}/videos"
+        fixed_queries = [channel_query]
+        log.info("📢 Channel mode enabled. Target: %s", channel_query)
+    elif niche:
+        # 1. Fetch current trending keywords dynamically, with fallback
+        trending_kws = _get_current_trending_keywords()
+        if not trending_kws:
+            trending_kws = TRENDING_TOPICS_FALLBACK
+
+        # 2. Get current date/time context
+        now = datetime.now()
+        year_str = now.strftime("%Y")
+        month_str = now.strftime("%B")
+        day_str = now.strftime("%A")
+        week_str = f"week {now.isocalendar()[1]}"
+
+        # Define 5 premium queries with time context & trending keyword injection
+        # to ensure results are completely fresh and relevant.
+        global _NICHE_ROTATION_INDEX
+        idx = _NICHE_ROTATION_INDEX
+        
+        kw1 = trending_kws[idx % len(trending_kws)]
+        kw2 = trending_kws[(idx + 1) % len(trending_kws)]
+        kw3 = trending_kws[(idx + 2) % len(trending_kws)]
+        kw4 = trending_kws[(idx + 3) % len(trending_kws)]
+        kw5 = trending_kws[(idx + 4) % len(trending_kws)]
+
+        base_queries = [
+            f"ytsearch5:viral {niche} {kw1} english {day_str} today",
+            f"ytsearch5:best {niche} {kw2} highlights english this week {week_str}",
+            f"ytsearch5:insane {niche} {kw3} moment english {month_str} {year_str}",
+            f"ytsearch5:heated {niche} {kw4} debate english this month {year_str}",
+            f"ytsearch5:shocking {niche} {kw5} revelation english {year_str} new",
+        ]
+        
+        # Rotate the order of queries based on rotation index
+        idx_rot = idx % len(base_queries)
+        fixed_queries = base_queries[idx_rot:] + base_queries[:idx_rot]
+        _NICHE_ROTATION_INDEX += 1
+        log.info("📢 Niche mode (with trending & time context) enabled. Target niche: %s (rotated start index: %d)", niche, idx_rot)
+    elif keyword:
+        fixed_queries = [
+            f"ytsearch5:{keyword}",
+            f"scsearch5:{keyword}",
+            f"gvsearch5:{keyword}",
+            f"yvsearch5:{keyword}",
+        ]
+        log.info("📢 Keyword mode enabled. Target: %s (across multiple platforms)", keyword)
+
     available_pools = list(TREND_POOLS.keys())
     pools_to_search = (
         [c for c in categories if c in available_pools] if categories else available_pools
     )
 
-    if not pools_to_search:
+    if not pools_to_search and not fixed_queries:
         log.error("No valid trend pools selected.")
         return None
 
     for attempt in range(1, max_retries + 1):
-        # Build queries across all active pools — fewer queries, run throttled
-        queries: list[str] = []
-        for pool_name in pools_to_search:
-            queries.extend(_generate_dynamic_queries(pool_name, count=3))
-        random.shuffle(queries)
-        queries = list(dict.fromkeys(queries))  # deduplicate, preserve shuffle order
+        if fixed_queries is not None:
+            queries = list(fixed_queries)
+        else:
+            # Build queries across all active pools — fewer queries, run throttled
+            queries = []
+            for pool_name in pools_to_search:
+                queries.extend(_generate_dynamic_queries(pool_name, count=3))
+            random.shuffle(queries)
+            queries = list(dict.fromkeys(queries))  # deduplicate, preserve shuffle order
 
         log.info(
             "🔥 Throttled hunting: %d unique queries (attempt %d/%d)",
@@ -380,10 +503,13 @@ def get_trending_link(
 
         all_candidates: list[tuple[float, VideoCandidate]] = []
 
-        # Run at most 2 searches concurrently to avoid YouTube rate-limiting.
+        # Determine if we should enforce a 30-day age limit (e.g. in channel mode)
+        max_age_days = 30 if channel else None
+
+        # Run at most 2 searches concurrently to avoid rate-limiting.
         # Exit early as soon as we have at least one viable candidate.
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = {executor.submit(_scout_pool, q, seen): q for q in queries}
+            futures = {executor.submit(_scout_pool, q, seen, max_age_days): q for q in queries}
             for future in as_completed(futures):
                 results = future.result()
                 all_candidates.extend(results)

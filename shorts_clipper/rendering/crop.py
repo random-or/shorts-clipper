@@ -34,20 +34,6 @@ def _build_crop_filter(src_w: int, src_h: int, layout: str) -> str:
         x_offset = scale_w - _TARGET_W
         return f"scale={scale_w}:{scale_h},crop={_TARGET_W}:{_TARGET_H}:{x_offset}:0"
 
-    if layout == "split_screen":
-        # Stack top half and bottom half — podcast/debate dual-view
-        half_h = _TARGET_H // 2
-        scale_w = max(_TARGET_W, round(half_h * src_ratio))
-        x_c = (scale_w - _TARGET_W) // 2
-        top = f"scale={scale_w}:{half_h},crop={_TARGET_W}:{half_h}:{x_c}:0"
-        bot = f"scale={scale_w}:{half_h},crop={_TARGET_W}:{half_h}:{x_c}:{half_h // 2}"
-        return (
-            f"[0:v]split=2[top][bot];"
-            f"[top]{top}[top_out];"
-            f"[bot]{bot}[bot_out];"
-            f"[top_out][bot_out]vstack=inputs=2"
-        )
-
     # Default: crop_center — compute precise center crop box
     crop = compute_center_crop(
         width=src_w,
@@ -78,7 +64,7 @@ def process_to_vertical(
     Args:
         input_path: Source video file.
         output_path: Destination file (will be overwritten if it exists).
-        layout: crop_center | crop_left | crop_right | split_screen.
+        layout: crop_center | crop_left | crop_right.
         crf: Constant rate factor (18 = near-lossless, 23 = default).
         preset: FFmpeg x264 preset (fast / medium / slow).
 
@@ -103,15 +89,12 @@ def process_to_vertical(
         _TARGET_H,
     )
 
-    # split_screen uses -filter_complex; everything else uses -vf
-    filter_flag = "-filter_complex" if layout == "split_screen" else "-vf"
-
     cmd = [
         "ffmpeg",
         "-y",
         "-i",
         str(input_path),
-        filter_flag,
+        "-vf",
         vf,
         "-c:v",
         "libx264",
