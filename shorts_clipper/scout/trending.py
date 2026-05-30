@@ -28,8 +28,16 @@ log = logging.getLogger(__name__)
 _NICHE_ROTATION_INDEX = 0
 
 TRENDING_TOPICS_FALLBACK = [
-    "podcast", "drama", "gaming", "ai", "streamer", 
-    "interview", "debate", "reaction", "opinion", "expose"
+    "podcast",
+    "drama",
+    "gaming",
+    "ai",
+    "streamer",
+    "interview",
+    "debate",
+    "reaction",
+    "opinion",
+    "expose",
 ]
 
 
@@ -41,13 +49,64 @@ def _get_current_trending_keywords() -> list[str]:
 
     words: list[str] = []
     stop_words = {
-        "to", "in", "and", "the", "a", "of", "for", "on", "with", "how", "start",
-        "trading", "stock", "market", "beginners", "free", "guide", "dubbed",
-        "movie", "full", "hindi", "new", "release", "trending", "viral", "slowed",
-        "reverb", "mashup", "love", "non", "stop", "instagram", "song", "songs",
-        "video", "videos", "shorts", "short", "clip", "clips", "part", "episode",
-        "chera", "tu", "nahi", "aisa", "main", "lo", "fi", "ultra", "4k", "south",
-        "techno", "thriller", "best", "latest", "today", "now"
+        "to",
+        "in",
+        "and",
+        "the",
+        "a",
+        "of",
+        "for",
+        "on",
+        "with",
+        "how",
+        "start",
+        "trading",
+        "stock",
+        "market",
+        "beginners",
+        "free",
+        "guide",
+        "dubbed",
+        "movie",
+        "full",
+        "hindi",
+        "new",
+        "release",
+        "trending",
+        "viral",
+        "slowed",
+        "reverb",
+        "mashup",
+        "love",
+        "non",
+        "stop",
+        "instagram",
+        "song",
+        "songs",
+        "video",
+        "videos",
+        "shorts",
+        "short",
+        "clip",
+        "clips",
+        "part",
+        "episode",
+        "chera",
+        "tu",
+        "nahi",
+        "aisa",
+        "main",
+        "lo",
+        "fi",
+        "ultra",
+        "4k",
+        "south",
+        "techno",
+        "thriller",
+        "best",
+        "latest",
+        "today",
+        "now",
     }
     for entry in entries:
         title = entry.get("title", "")
@@ -55,6 +114,7 @@ def _get_current_trending_keywords() -> list[str]:
             if word not in stop_words:
                 words.append(word)
     return list(set(words))
+
 
 # ---------------------------------------------------------------------------
 # Query pools — rotated on each call, escalated on failure
@@ -257,7 +317,7 @@ def _has_english(info: dict) -> bool:
 def _is_suitable(info: dict, seen: dict[str, float], max_age_days: int | None = None) -> bool:
     vid_id = info.get("id", "")
     duration = float(info.get("duration") or 0)
-    
+
     if vid_id in seen or not (_MIN_DURATION <= duration <= _MAX_DURATION) or not _has_english(info):
         return False
 
@@ -269,7 +329,12 @@ def _is_suitable(info: dict, seen: dict[str, float], max_age_days: int | None = 
             upload_dt = datetime.strptime(upload_date, "%Y%m%d")
             age_days = (datetime.now() - upload_dt).total_seconds() / 86400.0
             if age_days > max_age_days:
-                log.info("   [Skip] Candidate %s is too old (age=%.1f days > %d)", vid_id, age_days, max_age_days)
+                log.info(
+                    "   [Skip] Candidate %s is too old (age=%.1f days > %d)",
+                    vid_id,
+                    age_days,
+                    max_age_days,
+                )
                 return False
         except Exception:  # noqa: BLE001
             return False
@@ -445,7 +510,7 @@ def get_trending_link(
         # to ensure results are completely fresh and relevant.
         global _NICHE_ROTATION_INDEX
         idx = _NICHE_ROTATION_INDEX
-        
+
         kw1 = trending_kws[idx % len(trending_kws)]
         kw2 = trending_kws[(idx + 1) % len(trending_kws)]
         kw3 = trending_kws[(idx + 2) % len(trending_kws)]
@@ -459,12 +524,17 @@ def get_trending_link(
             f"ytsearch5:heated {niche} {kw4} debate english this month {year_str}",
             f"ytsearch5:shocking {niche} {kw5} revelation english {year_str} new",
         ]
-        
+
         # Rotate the order of queries based on rotation index
         idx_rot = idx % len(base_queries)
         fixed_queries = base_queries[idx_rot:] + base_queries[:idx_rot]
         _NICHE_ROTATION_INDEX += 1
-        log.info("📢 Niche mode (with trending & time context) enabled. Target niche: %s (rotated start index: %d)", niche, idx_rot)
+        log.info(
+            "📢 Niche mode (with trending & time context) enabled."
+            " Target niche: %s (rotated start index: %d)",
+            niche,
+            idx_rot,
+        )
     elif keyword:
         fixed_queries = [
             f"ytsearch5:{keyword}",

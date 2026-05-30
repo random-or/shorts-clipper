@@ -27,7 +27,8 @@ _PROMPT_TEMPLATE = """\
 You are an elite viral shorts editor with 10 years of experience on TikTok,
 Instagram Reels, and YouTube Shorts. Your clips consistently hit 1M+ views.
 
-Analyze the transcript below, identify the SINGLE best clip window, and score it from 0 to 100 based on the evaluation criteria.
+Analyze the transcript below, identify the SINGLE best clip window,
+and score it from 0 to 100 based on the evaluation criteria.
 
 {transcript}
 
@@ -35,16 +36,25 @@ Analyze the transcript below, identify the SINGLE best clip window, and score it
 
 Score the clip window strictly based on these 5 dimensions (0 to 100 overall score):
 
-1. EMOTIONAL PEAK MOMENTS: Genuinely surprising, hilarious, or high-impact moments. Do NOT just select loud or high-volume noise; prioritize authentic humor or shocking surprises.
-2. CLIP-ABILITY: The segment must have a clean, logical start and a satisfying end. It must make perfect sense standing alone as a self-contained video.
-3. NICHE RELEVANCE: The clip must highly align with and fit the specific topic, theme, or channel style.
-4. HOOK QUALITY: The first 3 seconds of the clip must grab attention immediately with extreme hook power (tension, question, mystery, shock, or surprise).
+1. EMOTIONAL PEAK MOMENTS: Genuinely surprising, hilarious, or high-impact
+moments. Do NOT just select loud or high-volume noise; prioritize authentic
+humor or shocking surprises.
+2. CLIP-ABILITY: The segment must have a clean, logical start and a
+satisfying end. It must make perfect sense standing alone as a
+self-contained video.
+3. NICHE RELEVANCE: The clip must highly align with and fit the specific
+topic, theme, or channel style.
+4. HOOK QUALITY: The first 3 seconds of the clip must grab attention
+immediately with extreme hook power (tension, question, mystery, shock,
+or surprise).
 5. AVOID ENTIRELY (Score < 85 if any of these are present):
    - Reaction compilations.
    - Generic motivational filler/pacing.
    - Anything requiring external context or explanation from the rest of the video to be understood.
 
-Only select and return a clip if its final combined score is 85 or higher. If no clip reaches a score of 85 or above, return a low score under 85 and explain why in the reason.
+Only select and return a clip if its final combined score is 85 or higher.
+If no clip reaches a score of 85 or above, return a low score under 85
+and explain why in the reason.
 
 ━━━ FRAMING — choose the best vertical crop ━━━
 • crop_center   — single subject, centered

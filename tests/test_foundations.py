@@ -91,6 +91,7 @@ class GeminiProviderTests(unittest.TestCase):
     @patch("google.genai.Client")
     def test_select_clip_passes_high_score(self, mock_client_cls):
         from unittest.mock import MagicMock
+
         from shorts_clipper.providers.gemini import GeminiProvider
 
         mock_client = MagicMock()
@@ -98,7 +99,11 @@ class GeminiProviderTests(unittest.TestCase):
 
         # Mock the models.generate_content return value
         mock_response = MagicMock()
-        mock_response.text = '{"start": 10.0, "end": 45.0, "layout": "crop_center", "virality_score": 87, "emotional_category": "humor", "strongest_hook_line": "wow", "reason": "funny"}'
+        mock_response.text = (
+            '{"start": 10.0, "end": 45.0, "layout": "crop_center",'
+            ' "virality_score": 87, "emotional_category": "humor",'
+            ' "strongest_hook_line": "wow", "reason": "funny"}'
+        )
         mock_client.models.generate_content.return_value = mock_response
 
         provider = GeminiProvider(api_key="fake-key")
@@ -112,16 +117,26 @@ class GeminiProviderTests(unittest.TestCase):
     @patch("google.genai.Client")
     def test_select_clip_rejects_low_score_and_falls_back(self, mock_client_cls):
         from unittest.mock import MagicMock
+
         from shorts_clipper.providers.gemini import GeminiProvider
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
 
         mock_response = MagicMock()
-        mock_response.text = '{"start": 10.0, "end": 45.0, "layout": "crop_center", "virality_score": 80, "emotional_category": "humor", "strongest_hook_line": "wow", "reason": "too generic"}'
+        mock_response.text = (
+            '{"start": 10.0, "end": 45.0, "layout": "crop_center",'
+            ' "virality_score": 80, "emotional_category": "humor",'
+            ' "strongest_hook_line": "wow",'
+            ' "reason": "too generic"}'
+        )
         mock_client.models.generate_content.return_value = mock_response
 
-        provider = GeminiProvider(api_key="fake-key", fallback_window=(15.0, 50.0), fallback_layout="crop_left")
+        provider = GeminiProvider(
+            api_key="fake-key",
+            fallback_window=(15.0, 50.0),
+            fallback_layout="crop_left",
+        )
         segments = [TranscriptSegment(start=0, end=100, text="hello world")]
         window, layout = provider.select_clip_raw(segments)
 
