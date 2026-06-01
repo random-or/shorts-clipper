@@ -15,10 +15,13 @@ class YouTubePublisher(PublisherAdapter):
         log.info("🚀 [YouTube Publisher] Initializing upload for Shorts clip: %s", video_path.name)
         log.info("   Target Title: %r", title)
         log.info("   Description:  %r", description)
-        
+
         # Real-world deployment adapter stub:
         # Integrates with Google OAuth2 + google-api-python-client or Playwright
         log.info("   Uploading video stream to YouTube ingestion CDN...")
         log.info("   Applying tags and visibility settings...")
-        log.info("✅ [YouTube Publisher] Clip %s successfully published to YouTube Shorts!", video_path.name)
+        log.info(
+            "✅ [YouTube Publisher] Clip %s successfully published to YouTube Shorts!",
+            video_path.name,
+        )
         return True

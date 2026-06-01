@@ -52,10 +52,14 @@ def extract_thumbnail(
     cmd = [
         "ffmpeg",
         "-y",
-        "-ss", f"{position:.3f}",
-        "-i", str(video_path),
-        "-frames:v", "1",
-        "-q:v", str(quality),
+        "-ss",
+        f"{position:.3f}",
+        "-i",
+        str(video_path),
+        "-frames:v",
+        "1",
+        "-q:v",
+        str(quality),
         str(output_path),
     ]
 

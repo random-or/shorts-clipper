@@ -128,4 +128,3 @@ def process_to_vertical(
 
     log.info("✅ Vertical crop done → %s", output_path)
     return output_path
-

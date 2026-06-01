@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🎬 Vanguard Shorts Clipper
+# 🎬 Shorts Clipper
 
-### **Deployment-Grade AI-Powered Viral Shorts Factory**
+### **AI-Powered Viral Shorts Factory**
 
-*Transform long-form videos into scroll-stopping vertical clips — fully automated with a state-of-the-art web dashboard.*
+*Easily transform long-form videos into scroll-stopping vertical clips — fully automated with a state-of-the-art web dashboard.*
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
@@ -14,12 +14,12 @@
 <br/>
 
 <p>
-  <strong>Vanguard Shorts Clipper</strong> is an open-source, end-to-end automation pipeline that takes any long-form landscape video and autonomously produces polished, captioned, 9:16 vertical shorts ready for <strong>TikTok</strong>, <strong>YouTube Shorts</strong>, and <strong>Instagram Reels</strong>. It features a complete SQLite-backed job queue, Gemini-powered engagement scoring, and a beautiful full-stack web dashboard.
+  <strong>Shorts Clipper</strong> is an open-source, end-to-end automation pipeline that takes any long-form landscape video and autonomously produces polished, captioned, 9:16 vertical shorts ready for <strong>TikTok</strong>, <strong>YouTube Shorts</strong>, and <strong>Instagram Reels</strong>. It features a complete SQLite-backed job queue, Gemini-powered engagement scoring, and a beautiful full-stack web dashboard.
 </p>
 
 <br/>
 
-**[⚡ Quick Start](#-quick-start) · [🖥️ Web Dashboard](#%EF%B8%8F-vanguard-web-console) · [🧠 How It Works](#-how-it-works) · [🧩 Modules](#-project-structure)**
+**[⚡ Quick Start](#-quick-start) · [🖥️ Web Dashboard](#%EF%B8%8F-web-console) · [🧠 How It Works](#-how-it-works) · [🧩 Modules](#-project-structure)**
 
 </div>
 
@@ -35,7 +35,7 @@
 <tr>
 <td width="50%">
 
-### 🖥️ Vanguard Web Console
+### 🖥️ Web Console
 A stunning, fully-featured dark-mode Web UI with a 3-column "Descript-like" layout. Track server-side job progress, configure environment variables in-browser, launch Autopilot targeting, and view your rendered clip media library with embedded performance feedback.
 
 </td>
@@ -101,14 +101,14 @@ cp .env.example .env
 ```
 Open `.env` and add your **Gemini API key** ([get one free here](https://aistudio.google.com/)).
 
-### Launch the Vanguard Web Console 🚀
+### Launch the Web Console 🚀
 
 ```bash
 uvicorn shorts_clipper.api.server:app --reload --port 8000
 ```
-Open **[http://localhost:8000](http://localhost:8000)** in your browser to access the Vanguard Console. From here you can launch autopilot searches, process custom videos, and view the live streaming log console.
+Open **[http://localhost:8000](http://localhost:8000)** in your browser to access the Shorts Clipper Console. From here you can launch autopilot searches, process custom videos, and view the live streaming log console.
 
-Alternatively, use the legacy terminal CLI:
+Alternatively, use the terminal CLI:
 ```bash
 python -m shorts_clipper autopilot --count 3
 ```
@@ -119,7 +119,7 @@ python -m shorts_clipper autopilot --count 3
 
 <br/>
 
-## 🖥️ Vanguard Web Console
+## 🖥️ Web Console
 
 The new web-based dashboard serves as the command center for the pipeline. It is entirely self-hosted and features:
 - **Interactive Clipper Studio:** Paste a YouTube URL, retrieve a full transcript, and render specific selections.
@@ -140,7 +140,7 @@ The new web-based dashboard serves as the command center for the pipeline. It is
 shorts-clipper/
 ├── shorts_clipper/
 │   ├── api/                   # FastAPI Web Server & REST/SSE Endpoints
-│   ├── ui/                    # Vanguard Console Frontend (HTML/JS/CSS)
+│   ├── ui/                    # Web Console Frontend (HTML/JS/CSS)
 │   ├── core/                  # SQLite Job Queue, Settings, Logging
 │   ├── scout/                 # YouTube Discovery & Virality Selection
 │   ├── analyze/               # Clip Performance Feedback & Analytics
@@ -187,7 +187,7 @@ We have just completed **Phase 7** of the Deployment-Grade Architecture Roadmap.
 Recent improvements include:
 - ✅ **SQLite Job Queue:** Persistent tracking of all render jobs.
 - ✅ **Performance Tracking:** Analytics module for views and retention scores.
-- ✅ **Vanguard UI Redesign:** A strict, premium flat UI design system (no glassmorphism).
+- ✅ **UI Redesign:** A strict, premium flat UI design system (no glassmorphism).
 - ✅ **CI/CD Stabilization:** Linting and formatting strictness enforced by Ruff.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.

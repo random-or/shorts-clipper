@@ -16,8 +16,10 @@ class WebhookPublisher(PublisherAdapter):
         self._url = endpoint_url
 
     def publish(self, video_path: Path, title: str, description: str, **kwargs) -> bool:
-        log.info("🚀 [Webhook Publisher] Triggering notification webhook for clip: %s", video_path.name)
-        
+        log.info(
+            "🚀 [Webhook Publisher] Triggering notification webhook for clip: %s", video_path.name
+        )
+
         payload = {
             "event": "clip_generated",
             "video_name": video_path.name,
@@ -26,11 +28,13 @@ class WebhookPublisher(PublisherAdapter):
             "file_size_bytes": video_path.stat().st_size,
             "metadata": kwargs.get("metadata", {}),
         }
-        
+
         log.debug("Webhook payload content: %s", json.dumps(payload))
-        
+
         if not self._url:
-            log.warning("   [Webhook Publisher] No webhook endpoint URL configured. Logging payload output:")
+            log.warning(
+                "   [Webhook Publisher] No webhook endpoint URL configured. Logging payload output:"
+            )
             log.info("   PAYLOAD: %s", json.dumps(payload, indent=2))
             return True
 

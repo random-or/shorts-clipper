@@ -47,7 +47,6 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(settings.video_preset, "fast")
 
 
-
 class TranscriptFormattingTests(unittest.TestCase):
     def test_formats_segments_for_llm_prompt(self):
         segments = [
@@ -211,6 +210,7 @@ class GeminiProviderTests(unittest.TestCase):
         )
 
         call_count = 0
+
         def side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1

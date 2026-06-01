@@ -48,14 +48,17 @@ app.add_middleware(
 
 log_queue: queue.Queue[str] = queue.Queue(maxsize=2000)
 
+
 class SSELogHandler(logging.Handler):
     """Custom logging handler to stream logging entries via SSE."""
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
             msg = self.format(record)
             log_queue.put_nowait(msg)
         except Exception:
             pass
+
 
 # Attach SSE logging handler to shorts_clipper logger
 logger = logging.getLogger("shorts_clipper")
@@ -72,33 +75,40 @@ _feedback_store = FeedbackStore()
 # Data Models
 # ---------------------------------------------------------------------------
 
+
 class AutopilotRequest(BaseModel):
     niche: str | None = None
     keyword: str | None = None
     channel: str | None = None
     count: int = Field(default=3, ge=1, le=10)
 
+
 class CustomClipRequest(BaseModel):
     url: str
     count: int = Field(default=1, ge=1, le=10)
 
+
 class TranscriptRequest(BaseModel):
     url: str
+
 
 class SegmentModel(BaseModel):
     start: float
     end: float
     text: str
 
+
 class HighlightsRequest(BaseModel):
     segments: list[SegmentModel]
     count: int = Field(default=3, ge=1, le=10)
+
 
 class CustomClipRenderRequest(BaseModel):
     url: str
     start: float
     end: float
     layout: str = "crop_center"
+
 
 class SettingsModel(BaseModel):
     gemini_api_key: str | None = None
@@ -110,6 +120,7 @@ class SettingsModel(BaseModel):
     scout_max_age_days: int = 90
     enable_gpu: bool = False
 
+
 class FeedbackModel(BaseModel):
     clip_name: str
     views: int = 0
@@ -120,9 +131,11 @@ class FeedbackModel(BaseModel):
     retention_pct: float = 0.0
     notes: str = ""
 
+
 # ---------------------------------------------------------------------------
 # API Routes — Jobs
 # ---------------------------------------------------------------------------
+
 
 @app.get("/api/jobs")
 def list_jobs(status: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
@@ -137,6 +150,7 @@ def list_jobs(status: str | None = None, limit: int = 50) -> list[dict[str, Any]
         jobs = _job_queue.list_all(limit=limit)
     return [j.to_dict() for j in jobs]
 
+
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str) -> dict[str, Any]:
     """Get a specific job by ID."""
@@ -145,6 +159,7 @@ def get_job(job_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Job not found")
     return job.to_dict()
 
+
 @app.delete("/api/jobs/{job_id}")
 def delete_job(job_id: str) -> dict[str, str]:
     """Delete a job from the queue."""
@@ -152,9 +167,11 @@ def delete_job(job_id: str) -> dict[str, str]:
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Job not found")
 
+
 # ---------------------------------------------------------------------------
 # API Routes — Clips
 # ---------------------------------------------------------------------------
+
 
 @app.get("/api/clips")
 def list_clips() -> list[dict[str, Any]]:
@@ -163,21 +180,24 @@ def list_clips() -> list[dict[str, Any]]:
     out_dir = Path(settings.output_dir)
     if not out_dir.exists():
         out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     clips = []
     for path in sorted(out_dir.glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True):
         stat = path.stat()
         mtime = datetime.fromtimestamp(stat.st_mtime).isoformat()
         # Check for thumbnail
         thumb = path.with_suffix(".jpg")
-        clips.append({
-            "name": path.name,
-            "path": f"/clips/{path.name}",
-            "thumbnail": f"/clips/{thumb.name}" if thumb.exists() else None,
-            "size": stat.st_size,
-            "created_at": mtime,
-        })
+        clips.append(
+            {
+                "name": path.name,
+                "path": f"/clips/{path.name}",
+                "thumbnail": f"/clips/{thumb.name}" if thumb.exists() else None,
+                "size": stat.st_size,
+                "created_at": mtime,
+            }
+        )
     return clips
+
 
 @app.get("/api/settings", response_model=SettingsModel)
 def get_settings() -> SettingsModel:
@@ -194,6 +214,7 @@ def get_settings() -> SettingsModel:
         enable_gpu=s.enable_gpu,
     )
 
+
 @app.post("/api/settings")
 def save_settings(payload: SettingsModel) -> dict[str, str]:
     """Write configuration changes to the active .env file."""
@@ -208,18 +229,22 @@ def save_settings(payload: SettingsModel) -> dict[str, str]:
         env_lines.append(f"SHORTS_VIDEO_PRESET={payload.video_preset}")
         env_lines.append(f"SHORTS_SCOUT_MAX_AGE_DAYS={payload.scout_max_age_days}")
         env_lines.append(f"SHORTS_ENABLE_GPU={'true' if payload.enable_gpu else 'false'}")
-        
+
         Path(".env").write_text("\n".join(env_lines), encoding="utf-8")
         return {"status": "success", "message": "Settings saved to .env file successfully."}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to save settings: {exc}") from exc
 
+
 # ---------------------------------------------------------------------------
 # API Routes — Pipeline Triggers (with Job Queue)
 # ---------------------------------------------------------------------------
 
+
 @app.post("/api/autopilot")
-def trigger_autopilot(payload: AutopilotRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+def trigger_autopilot(
+    payload: AutopilotRequest, background_tasks: BackgroundTasks
+) -> dict[str, Any]:
     """Trigger Autopilot mode with job tracking."""
     job = _job_queue.create("autopilot", payload.model_dump())
 
@@ -243,7 +268,8 @@ def trigger_autopilot(payload: AutopilotRequest, background_tasks: BackgroundTas
                     output_paths = [str(result)]
 
             _job_queue.update_status(
-                job.id, JobStatus.DONE,
+                job.id,
+                JobStatus.DONE,
                 progress=100,
                 output_paths=output_paths,
                 result={"clip_count": len(output_paths)},
@@ -256,6 +282,7 @@ def trigger_autopilot(payload: AutopilotRequest, background_tasks: BackgroundTas
     background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Autopilot pipeline triggered."}
 
+
 @app.post("/api/clip")
 def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
     """Run standard clipper for a specific YouTube URL with job tracking."""
@@ -264,7 +291,11 @@ def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) 
     def task_worker() -> None:
         try:
             _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
-            logger.info("🎬 Starting Custom Clip background task for URL: %s (job %s)...", payload.url, job.id)
+            logger.info(
+                "🎬 Starting Custom Clip background task for URL: %s (job %s)...",
+                payload.url,
+                job.id,
+            )
             settings = Settings.from_env()
             result = run(payload.url, settings=settings, count=payload.count)
             output_paths = []
@@ -274,7 +305,8 @@ def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) 
                 output_paths = [str(result)]
 
             _job_queue.update_status(
-                job.id, JobStatus.DONE,
+                job.id,
+                JobStatus.DONE,
                 progress=100,
                 output_paths=output_paths,
                 result={"clip_count": len(output_paths)},
@@ -287,6 +319,7 @@ def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) 
     background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Clipper pipeline triggered."}
 
+
 @app.post("/api/scout/transcript")
 def trigger_scout_transcript(payload: TranscriptRequest) -> dict[str, Any]:
     """Fetch native subtitles or transcribe a 5-min rough audio sample to return rough transcript."""
@@ -296,7 +329,7 @@ def trigger_scout_transcript(payload: TranscriptRequest) -> dict[str, Any]:
         with tempfile.TemporaryDirectory(prefix="vanguard_scout_") as temp_dir:
             work_path = Path(temp_dir)
             rough_segments = fetch_subtitles(payload.url, work_path)
-            
+
             if not rough_segments:
                 logger.info("No native English subtitles. Downloading 5-min audio sample...")
                 audio_path = work_path / "rough_audio.m4a"
@@ -308,17 +341,17 @@ def trigger_scout_transcript(payload: TranscriptRequest) -> dict[str, Any]:
                     device=settings.whisper_device,
                     compute_type=settings.whisper_compute_type,
                 )
-                
+
             return {
                 "url": payload.url,
                 "segments": [
-                    {"start": s.start, "end": s.end, "text": s.text}
-                    for s in rough_segments
-                ]
+                    {"start": s.start, "end": s.end, "text": s.text} for s in rough_segments
+                ],
             }
     except Exception as exc:
         logger.error("Failed to fetch transcript: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
 
 @app.post("/api/scout/highlights")
 def trigger_scout_highlights(payload: HighlightsRequest) -> dict[str, Any]:
@@ -326,23 +359,23 @@ def trigger_scout_highlights(payload: HighlightsRequest) -> dict[str, Any]:
     logger.info("🧠 Consulting Gemini to select highlights...")
     try:
         from shorts_clipper.core.models import TranscriptSegment
+
         segments = [
-            TranscriptSegment(start=s.start, end=s.end, text=s.text)
-            for s in payload.segments
+            TranscriptSegment(start=s.start, end=s.end, text=s.text) for s in payload.segments
         ]
         settings = Settings.from_env()
         provider = GeminiProvider(api_key=settings.gemini_api_key)
-        
+
         # We consult the multi-clip selection logic
         clips = provider.select_multiple_clips(segments, count=payload.count)
-        
+
         return {
             "highlights": [
                 {
                     "start": window.start,
                     "end": window.end,
                     "layout": layout,
-                    "duration": round(window.end - window.start, 1)
+                    "duration": round(window.end - window.start, 1),
                 }
                 for window, layout in clips
             ]
@@ -351,31 +384,45 @@ def trigger_scout_highlights(payload: HighlightsRequest) -> dict[str, Any]:
         logger.error("Failed to fetch highlights from Gemini: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+
 @app.post("/api/clip/render")
-def trigger_clip_render(payload: CustomClipRenderRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+def trigger_clip_render(
+    payload: CustomClipRenderRequest, background_tasks: BackgroundTasks
+) -> dict[str, Any]:
     """Force rendering a specific custom timestamp window from a video."""
     job = _job_queue.create("render", payload.model_dump())
 
     def task_worker() -> None:
         try:
             _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
-            logger.info("🎬 Rendering precise custom clip window: %.1fs–%.1fs [%s] from %s (job %s)...", 
-                        payload.start, payload.end, payload.layout, payload.url, job.id)
-            
+            logger.info(
+                "🎬 Rendering precise custom clip window: %.1fs–%.1fs [%s] from %s (job %s)...",
+                payload.start,
+                payload.end,
+                payload.layout,
+                payload.url,
+                job.id,
+            )
+
             settings = Settings.from_env()
-            
+
             with tempfile.TemporaryDirectory(prefix="vanguard_render_") as work_dir:
                 work_path = Path(work_dir)
                 clip_work_dir = work_path / "clip_1"
                 clip_work_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 micro_path = clip_work_dir / "micro_clip.mp4"
-                logger.info("⬇ Downloading precise section %.1fs–%.1fs...", payload.start, payload.end)
-                
+                logger.info(
+                    "⬇ Downloading precise section %.1fs–%.1fs...", payload.start, payload.end
+                )
+
                 from shorts_clipper.downloader.yt_dlp import download_clip
-                download_clip(payload.url, micro_path, start_time=payload.start, end_time=payload.end)
+
+                download_clip(
+                    payload.url, micro_path, start_time=payload.start, end_time=payload.end
+                )
                 _job_queue.update_progress(job.id, 30)
-                
+
                 logger.info("Transcribing micro-clip for word timing...")
                 precision_segments = transcribe_clip(
                     micro_path,
@@ -384,10 +431,11 @@ def trigger_clip_render(payload: CustomClipRenderRequest, background_tasks: Back
                     compute_type=settings.whisper_compute_type,
                 )
                 _job_queue.update_progress(job.id, 50)
-                
+
                 logger.info("Cropping to vertical layout...")
                 cropped_path = clip_work_dir / "cropped.mp4"
                 from shorts_clipper.rendering.crop import process_to_vertical
+
                 process_to_vertical(
                     micro_path,
                     cropped_path,
@@ -396,13 +444,14 @@ def trigger_clip_render(payload: CustomClipRenderRequest, background_tasks: Back
                     preset=settings.video_preset,
                 )
                 _job_queue.update_progress(job.id, 70)
-                
+
                 logger.info("Burning subtitles + pacing...")
                 from shorts_clipper.captions.generator import burn_subtitles
+
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                 current_output_path = settings.output_dir / f"custom_{ts}.mp4"
                 settings.output_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 burn_subtitles(
                     cropped_path,
                     precision_segments,
@@ -417,12 +466,14 @@ def trigger_clip_render(payload: CustomClipRenderRequest, background_tasks: Back
                 # Extract thumbnail
                 try:
                     from shorts_clipper.render.thumbnailer import extract_thumbnail
+
                     extract_thumbnail(current_output_path)
                 except Exception as thumb_err:
                     logger.warning("Thumbnail extraction failed: %s", thumb_err)
 
                 _job_queue.update_status(
-                    job.id, JobStatus.DONE,
+                    job.id,
+                    JobStatus.DONE,
                     progress=100,
                     output_paths=[str(current_output_path)],
                 )
@@ -434,14 +485,17 @@ def trigger_clip_render(payload: CustomClipRenderRequest, background_tasks: Back
     background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Precision render task triggered."}
 
+
 # ---------------------------------------------------------------------------
 # API Routes — Feedback
 # ---------------------------------------------------------------------------
+
 
 @app.get("/api/feedback")
 def list_feedback(limit: int = 50) -> list[dict[str, Any]]:
     """List all feedback entries sorted by performance score."""
     return [fb.to_dict() for fb in _feedback_store.list_all(limit=limit)]
+
 
 @app.get("/api/feedback/{clip_name}")
 def get_feedback(clip_name: str) -> dict[str, Any]:
@@ -450,6 +504,7 @@ def get_feedback(clip_name: str) -> dict[str, Any]:
     if fb is None:
         raise HTTPException(status_code=404, detail="Feedback not found")
     return fb.to_dict()
+
 
 @app.post("/api/feedback")
 def submit_feedback(payload: FeedbackModel) -> dict[str, Any]:
@@ -465,7 +520,12 @@ def submit_feedback(payload: FeedbackModel) -> dict[str, Any]:
         notes=payload.notes,
     )
     result = _feedback_store.upsert(fb)
-    return {"status": "saved", "performance_score": result.performance_score, "data": result.to_dict()}
+    return {
+        "status": "saved",
+        "performance_score": result.performance_score,
+        "data": result.to_dict(),
+    }
+
 
 @app.delete("/api/feedback/{clip_name}")
 def delete_feedback(clip_name: str) -> dict[str, str]:
@@ -474,13 +534,16 @@ def delete_feedback(clip_name: str) -> dict[str, str]:
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Feedback not found")
 
+
 # ---------------------------------------------------------------------------
 # SSE Log Streaming
 # ---------------------------------------------------------------------------
 
+
 @app.get("/api/logs/stream")
 async def stream_logs() -> StreamingResponse:
     """Stream live logs generated by python clipper backend via SSE."""
+
     async def log_generator():
         while True:
             try:
@@ -494,7 +557,9 @@ async def stream_logs() -> StreamingResponse:
                 await anyio.sleep(0.5)
             except Exception:
                 break
+
     return StreamingResponse(log_generator(), media_type="text/event-stream")
+
 
 # ---------------------------------------------------------------------------
 # Static Files & UI Serving
@@ -506,15 +571,17 @@ outputs_dir_path = Path(settings.output_dir).absolute()
 outputs_dir_path.mkdir(parents=True, exist_ok=True)
 app.mount("/clips", StaticFiles(directory=str(outputs_dir_path)), name="clips")
 
+
 # Served Vanguard HTML UI
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     ui_html_path = Path("shorts_clipper/ui/index.html")
     if ui_html_path.exists():
         return HTMLResponse(content=ui_html_path.read_text(encoding="utf-8"))
-    
+
     # Fallback premium stub if ui/index.html is missing
-    return HTMLResponse(content="""
+    return HTMLResponse(
+        content="""
     <html>
         <head><title>Vanguard Console</title></head>
         <body style="background:#0b0d19; color:white; font-family:sans-serif; text-align:center; padding-top:100px;">
@@ -522,7 +589,9 @@ def index() -> HTMLResponse:
             <p style="color:#7e87ab;">Frontend is loading or missing in shorts_clipper/ui/index.html.</p>
         </body>
     </html>
-    """)
+    """
+    )
+
 
 # Serve the rest of the UI as static assets if needed
 ui_dir_path = Path("shorts_clipper/ui").absolute()

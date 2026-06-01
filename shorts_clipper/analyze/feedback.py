@@ -119,9 +119,17 @@ class FeedbackStore:
                 "retention_pct=excluded.retention_pct, performance_score=excluded.performance_score, "
                 "notes=excluded.notes, updated_at=excluded.updated_at",
                 (
-                    fb.clip_name, fb.views, fb.likes, fb.shares, fb.comments,
-                    fb.watch_time_avg, fb.retention_pct, fb.performance_score,
-                    fb.notes, fb.created_at, fb.updated_at,
+                    fb.clip_name,
+                    fb.views,
+                    fb.likes,
+                    fb.shares,
+                    fb.comments,
+                    fb.watch_time_avg,
+                    fb.retention_pct,
+                    fb.performance_score,
+                    fb.notes,
+                    fb.created_at,
+                    fb.updated_at,
                 ),
             )
             self._conn.commit()
@@ -143,8 +151,6 @@ class FeedbackStore:
 
     def delete(self, clip_name: str) -> bool:
         with _lock:
-            cursor = self._conn.execute(
-                "DELETE FROM feedback WHERE clip_name = ?", (clip_name,)
-            )
+            cursor = self._conn.execute("DELETE FROM feedback WHERE clip_name = ?", (clip_name,))
             self._conn.commit()
         return cursor.rowcount > 0

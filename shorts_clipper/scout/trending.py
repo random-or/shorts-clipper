@@ -167,12 +167,7 @@ _CACHE_TTL = 7 * 24 * 3600  # 7 days in seconds
 # ---------------------------------------------------------------------------
 
 FALLBACK_VIDEOS: list[str] = [
-    "https://www.youtube.com/watch?v=tJxfA5HJVAc",  # Top 200 Elden Ring Rage Moments
-    "https://www.youtube.com/watch?v=Uq5SxQGW2HU",  # MrBeast intense challenge
-    "https://www.youtube.com/watch?v=AzFBFHSqoKY",  # Heated debate compilation
-    "https://www.youtube.com/watch?v=lTTajzrSkCU",  # Viral sports moments
-    "https://www.youtube.com/watch?v=QJO3ROT-A4E",  # Streamer rage moments
-    "https://www.youtube.com/watch?v=xm3YgoEiEDc",  # Podcast argument compilation
+    "https://www.youtube.com/watch?v=2ibDeUgZoqQ",  # Podcast english
     "https://www.youtube.com/watch?v=jNQXAC9IVRw",  # Me at the zoo (classic)
     "https://www.youtube.com/watch?v=dQw4w9WgXcQ",  # Never gonna give you up
 ]
@@ -278,7 +273,6 @@ def _search_entries(query: str) -> list[dict]:
         if v.get("id"):
             entries.append({"id": v["id"], "title": v.get("title", "")})
     return entries
-
 
 
 def _has_english(info: dict) -> bool:
@@ -422,7 +416,7 @@ def _scout_pool(
     descending by score — never None.
     """
     log.info("🔍 Searching (all-in-one): %s", query)
-    
+
     # Boost search count from ytsearch5 to ytsearch12 for more candidate variety
     modified_query = query
     if "ytsearch5:" in query:
@@ -583,15 +577,22 @@ def get_trending_link(
             actual_max_age_days = 30 if channel else max_age_days
         elif attempt == 2:
             actual_max_age_days = 180 if channel else (365 if max_age_days else None)
-            log.warning("⚠️  Attempt 2: Relaxing age filter limit to %s days to expand candidate pool", actual_max_age_days)
+            log.warning(
+                "⚠️  Attempt 2: Relaxing age filter limit to %s days to expand candidate pool",
+                actual_max_age_days,
+            )
         else:
             actual_max_age_days = None
-            log.warning("⚠️  Attempt 3: Disabling age filter limit entirely to guarantee unique trending match")
+            log.warning(
+                "⚠️  Attempt 3: Disabling age filter limit entirely to guarantee unique trending match"
+            )
 
         # Run at most 2 searches concurrently to avoid rate-limiting.
         # Gather all candidates from all concurrent queries so we select the absolute best.
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = {executor.submit(_scout_pool, q, seen, actual_max_age_days): q for q in queries}
+            futures = {
+                executor.submit(_scout_pool, q, seen, actual_max_age_days): q for q in queries
+            }
             for future in as_completed(futures):
                 try:
                     results = future.result()

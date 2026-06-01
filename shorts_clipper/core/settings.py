@@ -52,10 +52,12 @@ class Settings:
         path = Path(env_path)
         file_values = _parse_env_file(path)
 
-        enable_gpu = (
-            (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false").lower()
-            in {"1", "true", "yes", "on"}
-        )
+        enable_gpu = (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
         whisper_device = _env(
             "SHORTS_WHISPER_DEVICE", file_values, "cuda" if enable_gpu else "cpu"
@@ -75,9 +77,7 @@ class Settings:
             _env("SHORTS_VIDEO_PRESET", file_values, default_video_preset) or default_video_preset
         )
 
-        scout_max_age_days = int(
-            _env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90"
-        )
+        scout_max_age_days = int(_env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90")
 
         return cls(
             gemini_api_key=_env("GEMINI_API_KEY", file_values),
@@ -101,4 +101,3 @@ class Settings:
             video_preset=video_preset,
             scout_max_age_days=scout_max_age_days,
         )
-

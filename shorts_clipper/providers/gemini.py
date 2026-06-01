@@ -75,7 +75,6 @@ Return ONLY valid JSON, no markdown, no commentary:
 }}"""
 
 
-
 _MULTI_PROMPT_TEMPLATE = """\
 You are an elite viral shorts editor with 10 years of experience on TikTok,
 Instagram Reels, and YouTube Shorts. Your clips consistently hit 1M+ views.
@@ -136,7 +135,6 @@ Return ONLY valid JSON as a list/array of objects. No markdown, no commentary:
 class GeminiProvider(HighlightProvider):
     """Uses Gemini 2.5 Flash to select the best clip window from a transcript."""
 
-
     def __init__(
         self,
         *,
@@ -159,6 +157,7 @@ class GeminiProvider(HighlightProvider):
     ) -> any:
         """Call generate_content with exponential backoff on transient errors."""
         import time
+
         delay = initial_delay
         for attempt in range(1, max_retries + 1):
             try:
@@ -168,7 +167,9 @@ class GeminiProvider(HighlightProvider):
                 )
             except Exception as exc:
                 if attempt == max_retries:
-                    log.error("Gemini generate_content failed after %d attempts: %s", max_retries, exc)
+                    log.error(
+                        "Gemini generate_content failed after %d attempts: %s", max_retries, exc
+                    )
                     raise
                 log.warning(
                     "Gemini API call failed (attempt %d/%d): %s. Retrying in %.1fs...",
@@ -331,5 +332,3 @@ class GeminiProvider(HighlightProvider):
             log.warning("Gemini multi-clip selection failed (%s). Using fallback.", exc)
             win, lay = self.select_clip_raw(segments)
             return [(win, lay)]
-
-

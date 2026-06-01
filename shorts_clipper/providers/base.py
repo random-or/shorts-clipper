@@ -40,4 +40,3 @@ class HighlightProvider(ABC):
         if isinstance(res, tuple):
             return [res]
         return [(res, "crop_center")]
-

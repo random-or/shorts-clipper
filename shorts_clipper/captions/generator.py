@@ -317,4 +317,3 @@ def burn_subtitles(
 
     log.info("✅ Subtitles burned → %s", output_path)
     return output_path
-

@@ -102,7 +102,6 @@ def _cmd_web(args: argparse.Namespace, settings: Settings) -> int:
         return 1
 
 
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m shorts_clipper",
@@ -187,7 +186,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--keyword",
         help="Search specifically for this term across multiple platforms.",
     )
-
 
     # ── web ───────────────────────────────────────────────────────────────
     web_p = sub.add_parser("web", help="Start the Vanguard Web Console Dashboard.")

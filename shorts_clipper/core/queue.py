@@ -147,9 +147,7 @@ class JobQueue:
 
     def get(self, job_id: str) -> Job | None:
         with _lock:
-            row = self._conn.execute(
-                "SELECT * FROM jobs WHERE id = ?", (job_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if row is None:
             return None
         return _row_to_job(row)
