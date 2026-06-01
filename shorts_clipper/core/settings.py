@@ -43,11 +43,42 @@ class Settings:
     cache_dir: Path = Path(".cache/shorts-clipper")
     log_level: str = "INFO"
     enable_gpu: bool = False
+    video_codec: str = "libx264"
+    video_preset: str = "ultrafast"
+    scout_max_age_days: int = 90
 
     @classmethod
     def from_env(cls, env_path: str | Path = ".env") -> Settings:
         path = Path(env_path)
         file_values = _parse_env_file(path)
+
+        enable_gpu = (
+            (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false").lower()
+            in {"1", "true", "yes", "on"}
+        )
+
+        whisper_device = _env(
+            "SHORTS_WHISPER_DEVICE", file_values, "cuda" if enable_gpu else "cpu"
+        ) or ("cuda" if enable_gpu else "cpu")
+
+        whisper_compute_type = _env(
+            "SHORTS_WHISPER_COMPUTE_TYPE", file_values, "float16" if enable_gpu else "int8"
+        ) or ("float16" if enable_gpu else "int8")
+
+        default_video_codec = "h264_nvenc" if enable_gpu else "libx264"
+        default_video_preset = "fast" if enable_gpu else "ultrafast"
+
+        video_codec = (
+            _env("SHORTS_VIDEO_CODEC", file_values, default_video_codec) or default_video_codec
+        )
+        video_preset = (
+            _env("SHORTS_VIDEO_PRESET", file_values, default_video_preset) or default_video_preset
+        )
+
+        scout_max_age_days = int(
+            _env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90"
+        )
+
         return cls(
             gemini_api_key=_env("GEMINI_API_KEY", file_values),
             openai_api_key=_env("OPENAI_API_KEY", file_values),
@@ -56,8 +87,8 @@ class Settings:
             or "http://localhost:11434",
             default_provider=_env("SHORTS_PROVIDER", file_values, "gemini") or "gemini",
             whisper_model=_env("SHORTS_WHISPER_MODEL", file_values, "tiny.en") or "tiny.en",
-            whisper_device=_env("SHORTS_WHISPER_DEVICE", file_values, "cpu") or "cpu",
-            whisper_compute_type=_env("SHORTS_WHISPER_COMPUTE_TYPE", file_values, "int8") or "int8",
+            whisper_device=whisper_device,
+            whisper_compute_type=whisper_compute_type,
             models_dir=Path(_env("SHORTS_MODELS_DIR", file_values, "models") or "models"),
             output_dir=Path(_env("SHORTS_OUTPUT_DIR", file_values, "outputs") or "outputs"),
             cache_dir=Path(
@@ -65,8 +96,9 @@ class Settings:
                 or ".cache/shorts-clipper"
             ),
             log_level=(_env("SHORTS_LOG_LEVEL", file_values, "INFO") or "INFO").upper(),
-            enable_gpu=(
-                (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false").lower()
-                in {"1", "true", "yes", "on"}
-            ),
+            enable_gpu=enable_gpu,
+            video_codec=video_codec,
+            video_preset=video_preset,
+            scout_max_age_days=scout_max_age_days,
         )
+

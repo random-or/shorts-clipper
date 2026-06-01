@@ -299,6 +299,29 @@ class ScoutQueryTests(unittest.TestCase):
         self.assertIn("gvsearch5:clash", queries)
         self.assertIn("yvsearch5:clash", queries)
 
+    def test_is_suitable_rejects_low_resolution(self):
+        from shorts_clipper.scout.trending import _is_suitable
+
+        # Video with low resolution (480p) should be rejected
+        info_low = {
+            "id": "vid_low",
+            "duration": 300,
+            "upload_date": "20260520",
+            "automatic_captions": {"en": []},
+            "height": 480,
+        }
+        self.assertFalse(_is_suitable(info_low, {}))
+
+        # Video with high resolution (1080p) should be accepted
+        info_high = {
+            "id": "vid_high",
+            "duration": 300,
+            "upload_date": "20260520",
+            "automatic_captions": {"en": []},
+            "height": 1080,
+        }
+        self.assertTrue(_is_suitable(info_high, {}))
+
 
 if __name__ == "__main__":
     unittest.main()

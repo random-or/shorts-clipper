@@ -170,7 +170,8 @@ def generate_ass_file(
         "NEVER",
         "INSANE",
         "BRO",
-        "NO WAY",
+        "NO",
+        "WAY",
         "LISTEN",
         "WAIT",
         "CRAZY",
@@ -180,6 +181,9 @@ def generate_ass_file(
         "OMG",
         "TRUTH",
         "SECRET",
+        "UNBELIEVABLE",
+        "SHOCKING",
+        "AURA",
     }
 
     for chunk in chunks:
@@ -222,6 +226,7 @@ def burn_subtitles(
     crf: int = 18,
     preset: str = "ultrafast",
     pacing: float = 1.0,
+    video_codec: str = "libx264",
 ) -> Path:
     """
     Burn subtitles into a video using FFmpeg's native ASS filter.
@@ -237,6 +242,7 @@ def burn_subtitles(
         crf:          FFmpeg CRF quality (18 = near-lossless, 23 = default).
         preset:       FFmpeg encode preset (fast, medium, slow).
         pacing:       Speed multiplier (1.0 = no change, 1.15 = 15% faster).
+        video_codec:  FFmpeg video encoder codec to use.
 
     Returns:
         Path to the output video.
@@ -275,21 +281,29 @@ def burn_subtitles(
             "-vf",
             vf,
             "-c:v",
-            "libx264",
-            "-crf",
-            str(crf),
-            "-preset",
-            preset,
-            "-af",
-            ",".join(af_parts),
-            "-c:a",
-            "aac",
-            "-b:a",
-            "192k",
-            "-movflags",
-            "+faststart",
-            str(output_path),
+            video_codec,
         ]
+
+        if video_codec == "libx264":
+            cmd.extend(["-crf", str(crf), "-preset", preset])
+        elif video_codec == "h264_nvenc":
+            cmd.extend(["-rc:v", "vbr", "-cq", str(crf), "-preset", preset])
+        else:
+            cmd.extend(["-preset", preset])
+
+        cmd.extend(
+            [
+                "-af",
+                ",".join(af_parts),
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-movflags",
+                "+faststart",
+                str(output_path),
+            ]
+        )
 
         log.info("Running FFmpeg: %s", " ".join(cmd))
         result = subprocess.run(
@@ -303,3 +317,4 @@ def burn_subtitles(
 
     log.info("✅ Subtitles burned → %s", output_path)
     return output_path
+

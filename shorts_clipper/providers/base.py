@@ -30,3 +30,14 @@ class HighlightProvider(ABC):
     @abstractmethod
     def select_clip(self, segments: Sequence[TranscriptSegment]) -> ClipWindow:
         """Return the best clip window for a transcript."""
+
+    def select_multiple_clips(
+        self, segments: Sequence[TranscriptSegment], count: int = 1
+    ) -> list[tuple[ClipWindow, str]]:
+        """Return multiple clip windows with layouts for a transcript."""
+        # By default, falls back to select_clip wrapped in a list
+        res = self.select_clip(segments)
+        if isinstance(res, tuple):
+            return [res]
+        return [(res, "crop_center")]
+

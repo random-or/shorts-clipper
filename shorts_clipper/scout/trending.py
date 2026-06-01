@@ -238,50 +238,47 @@ def _generate_dynamic_queries(pool_name: str, count: int = 5) -> list[str]:
     return list(results)
 
 
-def _search_entries(query: str) -> list[dict]:
-    """Return flat playlist entries for a yt-dlp search query."""
+def _search_and_fetch_metadata(query: str) -> list[dict]:
+    """Run search and dump full metadata for top results in a single yt-dlp execution."""
     cmd = [
         "yt-dlp",
         query,
-        "--flat-playlist",
-        "--dump-single-json",
+        "--dump-json",
+        "--skip-download",
         "--retries",
         "2",
         "--socket-timeout",
         "10",
         "--quiet",
     ]
-    # If the query is a channel URL or user page, limit to recent 15 videos to avoid long downloads
     if "youtube.com/" in query or query.startswith("http"):
         cmd.extend(["--playlist-end", "15"])
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=20)
-        data = json.loads(result.stdout)
-        return data.get("entries") or []
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        videos = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line:
+                try:
+                    videos.append(json.loads(line))
+                except Exception:
+                    continue
+        return videos
     except Exception as exc:  # noqa: BLE001
-        log.warning("Search failed for query %r: %s", query, exc)
+        log.warning("Search and metadata fetch failed for query %r: %s", query, exc)
         return []
 
 
-def _fetch_video_info(video_id: str) -> dict | None:
-    """Fetch full metadata for a single video ID (safe to run in thread)."""
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    cmd = [
-        "yt-dlp",
-        "--dump-json",
-        "--skip-download",
-        "--socket-timeout",
-        "10",
-        "--quiet",
-        url,
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=20)
-        return json.loads(result.stdout)
-    except Exception as exc:  # noqa: BLE001
-        log.debug("Info fetch failed for %s: %s", video_id, exc)
-        return None
+def _search_entries(query: str) -> list[dict]:
+    """Return flat playlist entries for a yt-dlp search query (wrapper for compatibility)."""
+    videos = _search_and_fetch_metadata(query)
+    entries = []
+    for v in videos:
+        if v.get("id"):
+            entries.append({"id": v["id"], "title": v.get("title", "")})
+    return entries
+
 
 
 def _has_english(info: dict) -> bool:
@@ -319,6 +316,12 @@ def _is_suitable(info: dict, seen: dict[str, float], max_age_days: int | None = 
     duration = float(info.get("duration") or 0)
 
     if vid_id in seen or not (_MIN_DURATION <= duration <= _MAX_DURATION) or not _has_english(info):
+        return False
+
+    # 5. Quality check: Reject low-resolution videos (less than 720p)
+    height = info.get("height")
+    if height is not None and height < 720:
+        log.info("   [Skip] Candidate %s is low resolution (%dp < 720p)", vid_id, height)
         return False
 
     if max_age_days is not None:
@@ -418,37 +421,36 @@ def _scout_pool(
     Returns a (possibly empty) list of (score, VideoCandidate) pairs sorted
     descending by score — never None.
     """
-    log.info("🔍 Searching: %s", query)
-    entries = _search_entries(query)
-    if not entries:
+    log.info("🔍 Searching (all-in-one): %s", query)
+    
+    # Boost search count from ytsearch5 to ytsearch12 for more candidate variety
+    modified_query = query
+    if "ytsearch5:" in query:
+        modified_query = query.replace("ytsearch5:", "ytsearch12:")
+
+    infos = _search_and_fetch_metadata(modified_query)
+    if not infos:
         log.warning("No entries returned for query: %s", query)
         return []
 
-    ids = [e["id"] for e in entries if e.get("id") and e["id"] not in seen]
-    if not ids:
-        log.info("All results already seen for: %s", query)
-        return []
-
-    log.info("⚡ Fetching info for %d candidates in parallel...", len(ids))
     candidates: list[tuple[float, VideoCandidate]] = []
+    for info in infos:
+        vid_id = info.get("id")
+        if not vid_id or vid_id in seen:
+            continue
 
-    with ThreadPoolExecutor(max_workers=min(_MAX_WORKERS, len(ids))) as pool:
-        futures = {pool.submit(_fetch_video_info, vid): vid for vid in ids}
-        for future in as_completed(futures):
-            info = future.result()
-            if info and _is_suitable(info, seen, max_age_days):
-                vid_id = info["id"]
-                url = f"https://www.youtube.com/watch?v={vid_id}"
-                title = info.get("title", "Unknown")
-                duration = float(info.get("duration") or 0)
-                score = _calculate_virality_score(info)
-                candidates.append(
-                    (
-                        score,
-                        VideoCandidate(url=url, video_id=vid_id, duration=duration, title=title),
-                    )
+        if _is_suitable(info, seen, max_age_days):
+            url = f"https://www.youtube.com/watch?v={vid_id}"
+            title = info.get("title", "Unknown")
+            duration = float(info.get("duration") or 0)
+            score = _calculate_virality_score(info)
+            candidates.append(
+                (
+                    score,
+                    VideoCandidate(url=url, video_id=vid_id, duration=duration, title=title),
                 )
-                log.info("🎯 Found valid candidate: [%s] %s (virality=%.2f)", vid_id, title, score)
+            )
+            log.info("🎯 Found valid candidate: [%s] %s (virality=%.2f)", vid_id, title, score)
 
     candidates.sort(key=lambda x: x[0], reverse=True)
     return candidates
@@ -462,6 +464,7 @@ def get_trending_link(
     channel: str | None = None,
     niche: str | None = None,
     keyword: str | None = None,
+    max_age_days: int | None = 90,
 ) -> str | None:
     """
     Find a trending YouTube video suitable for clipping.
@@ -476,6 +479,7 @@ def get_trending_link(
         channel: Search only this channel's recent videos.
         niche: Build 5 targeted search queries around this niche and rotate between them.
         keyword: Search specifically for this term across multiple platforms.
+        max_age_days: Maximum age of trending videos in days (default: 90).
 
     Returns:
         A YouTube URL string, or None if no suitable video was found.
@@ -574,22 +578,26 @@ def get_trending_link(
 
         all_candidates: list[tuple[float, VideoCandidate]] = []
 
-        # Determine if we should enforce a 30-day age limit (e.g. in channel mode)
-        max_age_days = 30 if channel else None
+        # Progressive age filter relaxation to support self-healing queries
+        if attempt == 1:
+            actual_max_age_days = 30 if channel else max_age_days
+        elif attempt == 2:
+            actual_max_age_days = 180 if channel else (365 if max_age_days else None)
+            log.warning("⚠️  Attempt 2: Relaxing age filter limit to %s days to expand candidate pool", actual_max_age_days)
+        else:
+            actual_max_age_days = None
+            log.warning("⚠️  Attempt 3: Disabling age filter limit entirely to guarantee unique trending match")
 
         # Run at most 2 searches concurrently to avoid rate-limiting.
-        # Exit early as soon as we have at least one viable candidate.
+        # Gather all candidates from all concurrent queries so we select the absolute best.
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = {executor.submit(_scout_pool, q, seen, max_age_days): q for q in queries}
+            futures = {executor.submit(_scout_pool, q, seen, actual_max_age_days): q for q in queries}
             for future in as_completed(futures):
-                results = future.result()
-                all_candidates.extend(results)
-                if all_candidates:
-                    # Cancel remaining pending futures — we have what we need
-                    for f in futures:
-                        f.cancel()
-                    log.info("⚡ Early exit — candidate found, skipping remaining queries.")
-                    break
+                try:
+                    results = future.result()
+                    all_candidates.extend(results)
+                except Exception as exc:
+                    log.warning("Scout pool query failed: %s", exc)
 
         if all_candidates:
             all_candidates.sort(key=lambda x: x[0], reverse=True)

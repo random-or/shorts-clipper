@@ -75,6 +75,59 @@ Return ONLY valid JSON, no markdown, no commentary:
 }}"""
 
 
+
+_MULTI_PROMPT_TEMPLATE = """\
+You are an elite viral shorts editor with 10 years of experience on TikTok,
+Instagram Reels, and YouTube Shorts. Your clips consistently hit 1M+ views.
+
+Analyze the transcript below, identify the top {count} non-overlapping, high-impact clip windows,
+and score each from 0 to 100 based on the evaluation criteria.
+
+{transcript}
+
+━━━ EVALUATION CRITERIA (Score 0-100) ━━━
+
+Score the clip window strictly based on these 5 dimensions (0 to 100 overall score):
+
+1. EMOTIONAL PEAK MOMENTS: Genuinely surprising, hilarious, or high-impact
+moments. Do NOT just select loud or high-volume noise; prioritize authentic
+humor or shocking surprises.
+2. CLIP-ABILITY: The segment must have a clean, logical start and a
+satisfying end. It must make perfect sense standing alone as a
+self-contained video.
+3. NICHE RELEVANCE: The clip must highly align with and fit the specific
+topic, theme, or channel style.
+4. HOOK QUALITY: The first 3 seconds of the clip must grab attention
+immediately with extreme hook power (tension, question, mystery, shock,
+or surprise).
+5. AVOID ENTIRELY (Score < 85 if any of these are present):
+   - Reaction compilations.
+   - Generic motivational filler/pacing.
+   - Anything requiring external context or explanation from the rest of the video to be understood.
+
+Only select and return clips if their final combined score is 85 or higher.
+
+━━━ FRAMING — choose the best vertical crop ━━━
+• crop_center   — single subject, centered
+• crop_left     — subject is left of frame
+• crop_right    — subject is right of frame
+
+━━━ RESPONSE FORMAT ━━━
+
+Return ONLY valid JSON as a list/array of objects. No markdown, no commentary:
+[
+  {{
+    "start": <float seconds>,
+    "end": <float seconds>,
+    "layout": "<framing_strategy>",
+    "virality_score": <int 0-100>,
+    "emotional_category": "<tension|shock|humor|confrontation|revelation>",
+    "strongest_hook_line": "<exact phrase from transcript>",
+    "reason": "<one sentence why this clip meets the criteria and how it was scored>"
+  }}
+]"""
+
+
 # ---------------------------------------------------------------------------
 # Provider
 # ---------------------------------------------------------------------------
@@ -82,6 +135,7 @@ Return ONLY valid JSON, no markdown, no commentary:
 
 class GeminiProvider(HighlightProvider):
     """Uses Gemini 2.5 Flash to select the best clip window from a transcript."""
+
 
     def __init__(
         self,
@@ -100,6 +154,32 @@ class GeminiProvider(HighlightProvider):
 
         self._client = genai.Client(api_key=api_key or os.environ.get("GEMINI_API_KEY"))
 
+    def _generate_content_with_retry(
+        self, prompt: str, max_retries: int = 3, initial_delay: float = 2.0
+    ) -> any:
+        """Call generate_content with exponential backoff on transient errors."""
+        import time
+        delay = initial_delay
+        for attempt in range(1, max_retries + 1):
+            try:
+                return self._client.models.generate_content(
+                    model=self._model,
+                    contents=prompt,
+                )
+            except Exception as exc:
+                if attempt == max_retries:
+                    log.error("Gemini generate_content failed after %d attempts: %s", max_retries, exc)
+                    raise
+                log.warning(
+                    "Gemini API call failed (attempt %d/%d): %s. Retrying in %.1fs...",
+                    attempt,
+                    max_retries,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+                delay *= 2
+
     def select_clip(self, segments: Sequence[TranscriptSegment]) -> ClipWindow:
         """Return the best clip window. Falls back gracefully on any failure."""
         transcript_text = format_transcript(segments)
@@ -107,10 +187,7 @@ class GeminiProvider(HighlightProvider):
 
         log.info("\n--- CONSULTING %s ---", self._model)
         try:
-            response = self._client.models.generate_content(
-                model=self._model,
-                contents=prompt,
-            )
+            response = self._generate_content_with_retry(prompt)
             raw = response.text.strip()
             log.debug("Gemini raw response: %r", raw)
 
@@ -183,3 +260,76 @@ class GeminiProvider(HighlightProvider):
         if isinstance(result, tuple):
             return result
         return result, self._fallback_layout
+
+    def select_multiple_clips(
+        self, segments: Sequence[TranscriptSegment], count: int = 1
+    ) -> list[tuple[ClipWindow, str]]:
+        """Return the best clip windows (up to count) from the transcript."""
+        if count <= 1:
+            win, lay = self.select_clip_raw(segments)
+            return [(win, lay)]
+
+        transcript_text = format_transcript(segments)
+        prompt = _MULTI_PROMPT_TEMPLATE.format(count=count, transcript=transcript_text)
+
+        log.info("\n--- CONSULTING %s FOR MULTIPLE CLIPS (up to %d) ---", self._model, count)
+        try:
+            response = self._generate_content_with_retry(prompt)
+            raw = response.text.strip()
+            log.debug("Gemini raw response: %r", raw)
+
+            json_str = raw
+            json_match = re.search(r"```(?:json)?(.*?)```", raw, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1).strip()
+
+            try:
+                items = json.loads(json_str)
+            except json.JSONDecodeError as exc:
+                raise ProviderError(f"Gemini returned unparseable JSON array: {raw!r}") from exc
+
+            if not isinstance(items, list):
+                raise ProviderError(f"Gemini response did not return a JSON list: {raw!r}")
+
+            results: list[tuple[ClipWindow, str]] = []
+            for item in items[:count]:
+                try:
+                    start = float(item["start"])
+                    end = float(item["end"])
+                    layout = str(item.get("layout", self._fallback_layout)).strip()
+                    score = int(item.get("virality_score", 0))
+
+                    if score < 85:
+                        log.warning("Skipping selected clip with low score: %d (< 85)", score)
+                        continue
+
+                    # Clamp duration
+                    duration = end - start
+                    if duration < 30:
+                        end = start + 35
+                    elif duration > 65:
+                        end = start + 55
+
+                    log.info(
+                        "✅ Gemini selected candidate: %.1fs → %.1fs [%s] | score=%d | %s",
+                        start,
+                        end,
+                        layout,
+                        score,
+                        item.get("emotional_category", "?"),
+                    )
+                    results.append((ClipWindow(start=start, end=end), layout))
+                except Exception as item_exc:
+                    log.warning("Failed parsing individual clip candidate: %s", item_exc)
+
+            if not results:
+                raise ProviderError("No high-quality clips selected by Gemini.")
+
+            return results
+
+        except Exception as exc:
+            log.warning("Gemini multi-clip selection failed (%s). Using fallback.", exc)
+            win, lay = self.select_clip_raw(segments)
+            return [(win, lay)]
+
+

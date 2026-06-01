@@ -57,6 +57,7 @@ def process_to_vertical(
     layout: str = "crop_center",
     crf: int = 18,
     preset: str = "ultrafast",
+    video_codec: str = "libx264",
 ) -> Path:
     """
     Crop and scale a video to 1080×1920 vertical using pure FFmpeg.
@@ -67,6 +68,7 @@ def process_to_vertical(
         layout: crop_center | crop_left | crop_right.
         crf: Constant rate factor (18 = near-lossless, 23 = default).
         preset: FFmpeg x264 preset (fast / medium / slow).
+        video_codec: FFmpeg video encoder codec to use.
 
     Returns:
         Path to the output file.
@@ -97,19 +99,27 @@ def process_to_vertical(
         "-vf",
         vf,
         "-c:v",
-        "libx264",
-        "-crf",
-        str(crf),
-        "-preset",
-        preset,
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-movflags",
-        "+faststart",
-        str(output_path),
+        video_codec,
     ]
+
+    if video_codec == "libx264":
+        cmd.extend(["-crf", str(crf), "-preset", preset])
+    elif video_codec == "h264_nvenc":
+        cmd.extend(["-rc:v", "vbr", "-cq", str(crf), "-preset", preset])
+    else:
+        cmd.extend(["-preset", preset])
+
+    cmd.extend(
+        [
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+    )
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -118,3 +128,4 @@ def process_to_vertical(
 
     log.info("✅ Vertical crop done → %s", output_path)
     return output_path
+

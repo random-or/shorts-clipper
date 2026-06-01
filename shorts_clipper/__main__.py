@@ -26,9 +26,15 @@ def _cmd_clip(args: argparse.Namespace, settings: Settings) -> int:
     from shorts_clipper.pipeline.runner import run
 
     out = Path(args.output) if args.output else None
+    count = getattr(args, "count", 1)
     try:
-        path = run(args.url, settings=settings, output_path=out)
-        print(f"\n🔥 Clip ready: {path}")
+        path_or_paths = run(args.url, settings=settings, output_path=out, count=count)
+        if isinstance(path_or_paths, list):
+            print("\n🔥 Clips ready:")
+            for p in path_or_paths:
+                print(f"  - {p}")
+        else:
+            print(f"\n🔥 Clip ready: {path_or_paths}")
         return 0
     except Exception as exc:
         logging.getLogger(__name__).error("Pipeline failed: %s", exc)
@@ -38,14 +44,21 @@ def _cmd_clip(args: argparse.Namespace, settings: Settings) -> int:
 def _cmd_autopilot(args: argparse.Namespace, settings: Settings) -> int:
     from shorts_clipper.pipeline.runner import run_autopilot
 
-    path = run_autopilot(
+    count = getattr(args, "count", 1)
+    path_or_paths = run_autopilot(
         settings=settings,
         channel=getattr(args, "channel", None),
         niche=getattr(args, "niche", None),
         keyword=getattr(args, "keyword", None),
+        count=count,
     )
-    if path:
-        print(f"\n🔥 Clip ready: {path}")
+    if path_or_paths:
+        if isinstance(path_or_paths, list):
+            print("\n🔥 Clips ready:")
+            for p in path_or_paths:
+                print(f"  - {p}")
+        else:
+            print(f"\n🔥 Clip ready: {path_or_paths}")
         return 0
     print("❌ Autopilot could not find a suitable video.")
     return 1
@@ -61,6 +74,7 @@ def _cmd_scout(args: argparse.Namespace, settings: Settings) -> int:  # noqa: AR
             channel=getattr(args, "channel", None),
             niche=getattr(args, "niche", None),
             keyword=getattr(args, "keyword", None),
+            max_age_days=settings.scout_max_age_days,
         )
         if url:
             print(url)
@@ -69,6 +83,24 @@ def _cmd_scout(args: argparse.Namespace, settings: Settings) -> int:  # noqa: AR
             print("❌ No suitable video found.", file=sys.stderr)
             break
     return 0 if found == count else 1
+
+
+def _cmd_web(args: argparse.Namespace, settings: Settings) -> int:
+    import uvicorn
+
+    from shorts_clipper.api.server import app
+
+    host = getattr(args, "host", "127.0.0.1")
+    port = getattr(args, "port", 8000)
+
+    print(f"\n🚀 Launching Vanguard Clipper Web Console on http://{host}:{port}...")
+    try:
+        uvicorn.run(app, host=host, port=port)
+        return 0
+    except Exception as exc:
+        print(f"❌ Failed to run Vanguard server: {exc}")
+        return 1
+
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -101,6 +133,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Output file path (default: outputs/clip_TIMESTAMP.mp4)",
     )
+    clip_p.add_argument(
+        "-c",
+        "--count",
+        type=int,
+        default=1,
+        help="Number of viral clips to extract (default: 1)",
+    )
 
     # ── autopilot ─────────────────────────────────────────────────────────
     autopilot_p = sub.add_parser(
@@ -118,6 +157,13 @@ def build_parser() -> argparse.ArgumentParser:
     autopilot_p.add_argument(
         "--keyword",
         help="Search specifically for this term across multiple platforms.",
+    )
+    autopilot_p.add_argument(
+        "-c",
+        "--count",
+        type=int,
+        default=1,
+        help="Number of viral clips to extract (default: 1)",
     )
 
     # ── scout ─────────────────────────────────────────────────────────────
@@ -142,6 +188,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Search specifically for this term across multiple platforms.",
     )
 
+
+    # ── web ───────────────────────────────────────────────────────────────
+    web_p = sub.add_parser("web", help="Start the Vanguard Web Console Dashboard.")
+    web_p.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host address to bind to (default: 127.0.0.1)",
+    )
+    web_p.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to listen on (default: 8000)",
+    )
+
     return parser
 
 
@@ -156,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         "clip": _cmd_clip,
         "autopilot": _cmd_autopilot,
         "scout": _cmd_scout,
+        "web": _cmd_web,
     }
     return dispatch[args.command](args, settings)
 

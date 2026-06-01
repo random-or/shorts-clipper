@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShortClipper — AI Video Clipper Console</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+
+        :root {
+            --ink: #0a0a0b;
+            --ink2: #16161a;
+            --ink3: #1e1e24;
+            --wire: #2c2c32;
+            --smoke: #e8e6e1;
+            --ash: #b0ada6;
+            --ghost: #6e6b65;
+            --gold: #c9a84c;
+            --gold2: #e8c97a;
+            --font-serif: Georgia, serif;
+            --font-ui: system-ui, -apple-system, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--ink);
+            color: var(--smoke);
+            font-family: var(--font-ui);
+            overflow-x: hidden;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        /* Typography */
+        .serif-text, .clip-card-name, .ts-text, .modal-title, .verdict-text {
+            font-family: var(--font-serif);
+            font-style: italic;
+            font-weight: 400;
+            color: var(--smoke);
+        }
+
+        .ui-text, label, .ts-time, .btn, .nav-item, .stat-label, .panel-title, th, td, .status-row, .stage-label {
+            font-family: var(--font-ui);
+            font-size: 9px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-weight: 400;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 400;
+        }
+
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--ink2);
+            border-right: 1px solid var(--wire);
+            display: flex;
+            flex-direction: column;
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .brand-container {
+            margin-bottom: 3rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .brand-name {
+            font-family: var(--font-ui);
+            font-size: 11px;
+            letter-spacing: 0.35em;
+            text-transform: uppercase;
+            color: var(--ash);
+            font-weight: 400;
+        }
+
+        .brand-logo {
+            display: none;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            flex-grow: 1;
+        }
+
+        .nav-item {
+            color: var(--ash);
+            cursor: pointer;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .nav-item:hover {
+            color: var(--smoke);
+        }
+
+        .nav-item.active {
+            color: var(--gold);
+            border-bottom: 1px solid var(--gold);
+        }
+
+        .system-status {
+            padding: 1rem;
+            background: var(--ink3);
+            border: 1px solid var(--wire);
+        }
+
+        .status-header {
+            color: var(--ghost);
+            margin-bottom: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.35rem;
+            color: var(--ash);
+        }
+
+        .status-val {
+            color: var(--smoke);
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            flex-grow: 1;
+            padding: 2.5rem 3rem;
+            min-height: 100vh;
+        }
+
+        /* Stat Bar */
+        .stats-bar {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--wire);
+            padding-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--ghost);
+        }
+
+        .stat-value {
+            font-family: var(--font-serif);
+            font-size: 16px;
+            color: var(--smoke);
+        }
+
+        .stat-icon {
+            display: none;
+        }
+
+        /* Panels */
+        .glass-panel {
+            background: var(--ink3);
+            border: 1px solid var(--wire);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .panel-title {
+            color: var(--smoke);
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--wire);
+            padding-bottom: 0.75rem;
+        }
+
+        .panel-title i {
+            display: none;
+        }
+
+        /* Forms */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group-full {
+            grid-column: span 2;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            color: var(--ghost);
+        }
+
+        input[type="text"], input[type="number"], select {
+            background: var(--ink);
+            border: 1px solid var(--wire);
+            color: var(--smoke);
+            font-family: var(--font-ui);
+            font-size: 10px;
+            padding: 0.8rem 1rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--gold);
+        }
+
+        /* Buttons */
+        .btn {
+            background: var(--ink2);
+            border: 1px solid var(--wire);
+            color: var(--smoke);
+            padding: 0.85rem 1.75rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        .btn-pink {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+        
+        .btn-secondary {
+            background: var(--ink);
+        }
+
+        .btn-mini {
+            padding: 0.45rem 0.5rem;
+        }
+
+        /* Dots & Pipeline */
+        .stage-pipeline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--ink2);
+            border: 1px solid var(--wire);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stage-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.4rem;
+            color: var(--ghost);
+        }
+
+        .stage-icon {
+            display: none;
+        }
+
+        .stage-label {
+            color: var(--ghost);
+        }
+
+        .stage-step.active .stage-label {
+            color: var(--smoke);
+        }
+
+        .stage-step.done .stage-label {
+            color: var(--gold);
+        }
+
+        .pipeline-bar {
+            height: 1px;
+            background: var(--wire);
+            flex-grow: 1;
+            margin: 0 15px;
+        }
+
+        .pipeline-bar.done {
+            background: var(--gold);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            background: var(--gold);
+        }
+
+        /* Selection state */
+        .selectable {
+            border-left: 2px solid transparent;
+            padding-left: 1rem;
+            transition: all 0.2s ease;
+        }
+        .selectable:hover, .selectable.selected {
+            border-left: 2px solid var(--gold);
+            background: rgba(201, 168, 76, 0.06);
+        }
+
+        /* Transcript */
+        .transcript-list {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--wire);
+            padding: 1rem;
+            background: var(--ink);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .transcript-row {
+            display: flex;
+            padding: 0.35rem 0.5rem;
+            border-left: 2px solid transparent;
+        }
+
+        .transcript-row:hover {
+            border-left: 2px solid var(--gold);
+            background: rgba(201, 168, 76, 0.06);
+        }
+
+        .ts-time {
+            width: 70px;
+            color: var(--ghost);
+            flex-shrink: 0;
+        }
+
+        .ts-text {
+            font-size: 14px;
+        }
+
+        .ts-text.highlighted {
+            color: var(--gold2);
+        }
+
+        /* Tables */
+        .highlights-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        .highlights-table th {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            color: var(--ghost);
+            border-bottom: 1px solid var(--wire);
+        }
+
+        .highlights-table td {
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid var(--wire);
+            color: var(--ash);
+        }
+
+        .highlights-table tr:hover td {
+            background: rgba(201, 168, 76, 0.06);
+        }
+
+        /* Terminal */
+        .terminal-container {
+            background: var(--ink);
+            border: 1px solid var(--wire);
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--wire);
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .terminal-controls {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .terminal-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .term-red { background: #c94a4a; }
+        .term-yel { background: var(--gold); }
+        .term-grn { background: var(--ghost); }
+
+        .terminal-title {
+            color: var(--ghost);
+            font-family: var(--font-ui);
+            font-size: 9px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .terminal-body {
+            height: 250px;
+            overflow-y: auto;
+            color: var(--smoke);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        /* Dots */
+        .dot-running { background: #4a9eff; animation: pulse 2.4s infinite; }
+        .dot-done { background: var(--gold); }
+        .dot-queue { background: var(--ghost); }
+        .dot-failed { background: #c94a4a; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        /* Library Clips */
+        .clips-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .clip-card {
+            background: var(--ink3);
+            border: 1px solid var(--wire);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .clip-card:hover {
+            border-color: var(--gold);
+        }
+
+        .clip-preview-placeholder {
+            width: 100%;
+            height: 280px;
+            background: var(--ink);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid var(--wire);
+        }
+
+        .clip-overlay-play {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--wire);
+            color: var(--smoke);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 1px solid var(--ash);
+        }
+
+        .clip-overlay-play:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        .clip-card-info {
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .clip-card-name {
+            font-size: 14px;
+            height: 2.5rem;
+            overflow: hidden;
+        }
+
+        .clip-meta-row {
+            display: flex;
+            justify-content: space-between;
+            color: var(--ghost);
+            font-family: var(--font-ui);
+            font-size: 9px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .clip-publish-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            border-top: 1px solid var(--wire);
+            padding: 0.75rem 1rem;
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(10, 10, 11, 0.95);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--ink2);
+            border: 1px solid var(--wire);
+            width: 420px;
+            max-width: 90vw;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--wire);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--ghost);
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+        .modal-close:hover { color: var(--smoke); }
+
+        .modal-body {
+            padding: 1.5rem;
+            background: var(--ink);
+        }
+
+        .modal-body video {
+            width: 100%;
+            height: 520px;
+            object-fit: cover;
+            outline: none;
+        }
+
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--wire);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        .app-view { display: none; }
+        .app-view.active { display: block; }
+
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="brand-container">
+                <div class="brand-logo">
+                    </div>
+                <div class="brand-name">ShortClipper</div>
+            </div>
+            
+            <div class="nav-menu">
+                <div class="nav-item active" onclick="switchView('view-autopilot')">
+                    Autopilot Launchpad
+                </div>
+                <div class="nav-item" onclick="switchView('view-clipper')">
+                    Interactive Clipper
+                </div>
+                <div class="nav-item" onclick="switchView('view-library')">
+                    Clips Library
+                </div>
+                <div class="nav-item" onclick="switchView('view-settings')">
+                    Console Settings
+                </div>
+            </div>
+            
+            <div class="system-status">
+                <div class="status-header">
+                    <span>SYSTEM STATE</span>
+                    <span class="status-dot"></span>
+                </div>
+                <div class="status-row">
+                    <span>API Endpoint</span>
+                    <span class="status-val">FastAPI Online</span>
+                </div>
+                <div class="status-row">
+                    <span>Whisper Engine</span>
+                    <span class="status-val" id="status-whisper">Tiny.en CPU</span>
+                </div>
+                <div class="status-row">
+                    <span>GPU Mode</span>
+                    <span class="status-val" id="status-gpu">Disabled</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content Area -->
+        <div class="main-content">
+            
+            <!-- Statistics Bar -->
+            <div class="stats-bar">
+                <div class="stat-card">
+                    <div>
+                        <div class="stat-label">Autopilot Runs</div>
+                        <div class="stat-value" id="stat-autopilot-count">Ready</div>
+                    </div>
+                    <div class="stat-icon stat-blue">
+                        </div>
+                </div>
+                <div class="stat-card">
+                    <div>
+                        <div class="stat-label">Total Clips Rendered</div>
+                        <div class="stat-value" id="stat-total-clips">0</div>
+                    </div>
+                    <div class="stat-icon stat-pink">
+                        </div>
+                </div>
+                <div class="stat-card">
+                    <div>
+                        <div class="stat-label">Whisper Device</div>
+                        <div class="stat-value" id="stat-whisper-device">CPU</div>
+                    </div>
+                    <div class="stat-icon stat-green">
+                        </div>
+                </div>
+                <div class="stat-card">
+                    <div>
+                        <div class="stat-label">Gemini Selected</div>
+                        <div class="stat-value">2.5 Flash</div>
+                    </div>
+                    <div class="stat-icon stat-amber">
+                        </div>
+                </div>
+            </div>
+            
+            <!-- Pipeline Stage Badges -->
+            <div class="stage-pipeline" id="progress-pipeline-bar">
+                <div class="stage-step" id="step-idle">
+                    <div class="stage-icon"></div>
+                    <div class="stage-label">Idle</div>
+                </div>
+                <div class="pipeline-bar" id="bar-scouting"></div>
+                <div class="stage-step" id="step-scouting">
+                    <div class="stage-icon"></div>
+                    <div class="stage-label">Scouting</div>
+                </div>
+                <div class="pipeline-bar" id="bar-downloading"></div>
+                <div class="stage-step" id="step-downloading">
+                    <div class="stage-icon"></div>
+                    <div class="stage-label">Downloading</div>
+                </div>
+                <div class="pipeline-bar" id="bar-transcribing"></div>
+                <div class="stage-step" id="step-transcribing">
+                    <div class="stage-icon"></div>
+                    <div class="stage-label">Transcribing</div>
+                </div>
+                <div class="pipeline-bar" id="bar-rendering"></div>
+                <div class="stage-step" id="step-rendering">
+                    <div class="stage-icon"></div>
+                    <div class="stage-label">Rendering</div>
+                </div>
+            </div>
+            
+            <!-- VIEW: AUTOPILOT -->
+            <div id="view-autopilot" class="app-view active">
+                <div class="glass-panel">
+                    <h2 class="panel-title">Autopilot Clipper Launchpad</h2>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="auto-niche">Target Niche / Topic</label>
+                            <select id="auto-niche">
+                                <option value="">Rotate Trending Pools</option>
+                                <option value="drama">Drama & Podcast Debates</option>
+                                <option value="motivation">Motivation & Sports Commentary</option>
+                                <option value="gaming">Gaming & Streamer Rage</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="auto-count">Clip Counts per Video</label>
+                            <input type="number" id="auto-count" min="1" max="10" value="3">
+                        </div>
+                        <div class="form-group">
+                            <label for="auto-keyword">Specific Query Keyword (Optional)</label>
+                            <input type="text" id="auto-keyword" placeholder="e.g. standing on business, crashout">
+                        </div>
+                        <div class="form-group">
+                            <label for="auto-channel">Target Specific Channel (Optional)</label>
+                            <input type="text" id="auto-channel" placeholder="e.g. @joe_rogan, podcast_channel">
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-pink" onclick="launchAutopilot()">LAUNCH AUTOPILOT PIPELINE</button>
+                </div>
+            </div>
+            
+            <!-- VIEW: CLIPPER STUDIO -->
+            <div id="view-clipper" class="app-view">
+                <div class="glass-panel">
+                    <h2 class="panel-title">Interactive Manual Clipper Studio</h2>
+                    
+                    <div class="form-grid" style="margin-bottom: 1.5rem;">
+                        <div class="form-group-full">
+                            <label for="manual-url">YouTube Video URL</label>
+                            <div style="display:flex; gap:1rem;">
+                                <input type="text" id="manual-url" style="flex-grow:1;" placeholder="https://www.youtube.com/watch?v=...">
+                                <button class="btn" onclick="fetchTranscript()">ANALYZE VIDEO</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Transcript display -->
+                    <div id="clipper-results-panel" style="display:none;">
+                        <h3 style="margin-bottom: 0.75rem; font-size:1.05rem; ">Rough Transcript Preview</h3>
+                        <div class="transcript-list" id="preview-transcript-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                        
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                            <h3 style="font-size:1.05rem; ">Gemini Highlight Candidates</h3>
+                            <button class="btn btn-mini btn-pink" onclick="generateHighlights()">DISCOVER HIGH-IMPACT CLIPS</button>
+                        </div>
+                        
+                        <table class="highlights-table" id="highlights-table-container">
+                            <thead>
+                                <tr>
+                                    <th>Segment Window</th>
+                                    <th>Duration</th>
+                                    <th>Crop Framing</th>
+                                    <th>Virality Rating</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="highlights-tbody">
+                                <tr>
+                                    <td colspan="5" style="text-align:center; color:var(--text-muted);">No highlight recommendations analyzed yet. Click "Discover High-Impact Clips".</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- VIEW: LIBRARY -->
+            <div id="view-library" class="app-view">
+                <div class="glass-panel">
+                    <h2 class="panel-title" style="justify-content: space-between;">
+                        <span>Rendered Clip Library</span>
+                        <button class="btn btn-secondary btn-mini" onclick="refreshLibrary()">REFRESH</button>
+                    </h2>
+                    
+                    <div class="clips-grid" id="library-clips-container">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- VIEW: SETTINGS -->
+            <div id="view-settings" class="app-view">
+                <div class="glass-panel">
+                    <h2 class="panel-title">Vanguard Console Settings</h2>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="set-gemini-key">Gemini API Key</label>
+                            <input type="text" id="set-gemini-key" placeholder="AI-analysis authentication token">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-whisper-model">Local Whisper Model</label>
+                            <select id="set-whisper-model">
+                                <option value="tiny.en">tiny.en (Fastest tests)</option>
+                                <option value="base.en">base.en (Optimized)</option>
+                                <option value="small.en">small.en (Accurate)</option>
+                                <option value="large-v3">large-v3 (Production/Precise)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-whisper-device">Whisper Compute Device</label>
+                            <select id="set-whisper-device">
+                                <option value="cpu">CPU (Standard)</option>
+                                <option value="cuda">CUDA (NVIDIA GPU Accelerated)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-whisper-compute">Whisper Quantisation Type</label>
+                            <select id="set-whisper-compute">
+                                <option value="int8">int8 (Lightweight CPU)</option>
+                                <option value="float16">float16 (Fast GPU)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-video-codec">FFmpeg Video Encoder Codec</label>
+                            <select id="set-video-codec">
+                                <option value="libx264">libx264 (H.264 CPU)</option>
+                                <option value="h264_nvenc">h264_nvenc (NVIDIA GPU Accelerated)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-video-preset">FFmpeg Video Preset</label>
+                            <select id="set-video-preset">
+                                <option value="ultrafast">ultrafast (Fastest render)</option>
+                                <option value="veryfast">veryfast</option>
+                                <option value="fast">fast</option>
+                                <option value="medium">medium (Best size/quality)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-age-days">Max Search Video Age (Days)</label>
+                            <input type="number" id="set-age-days" value="90">
+                        </div>
+                        <div class="form-group" style="flex-direction:row; align-items:center; gap:1rem; padding-top:1.5rem;">
+                            <input type="checkbox" id="set-enable-gpu" style="width:20px; height:20px;">
+                            <label for="set-enable-gpu">Enable GPU Acceleration (NVENC/CUDA)</label>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-pink" onclick="saveSettings()">SAVE CONFIGURATION</button>
+                </div>
+            </div>
+            
+            <!-- Live scrolling console terminal -->
+            <div class="glass-panel" style="padding: 1.5rem;">
+                <h3 style="font-size:1.05rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
+                    <span><i class="fa-solid fa-terminal" style="color:var(--accent-green)"></i> Real-Time Processing Console</span>
+                    <span style="font-size:0.75rem;  background:rgba(16,185,129,0.15); padding:2px 8px; border-radius:4px;" id="term-status-badge">Stream Listening</span>
+                </h3>
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <div class="terminal-controls">
+                            <span class="terminal-dot term-red"></span>
+                            <span class="terminal-dot term-yel"></span>
+                            <span class="terminal-dot term-grn"></span>
+                        </div>
+                        <span class="terminal-title">clipper@vanguard:~# log-stream --follow</span>
+                    </div>
+                    <div class="terminal-body" id="terminal-body-feed">
+[Vanguard Terminal Console Started] Listening for live process logging events...
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+    
+    <!-- Vertical Video Preview Player Modal -->
+    <div class="modal" id="preview-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title" id="modal-video-title">Preview Vertical Short</span>
+                <button class="modal-close" onclick="closeVideoModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <video id="modal-video-player" controls></video>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-mini" onclick="closeVideoModal()">Close</button>
+                <a id="modal-video-download" href="#" download class="btn btn-pink btn-mini">Download</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Logic -->
+    <script>
+        let currentUrlTranscript = "";
+        let currentSegments = [];
+
+        // App page navigation router
+        function switchView(viewId) {
+            document.querySelectorAll('.app-view').forEach(view => {
+                view.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.getElementById(viewId).classList.add('active');
+            event.currentTarget.classList.add('active');
+            
+            if (viewId === 'view-library') {
+                refreshLibrary();
+            }
+        }
+
+        // Initialize logging stream via Server-Sent Events (SSE)
+        function initLogStream() {
+            const stream = new EventSource('/api/logs/stream');
+            const term = document.getElementById('terminal-body-feed');
+            const badge = document.getElementById('term-status-badge');
+            
+            stream.onmessage = function(event) {
+                const text = event.data.trim();
+                if (text) {
+                    const lines = text.split('\n');
+                    lines.forEach(line => {
+                        const row = document.createElement('div');
+                        row.className = 'log-line';
+                        row.textContent = line;
+                        
+                        // Parse simple colors based on warning/error tags
+                        if (line.includes('ERROR') || line.includes('❌')) {
+                            row.style.color = '#ef4444';
+                        } else if (line.includes('WARNING') || line.includes('⚠️')) {
+                            row.style.color = '#fbbf24';
+                        } else if (line.includes('SUCCESS') || line.includes('✅') || line.includes('READY')) {
+                            row.style.color = '#34d399';
+                        } else if (line.includes('🤖') || line.includes('🚀')) {
+                            row.style.color = '#f472b6';
+                        }
+                        
+                        term.appendChild(row);
+                        
+                        // Dynamically update progress status pipeline bar badges based on logs
+                        updatePipelineProgress(line);
+                    });
+                    term.scrollTop = term.scrollHeight;
+                }
+            };
+            
+            stream.onerror = function() {
+                badge.textContent = "Offline, Reconnecting...";
+                badge.style.color = "#ef4444";
+                badge.style.background = "rgba(239,68,68,0.15)";
+            };
+            
+            stream.onopen = function() {
+                badge.textContent = "Stream Listening";
+                badge.style.color = "var(--accent-green)";
+                badge.style.background = "rgba(16,185,129,0.15)";
+            };
+        }
+
+        // Parse logs in real-time to update the pipeline status visually
+        function updatePipelineProgress(logLine) {
+            const stepIdle = document.getElementById('step-idle');
+            const stepScouting = document.getElementById('step-scouting');
+            const stepDownloading = document.getElementById('step-downloading');
+            const stepTranscribing = document.getElementById('step-transcribing');
+            const stepRendering = document.getElementById('step-rendering');
+            
+            const barScouting = document.getElementById('bar-scouting');
+            const barDownloading = document.getElementById('bar-downloading');
+            const barTranscribing = document.getElementById('bar-transcribing');
+            const barRendering = document.getElementById('bar-rendering');
+
+            if (logLine.includes('AUTOPILOT MODE: Scouting') || logLine.includes('🚀 ADVANCED VIRAL SCOUT')) {
+                resetPipelineProgress();
+                stepScouting.classList.add('active');
+            } else if (logLine.includes('⬇ Downloading') || logLine.includes('DOWNLOADING')) {
+                stepScouting.classList.remove('active');
+                stepScouting.classList.add('done');
+                barScouting.classList.add('done');
+                stepDownloading.classList.add('active');
+            } else if (logLine.includes('Running Whisper') || logLine.includes('🎙 Transcribing')) {
+                stepDownloading.classList.remove('active');
+                stepDownloading.classList.add('done');
+                barDownloading.classList.add('done');
+                stepTranscribing.classList.add('active');
+            } else if (logLine.includes('VERTICAL CROP') || logLine.includes('BURNING SUBTITLES')) {
+                stepTranscribing.classList.remove('active');
+                stepTranscribing.classList.add('done');
+                barTranscribing.classList.add('done');
+                stepRendering.classList.add('active');
+            } else if (logLine.includes('SUCCESS —') || logLine.includes('READY')) {
+                stepRendering.classList.remove('active');
+                stepRendering.classList.add('done');
+                barRendering.classList.add('done');
+                setTimeout(() => {
+                    resetPipelineProgress();
+                }, 10000);
+            }
+        }
+
+        function resetPipelineProgress() {
+            document.querySelectorAll('.stage-step').forEach(step => {
+                step.className = 'stage-step';
+            });
+            document.querySelectorAll('.pipeline-bar').forEach(bar => {
+                bar.className = 'pipeline-bar';
+            });
+            document.getElementById('step-idle').classList.add('active');
+        }
+
+        // Fetch server system config values and settings
+        async function fetchSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                
+                document.getElementById('set-gemini-key').value = data.gemini_api_key || "";
+                document.getElementById('set-whisper-model').value = data.whisper_model;
+                document.getElementById('set-whisper-device').value = data.whisper_device;
+                document.getElementById('set-whisper-compute').value = data.whisper_compute_type;
+                document.getElementById('set-video-codec').value = data.video_codec;
+                document.getElementById('set-video-preset').value = data.video_preset;
+                document.getElementById('set-age-days').value = data.scout_max_age_days;
+                document.getElementById('set-enable-gpu').checked = data.enable_gpu;
+                
+                // Update system statuses visually in navigation sidebar status box
+                document.getElementById('status-whisper').textContent = `${data.whisper_model.toUpperCase()} ${data.whisper_device.toUpperCase()}`;
+                document.getElementById('status-gpu').textContent = data.enable_gpu ? "Enabled (NVENC)" : "Disabled";
+                document.getElementById('stat-whisper-device').textContent = data.whisper_device.toUpperCase();
+            } catch (err) {
+                console.error("Failed to load settings from server:", err);
+            }
+        }
+
+        async function saveSettings() {
+            const body = {
+                gemini_api_key: document.getElementById('set-gemini-key').value,
+                whisper_model: document.getElementById('set-whisper-model').value,
+                whisper_device: document.getElementById('set-whisper-device').value,
+                whisper_compute_type: document.getElementById('set-whisper-compute').value,
+                video_codec: document.getElementById('set-video-codec').value,
+                video_preset: document.getElementById('set-video-preset').value,
+                scout_max_age_days: parseInt(document.getElementById('set-age-days').value),
+                enable_gpu: document.getElementById('set-enable-gpu').checked
+            };
+            
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                alert(data.message);
+                fetchSettings();
+            } catch (err) {
+                alert("Failed to save settings: " + err);
+            }
+        }
+
+        // Autopilot controls
+        async function launchAutopilot() {
+            const body = {
+                niche: document.getElementById('auto-niche').value || null,
+                keyword: document.getElementById('auto-keyword').value || null,
+                channel: document.getElementById('auto-channel').value || null,
+                count: parseInt(document.getElementById('auto-count').value)
+            };
+            
+            try {
+                const res = await fetch('/api/autopilot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                alert(data.message);
+            } catch (err) {
+                alert("Failed to launch autopilot: " + err);
+            }
+        }
+
+        // Manual clipper controls
+        async function fetchTranscript() {
+            const url = document.getElementById('manual-url').value.trim();
+            if (!url) {
+                alert("Please enter a valid YouTube URL first!");
+                return;
+            }
+            
+            currentUrlTranscript = url;
+            const container = document.getElementById('preview-transcript-container');
+            container.innerHTML = '<div style=" font-weight:600;">Downloading and analyzing video transcript (usually 20-40 seconds)...</div>';
+            document.getElementById('clipper-results-panel').style.display = 'block';
+            
+            try {
+                const res = await fetch('/api/scout/transcript', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                const data = await res.json();
+                currentSegments = data.segments;
+                
+                // Populate preview transcript
+                container.innerHTML = "";
+                data.segments.forEach(seg => {
+                    const row = document.createElement('div');
+                    row.className = 'transcript-row';
+                    
+                    const formatTime = (sec) => {
+                        const m = Math.floor(sec / 60);
+                        const s = Math.floor(sec % 60);
+                        return `${m}:${s < 10 ? '0' : ''}${s}`;
+                    };
+                    
+                    row.innerHTML = `
+                        <span class="ts-time">[${formatTime(seg.start)}]</span>
+                        <span class="ts-text">${seg.text}</span>
+                    `;
+                    container.appendChild(row);
+                });
+                
+            } catch (err) {
+                container.innerHTML = `<div style="color: var(--ash); font-weight:600;">Failed to download transcript: ${err}</div>`;
+            }
+        }
+
+        async function generateHighlights() {
+            if (!currentSegments.length) {
+                alert("Please analyze a video first!");
+                return;
+            }
+            
+            const tbody = document.getElementById('highlights-tbody');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;  font-weight:600;">Consulting Gemini thinking engine to discover virality hooks...</td></tr>';
+            
+            try {
+                const res = await fetch('/api/scout/highlights', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        segments: currentSegments,
+                        count: 3
+                    })
+                });
+                
+                const data = await res.json();
+                tbody.innerHTML = "";
+                
+                if (!data.highlights || !data.highlights.length) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No viral clips found above the 85+ score threshold.</td></tr>';
+                    return;
+                }
+                
+                data.highlights.forEach((hl, index) => {
+                    const tr = document.createElement('tr');
+                    
+                    const formatTime = (sec) => {
+                        const m = Math.floor(sec / 60);
+                        const s = Math.floor(sec % 60);
+                        return `${m}:${s < 10 ? '0' : ''}${s}`;
+                    };
+                    
+                    tr.innerHTML = `
+                        <td><strong>${formatTime(hl.start)}</strong> ➔ <strong>${formatTime(hl.end)}</strong></td>
+                        <td>${hl.duration} seconds</td>
+                        <td><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${hl.layout}</code></td>
+                        <td><span class="badge-virality badge-virality-high">GEMINI OK</span></td>
+                        <td>
+                            <button class="btn btn-mini" onclick="renderCustomHighlight(${hl.start}, ${hl.end}, '${hl.layout}')">
+                                Render Precise Clip
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--ash); font-weight:600;">Failed to generate highlights: ${err}</td></tr>`;
+            }
+        }
+
+        async function renderCustomHighlight(start, end, layout) {
+            try {
+                const res = await fetch('/api/clip/render', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: currentUrlTranscript,
+                        start: start,
+                        end: end,
+                        layout: layout
+                    })
+                });
+                const data = await res.json();
+                alert("Clip rendering started in background! Follow the log feed below.");
+            } catch (err) {
+                alert("Failed to render custom clip: " + err);
+            }
+        }
+
+        // Library video operations
+        async function refreshLibrary() {
+            const container = document.getElementById('library-clips-container');
+            container.innerHTML = '<div style="grid-column: span 4; text-align:center; color:var(--text-secondary);">Scanning outputs catalog directory...</div>';
+            
+            try {
+                const res = await fetch('/api/clips');
+                const clips = await res.json();
+                
+                // Update total count badge
+                document.getElementById('stat-total-clips').textContent = clips.length;
+                
+                container.innerHTML = "";
+                if (!clips.length) {
+                    container.innerHTML = '<div style="grid-column: span 4; text-align:center; color:var(--text-muted); padding: 3rem 0;">No clipped vertical videos generated yet. Launch autopilot or custom render above!</div>';
+                    return;
+                }
+                
+                clips.forEach(clip => {
+                    const card = document.createElement('div');
+                    card.className = 'clip-card';
+                    
+                    const formatSize = (bytes) => {
+                        const mb = bytes / (1024 * 1024);
+                        return `${mb.toFixed(1)} MB`;
+                    };
+                    
+                    const formatDate = (isoStr) => {
+                        const d = new Date(isoStr);
+                        return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    };
+                    
+                    card.innerHTML = `
+                        <div class="clip-preview-placeholder">
+                            <div class="clip-overlay-play" onclick="openVideoModal('${clip.name}', '${clip.path}')">
+                                </div>
+                        </div>
+                        <div class="clip-card-info">
+                            <div class="clip-card-name" title="${clip.name}">${clip.name}</div>
+                            <div class="clip-meta-row">
+                                <span>${formatSize(clip.size)}</span>
+                                <span>${formatDate(clip.created_at)}</span>
+                            </div>
+                        </div>
+                        <div class="clip-publish-actions">
+                            <button class="btn btn-mini btn-secondary" onclick="publishMock('YouTube Shorts', '${clip.name}')">Publish</button>
+                            <button class="btn btn-mini btn-secondary" onclick="publishMock('Instagram Reels', '${clip.name}')">Publish</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                container.innerHTML = `<div style="grid-column: span 4; text-align:center; color: var(--ash);">Failed to refresh library: ${err}</div>`;
+            }
+        }
+
+        // Mock publishing adapter triggers
+        function publishMock(platform, clipName) {
+            alert(`🚀 [Vanguard Publisher Adapter] Triggered automatic publishing of clip "${clipName}" to ${platform} successfully!\n(Adapter mock simulation complete)`);
+        }
+
+        // Video modal controls
+        function openVideoModal(name, path) {
+            const modal = document.getElementById('preview-modal');
+            const player = document.getElementById('modal-video-player');
+            const title = document.getElementById('modal-video-title');
+            const download = document.getElementById('modal-video-download');
+            
+            title.textContent = name;
+            player.src = path;
+            download.href = path;
+            
+            modal.classList.add('active');
+            player.play();
+        }
+
+        function closeVideoModal() {
+            const modal = document.getElementById('preview-modal');
+            const player = document.getElementById('modal-video-player');
+            player.pause();
+            player.src = "";
+            modal.classList.remove('active');
+        }
+
+        // App Bootloader
+        window.addEventListener('DOMContentLoaded', () => {
+            initLogStream();
+            fetchSettings();
+            
+            // Periodically refresh the stats counts
+            setInterval(() => {
+                fetch('/api/clips')
+                    .then(res => res.json())
+                    .then(clips => {
+                        document.getElementById('stat-total-clips').textContent = clips.length;
+                    }).catch(err => {});
+            }, 8000);
+        });
+    </script>
+</body>
+</html>
