@@ -356,6 +356,123 @@ def publish_clip(clip_name: str, background_tasks: BackgroundTasks) -> dict[str,
     return {"status": "started", "message": f"Publishing {clip_name} to YouTube..."}
 
 
+@app.post("/api/clips/{clip_name}/autogen-title")
+def autogen_clip_title(clip_name: str) -> dict[str, Any]:
+    """Transcribe clip (if missing segments) and call Gemini to generate viral titles & hashtags."""
+    settings = Settings.from_env()
+    path = Path(settings.output_dir) / clip_name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    json_path = path.with_suffix(".json")
+    import json
+
+    meta = {}
+    if json_path.exists():
+        try:
+            meta = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    segments_raw = meta.get("segments", [])
+    if not segments_raw:
+        try:
+            from shorts_clipper.transcription.whisper import transcribe_clip
+
+            logger.info("Transcribing clip %s for AI title generation...", clip_name)
+            precision_segments = transcribe_clip(
+                path,
+                model_size="tiny.en",
+                device=settings.whisper_device,
+                compute_type=settings.whisper_compute_type,
+            )
+            segments_raw = [
+                {"start": s.start, "end": s.end, "text": s.text} for s in precision_segments
+            ]
+        except Exception as trans_err:
+            logger.warning("Fast transcription fallback failed: %s", trans_err)
+
+    if not segments_raw:
+        raise HTTPException(
+            status_code=400, detail="No transcript segments found and transcription failed."
+        )
+
+    from shorts_clipper.core.models import TranscriptSegment
+
+    segments = [
+        TranscriptSegment(start=s["start"], end=s["end"], text=s["text"]) for s in segments_raw
+    ]
+
+    try:
+        provider = GeminiProvider(api_key=settings.gemini_api_key)
+        ai_meta = provider.generate_clip_metadata(segments)
+
+        meta["title"] = ai_meta["title"]
+        meta["description"] = ai_meta["description"]
+        meta["tags"] = ai_meta["tags"]
+        meta["segments"] = segments_raw
+
+        json_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+        return {"status": "success", "title": ai_meta["title"], "metadata": meta}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/youtube/status")
+def get_youtube_status() -> dict[str, Any]:
+    """Check connection status and return connected channel information."""
+    try:
+        from shorts_clipper.social.youtube import get_youtube_service
+
+        youtube = get_youtube_service()
+        res = youtube.channels().list(part="snippet,statistics", mine=True).execute()
+        if res.get("items"):
+            item = res["items"][0]
+            snippet = item["snippet"]
+            stats = item["statistics"]
+            return {
+                "connected": True,
+                "channel_name": snippet.get("title", "Connected Channel"),
+                "channel_id": item.get("id"),
+                "avatar_url": snippet.get("thumbnails", {}).get("default", {}).get("url"),
+                "subscriber_count": stats.get("subscriberCount", "0"),
+                "message": "YouTube account linked successfully.",
+            }
+    except Exception as e:
+        logger.warning("YouTube status check: %s", e)
+
+    return {
+        "connected": False,
+        "channel_name": None,
+        "message": "No YouTube account linked or token expired.",
+    }
+
+
+@app.post("/api/youtube/connect")
+def connect_youtube(background_tasks: BackgroundTasks) -> dict[str, str]:
+    """Trigger local OAuth flow to authorize YouTube upload access."""
+    if not Path("client_secret.json").exists():
+        raise HTTPException(
+            status_code=400,
+            detail="Missing client_secret.json file in project root. Please follow the YouTube API Setup guide in the README.",
+        )
+
+    def run_auth():
+        try:
+            from shorts_clipper.social.youtube import get_youtube_service
+
+            get_youtube_service()
+            logger.info("✅ YouTube connection established successfully!")
+        except Exception as err:
+            logger.error("❌ YouTube authentication failed: %s", err)
+
+    background_tasks.add_task(run_auth)
+    return {
+        "status": "started",
+        "message": "Local authentication server started on host. Please check your host console to authorize.",
+    }
+
+
 @app.get("/api/settings", response_model=SettingsModel)
 def get_settings() -> SettingsModel:
     """Read configuration from environment variables."""
@@ -644,6 +761,11 @@ def trigger_clip_render(
                     meta = provider.generate_clip_metadata(precision_segments)
                 except Exception as meta_err:
                     logger.warning("Failed to generate clip metadata with Gemini: %s", meta_err)
+
+                # Ensure segments are preserved in the metadata sidecar
+                meta["segments"] = [
+                    {"start": s.start, "end": s.end, "text": s.text} for s in precision_segments
+                ]
 
                 json_path = current_output_path.with_suffix(".json")
                 try:

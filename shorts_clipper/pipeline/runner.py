@@ -189,6 +189,11 @@ def run(
                 except Exception as meta_err:
                     log.warning("Failed to generate clip metadata with Gemini: %s", meta_err)
 
+                # Ensure segments are preserved in the metadata sidecar
+                meta["segments"] = [
+                    {"start": s.start, "end": s.end, "text": s.text} for s in precision_segments
+                ]
+
                 json_path = current_output_path.with_suffix(".json")
                 try:
                     json_path.write_text(

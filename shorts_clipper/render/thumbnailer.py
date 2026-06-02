@@ -46,8 +46,12 @@ def extract_thumbnail(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     if position is None:
-        meta = get_video_metadata(str(video_path))
-        position = meta.duration * 0.25
+        try:
+            meta = get_video_metadata(str(video_path))
+            position = meta.duration * 0.25 if meta.duration > 0 else 1.0
+        except Exception as err:
+            log.warning("Probing video duration failed: %s. Using default 1.0s position.", err)
+            position = 1.0
 
     cmd = [
         "ffmpeg",
@@ -66,8 +70,25 @@ def extract_thumbnail(
     log.info("📸 Extracting thumbnail at %.1fs → %s", position, output_path)
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        log.error("FFmpeg thumbnail stderr: %s", result.stderr[-1000:])
-        raise RuntimeError(f"Thumbnail extraction failed (exit {result.returncode})")
+        log.warning("FFmpeg thumbnail primary failed, attempting solid fallback: %s", result.stderr)
+        # Safe fallback: extract frame at 1.0s
+        fallback_cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-ss",
+            "00:00:01.000",
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
+            str(output_path),
+        ]
+        fallback_result = subprocess.run(fallback_cmd, capture_output=True, text=True)
+        if fallback_result.returncode != 0:
+            log.error("FFmpeg thumbnail fallback failed: %s", fallback_result.stderr)
+            raise RuntimeError("Thumbnail extraction failed completely.")
 
     log.info("✅ Thumbnail saved: %s", output_path)
     return output_path

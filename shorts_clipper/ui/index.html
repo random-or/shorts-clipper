@@ -88,18 +88,41 @@
             align-items: center;
         }
 
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+            margin-bottom: 2rem;
+        }
+
         .brand-name {
             font-family: var(--font-ui);
-            font-size: 11px;
-            letter-spacing: 0.35em;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
-            color: var(--ash);
-            font-weight: 400;
+            color: var(--smoke);
         }
 
         .brand-logo {
-            display: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(201, 168, 76, 0.15), rgba(244, 114, 182, 0.15));
+            border: 1px solid var(--wire);
+            box-shadow: 0 0 15px rgba(244, 114, 182, 0.2);
+            animation: logoGlow 3s infinite alternate ease-in-out;
         }
+
+        @keyframes logoGlow {
+            0% { box-shadow: 0 0 5px rgba(244,114,182,0.2), 0 0 10px rgba(201,168,76,0.1); border-color: var(--wire); }
+            100% { box-shadow: 0 0 15px rgba(244,114,182,0.5), 0 0 20px rgba(201,168,76,0.4); border-color: var(--gold); }
+        }
+
 
         .nav-menu {
             display: flex;
@@ -686,8 +709,12 @@
         <div class="sidebar">
             <div class="brand-container">
                 <div class="brand-logo">
-                    </div>
-                <div class="brand-name">ShortClipper</div>
+                    <i class="fa-solid fa-clapperboard" style="color: var(--gold); font-size: 1.15rem; text-shadow: 0 0 10px rgba(201,168,76,0.6);"></i>
+                </div>
+                <div class="brand-name">
+                    <span style="color: var(--gold); font-weight: 900; letter-spacing: 0.05em;">SHORTS</span>
+                    <span style="color: var(--pink); font-weight: 900; letter-spacing: 0.05em;">CLIPPER</span>
+                </div>
             </div>
             
             <div class="nav-menu">
@@ -704,6 +731,12 @@
                     Console Settings
                 </div>
             </div>
+
+            <!-- YouTube Account Connection Box -->
+            <div id="youtube-connection-box" style="margin-bottom: 2rem; padding: 0.85rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 8px; transition: all 0.3s ease;">
+                <!-- Populated dynamically -->
+            </div>
+
             
             <div class="system-status">
                 <div class="status-header">
@@ -805,13 +838,21 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="auto-niche">Target Niche / Topic</label>
-                            <select id="auto-niche">
+                            <select id="auto-niche" onchange="toggleCustomNicheInput(this.value)">
                                 <option value="">Rotate Trending Pools</option>
                                 <option value="drama">Drama & Podcast Debates</option>
                                 <option value="motivation">Motivation & Sports Commentary</option>
                                 <option value="gaming">Gaming & Streamer Rage</option>
                                 <option value="twitch">Twitch VOD Highlights</option>
+                                <option value="tech">Tech news, Space & AI breakthroughs</option>
+                                <option value="finance">Crypto, Finance debates & Wealth hacks</option>
+                                <option value="comedy">Standup crowdwork & Funny failures</option>
+                                <option value="custom_option">-- Enter Custom Topic Yourself --</option>
                             </select>
+                        </div>
+                        <div class="form-group" id="custom-niche-container" style="display: none;">
+                            <label for="auto-niche-custom" style="color: var(--gold);"><i class="fa-solid fa-sparkles"></i> Enter Custom Niche / Topic</label>
+                            <input type="text" id="auto-niche-custom" placeholder="e.g. quantum physics, space travel, street food">
                         </div>
                         <div class="form-group">
                             <label for="auto-count">Clip Counts per Video</label>
@@ -1208,9 +1249,26 @@
         }
 
         // Autopilot controls
+        let activeJobPollInterval = null;
+        
+        function toggleCustomNicheInput(val) {
+            const container = document.getElementById('custom-niche-container');
+            if (val === 'custom_option') {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+                document.getElementById('auto-niche-custom').value = '';
+            }
+        }
+
         async function launchAutopilot() {
+            let nicheVal = document.getElementById('auto-niche').value;
+            if (nicheVal === 'custom_option') {
+                nicheVal = document.getElementById('auto-niche-custom').value.trim() || null;
+            }
+            
             const body = {
-                niche: document.getElementById('auto-niche').value || null,
+                niche: nicheVal || null,
                 keyword: document.getElementById('auto-keyword').value || null,
                 channel: document.getElementById('auto-channel').value || null,
                 count: parseInt(document.getElementById('auto-count').value),
@@ -1225,10 +1283,172 @@
                 });
                 const data = await res.json();
                 alert(data.message);
+                if (data.job_id) {
+                    trackJobProgress(data.job_id);
+                }
             } catch (err) {
                 alert("Failed to launch autopilot: " + err);
             }
         }
+
+        function trackJobProgress(jobId) {
+            if (activeJobPollInterval) clearInterval(activeJobPollInterval);
+            
+            // Switch progress pipeline to Scouting phase
+            resetPipelineProgress();
+            document.getElementById('step-idle').className = 'stage-step done';
+            document.getElementById('bar-scouting').className = 'pipeline-bar active';
+            document.getElementById('step-scouting').className = 'stage-step active';
+            
+            activeJobPollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/jobs/' + jobId);
+                    if (!res.ok) return;
+                    const job = await res.json();
+                    
+                    const stepIdle = document.getElementById('step-idle');
+                    const stepScouting = document.getElementById('step-scouting');
+                    const stepDownloading = document.getElementById('step-downloading');
+                    const stepTranscribing = document.getElementById('step-transcribing');
+                    const stepRendering = document.getElementById('step-rendering');
+                    const stepPublishing = document.getElementById('step-publishing');
+                    
+                    const barScouting = document.getElementById('bar-scouting');
+                    const barDownloading = document.getElementById('bar-downloading');
+                    const barTranscribing = document.getElementById('bar-transcribing');
+                    const barRendering = document.getElementById('bar-rendering');
+                    const barPublishing = document.getElementById('bar-publishing');
+                    
+                    const progress = job.progress || 0;
+                    
+                    if (job.status === 'running') {
+                        if (progress <= 15) {
+                            stepIdle.className = 'stage-step done';
+                            barScouting.className = 'pipeline-bar active';
+                            stepScouting.className = 'stage-step active';
+                        } else if (progress <= 35) {
+                            stepIdle.className = 'stage-step done';
+                            stepScouting.className = 'stage-step done';
+                            barScouting.className = 'pipeline-bar done';
+                            barDownloading.className = 'pipeline-bar active';
+                            stepDownloading.className = 'stage-step active';
+                        } else if (progress <= 55) {
+                            stepIdle.className = 'stage-step done';
+                            stepScouting.className = 'stage-step done';
+                            barScouting.className = 'pipeline-bar done';
+                            stepDownloading.className = 'stage-step done';
+                            barDownloading.className = 'pipeline-bar done';
+                            barTranscribing.className = 'pipeline-bar active';
+                            stepTranscribing.className = 'stage-step active';
+                        } else if (progress <= 75) {
+                            stepIdle.className = 'stage-step done';
+                            stepScouting.className = 'stage-step done';
+                            barScouting.className = 'pipeline-bar done';
+                            stepDownloading.className = 'stage-step done';
+                            barDownloading.className = 'pipeline-bar done';
+                            stepTranscribing.className = 'stage-step done';
+                            barTranscribing.className = 'pipeline-bar done';
+                            barRendering.className = 'pipeline-bar active';
+                            stepRendering.className = 'stage-step active';
+                        } else {
+                            stepIdle.className = 'stage-step done';
+                            stepScouting.className = 'stage-step done';
+                            barScouting.className = 'pipeline-bar done';
+                            stepDownloading.className = 'stage-step done';
+                            barDownloading.className = 'pipeline-bar done';
+                            stepTranscribing.className = 'stage-step done';
+                            barTranscribing.className = 'pipeline-bar done';
+                            stepRendering.className = 'stage-step done';
+                            barRendering.className = 'pipeline-bar done';
+                            barPublishing.className = 'pipeline-bar active';
+                            stepPublishing.className = 'stage-step active';
+                        }
+                    } else if (job.status === 'done') {
+                        clearInterval(activeJobPollInterval);
+                        activeJobPollInterval = null;
+                        
+                        stepIdle.className = 'stage-step done';
+                        stepScouting.className = 'stage-step done';
+                        barScouting.className = 'pipeline-bar done';
+                        stepDownloading.className = 'stage-step done';
+                        barDownloading.className = 'pipeline-bar done';
+                        stepTranscribing.className = 'stage-step done';
+                        barTranscribing.className = 'pipeline-bar done';
+                        stepRendering.className = 'stage-step done';
+                        barRendering.className = 'pipeline-bar done';
+                        stepPublishing.className = 'stage-step done';
+                        barPublishing.className = 'pipeline-bar done';
+                        
+                        refreshLibrary();
+                        
+                        setTimeout(() => {
+                            resetPipelineProgress();
+                        }, 12000);
+                    } else if (job.status === 'failed') {
+                        clearInterval(activeJobPollInterval);
+                        activeJobPollInterval = null;
+                        
+                        alert("Clipper Job failed: " + (job.error || "Unknown error"));
+                        resetPipelineProgress();
+                    }
+                } catch (e) {
+                    console.error("Failed to poll job status:", e);
+                }
+            }, 1500);
+        }
+
+        async function checkYouTubeStatus() {
+            const box = document.getElementById('youtube-connection-box');
+            try {
+                const res = await fetch('/api/youtube/status');
+                const data = await res.json();
+                
+                if (data.connected) {
+                    box.innerHTML = `
+                        <div style="display:flex; align-items:center; gap: 0.75rem;">
+                            <img src="${data.avatar_url || 'https://www.youtube.com/favicon.ico'}" style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--gold); box-shadow: 0 0 10px rgba(201,168,76,0.3);" />
+                            <div style="flex-grow:1; min-width: 0;">
+                                <div style="color: var(--gold); font-size: 0.82rem; font-weight: 700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${data.channel_name}</div>
+                                <div style="color: var(--ghost); font-size: 0.68rem; font-family:monospace; margin-top: 1px;">${parseInt(data.subscriber_count).toLocaleString()} Subs</div>
+                            </div>
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;" title="Connected to YouTube"></span>
+                        </div>
+                    `;
+                } else {
+                    box.innerHTML = `
+                        <div style="text-align: center;">
+                            <div style="color: var(--ash); font-size: 0.72rem; margin-bottom: 0.4rem; font-weight:600;"><i class="fa-brands fa-youtube" style="color: #ef4444; margin-right: 4px;"></i> YouTube Setup</div>
+                            <button class="btn btn-mini btn-secondary" onclick="connectYouTube()" style="width: 100%; border-color: #ef4444; color: #ef4444; font-size:0.7rem; padding: 4px 0;"><i class="fa-solid fa-link"></i> Link Account</button>
+                        </div>
+                    `;
+                }
+            } catch(e) {
+                console.error("YouTube status error:", e);
+            }
+        }
+        
+        async function connectYouTube() {
+            if(!confirm("Start local YouTube OAuth flow? Ensure your 'client_secret.json' is in the project root, and then check your server logs/terminal for the auth link!")) return;
+            try {
+                const res = await fetch('/api/youtube/connect', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+                
+                let attempts = 0;
+                const statusInterval = setInterval(async () => {
+                    attempts++;
+                    await checkYouTubeStatus();
+                    const currentRes = await fetch('/api/youtube/status');
+                    const currentData = await currentRes.json();
+                    if (currentData.connected || attempts > 24) {
+                        clearInterval(statusInterval);
+                    }
+                }, 5000);
+            } catch(e) {
+                alert("Error connecting YouTube: " + e);
+            }
+        }
+
 
         // Manual clipper controls
         async function fetchTranscript() {
@@ -1346,6 +1566,9 @@
                 });
                 const data = await res.json();
                 alert("Clip rendering started in background! Follow the log feed below.");
+                if (data.job_id) {
+                    trackJobProgress(data.job_id);
+                }
             } catch (err) {
                 alert("Failed to render custom clip: " + err);
             }
@@ -1411,14 +1634,16 @@
                                 <span style="font-size: 0.7rem; color: var(--ghost); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%;">${clip.name}</span>
                                 ${getPublishBadge(metadata)}
                             </div>
-                            <div style="margin-bottom: 0.5rem; position: relative;">
+                            <div style="margin-bottom: 0.5rem; position: relative; display: flex; gap: 0.4rem;">
                                 <input type="text" 
+                                       id="title-input-${clip.name}"
                                        value="${titleText}" 
-                                       style="background: rgba(255,255,255,0.03); border: 1px solid var(--wire); color: var(--gold); font-size: 0.85rem; font-weight: 600; width: 100%; padding: 6px 8px; border-radius: 4px; transition: all 0.2s;"
+                                       style="background: rgba(255,255,255,0.03); border: 1px solid var(--wire); color: var(--gold); font-size: 0.85rem; font-weight: 600; flex-grow: 1; padding: 6px 8px; border-radius: 4px; transition: all 0.2s;"
                                        onchange="saveClipTitle('${clip.name}', this.value)"
                                        onfocus="this.style.borderColor='var(--gold)'; this.style.background='var(--ink)';"
                                        onblur="this.style.borderColor='var(--wire)'; this.style.background='rgba(255,255,255,0.03)';"
                                        placeholder="Enter viral title #shorts" />
+                                <button class="btn btn-mini" onclick="autoGenTitle('${clip.name}', this)" style="padding: 0 8px; border-color: var(--pink); color: var(--pink); display: flex; align-items: center; justify-content: center;" title="Auto-Generate Viral Title using Gemini AI"><i class="fa-solid fa-sparkles"></i></button>
                             </div>
                             <div class="clip-meta-row" style="font-size: 0.75rem;">
                                 <span>${formatSize(clip.size)}</span>
@@ -1472,6 +1697,33 @@
             } catch(e) { alert('Error: ' + e); }
         }
 
+        async function autoGenTitle(clipName, btn) {
+            btn.disabled = true;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            try {
+                const res = await fetch(`/api/clips/${encodeURIComponent(clipName)}/autogen-title`, { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    const input = document.getElementById(`title-input-${clipName}`);
+                    if (input) {
+                        input.value = data.title;
+                    }
+                    // Color pop feedback!
+                    input.style.borderColor = 'var(--pink)';
+                    setTimeout(() => { input.style.borderColor = 'var(--wire)'; }, 1000);
+                } else {
+                    const data = await res.json();
+                    alert("Title Auto-Generation failed: " + (data.detail || "Make sure Gemini API key is configured."));
+                }
+            } catch(e) {
+                alert("Error generating title: " + e);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
+        }
+
         // Video modal controls
         function openVideoModal(name, path) {
             const modal = document.getElementById('preview-modal');
@@ -1499,14 +1751,17 @@
         window.addEventListener('DOMContentLoaded', () => {
             initLogStream();
             fetchSettings();
+            checkYouTubeStatus();
+            refreshLibrary();
             
-            // Periodically refresh the stats counts
+            // Periodically refresh the stats counts & library status
             setInterval(() => {
                 fetch('/api/clips')
                     .then(res => res.json())
                     .then(clips => {
                         document.getElementById('stat-total-clips').textContent = clips.length;
                     }).catch(err => {});
+                checkYouTubeStatus();
             }, 8000);
         });
     </script>

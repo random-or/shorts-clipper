@@ -140,6 +140,24 @@ TREND_POOLS: dict[str, list[str]] = {
         "best twitch clips english",
         "xqc hasan kai cenat highlight english",
     ],
+    "tech": [
+        "crazy tech breakthroughs english",
+        "insane AI robot review english",
+        "latest tech reveal controversial english",
+        "elon musk space future debate",
+    ],
+    "finance": [
+        "crypto millionaire debate english",
+        "crazy stock market advice controversial",
+        "money secrets high velocity wealth english",
+        "rich dad poor dad interview lesson",
+    ],
+    "comedy": [
+        "best standup crowd work english",
+        "street interview funny fails english",
+        "hilarious hidden camera prank viral",
+        "controversial street comedy reaction",
+    ],
 }
 
 VIRAL_VOCABULARY = [
