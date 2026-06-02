@@ -8,7 +8,10 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+]
 
 
 def get_youtube_service(client_secret_file: Path | str = "client_secret.json"):

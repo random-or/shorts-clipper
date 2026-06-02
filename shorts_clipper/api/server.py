@@ -463,7 +463,10 @@ def connect_youtube(request: Request) -> dict[str, str]:
     origin = request.headers.get("origin") or f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{origin}/api/youtube/callback"
 
-    SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+    SCOPES = [
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.readonly",
+    ]
     try:
         flow = Flow.from_client_secrets_file(
             "client_secret.json",
@@ -492,7 +495,10 @@ def youtube_callback(request: Request, code: str, state: str | None = None) -> H
             content="<h3>Error: Missing client_secret.json in project root.</h3>", status_code=400
         )
 
-    SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+    SCOPES = [
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.readonly",
+    ]
     redirect_uri = str(request.url).split("?")[0]
 
     try:
