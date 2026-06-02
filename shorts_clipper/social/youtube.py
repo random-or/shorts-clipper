@@ -50,6 +50,8 @@ def upload_short(
     title: str,
     description: str = "#Shorts",
     tags: list[str] | None = None,
+    privacy_status: str = "private",
+    progress_callback = None,
 ) -> str:
     """Upload a video to YouTube as a Short.
 
@@ -70,12 +72,12 @@ def upload_short(
             "categoryId": "24",  # Entertainment
         },
         "status": {
-            "privacyStatus": "private",  # Default to private for review
+            "privacyStatus": privacy_status,
             "selfDeclaredMadeForKids": False,
         },
     }
 
-    media = MediaFileUpload(str(video_path), chunksize=-1, resumable=True)
+    media = MediaFileUpload(str(video_path), chunksize=1024 * 1024, resumable=True)
     request = youtube.videos().insert(
         part="snippet,status",
         body=body,
@@ -86,7 +88,13 @@ def upload_short(
     while response is None:
         status, response = request.next_chunk()
         if status:
-            log.info("Uploaded %d%%...", int(status.progress() * 100))
+            progress_pct = int(status.progress() * 100)
+            log.info("Uploaded %d%%...", progress_pct)
+            if progress_callback:
+                try:
+                    progress_callback(progress_pct)
+                except Exception:
+                    pass
 
     log.info("✅ Upload Complete! Video ID: %s", response.get("id"))
     return response.get("id")

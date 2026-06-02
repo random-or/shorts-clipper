@@ -291,7 +291,11 @@ def update_clip_metadata(clip_name: str, payload: ClipMetadataUpdate) -> dict[st
 
 
 @app.post("/api/clips/{clip_name}/publish")
-def publish_clip(clip_name: str, background_tasks: BackgroundTasks) -> dict[str, str]:
+def publish_clip(
+    clip_name: str,
+    background_tasks: BackgroundTasks,
+    privacy: str = "private",
+) -> dict[str, str]:
     settings = Settings.from_env()
     path = Path(settings.output_dir) / clip_name
     if not path.exists():
@@ -318,6 +322,7 @@ def publish_clip(clip_name: str, background_tasks: BackgroundTasks) -> dict[str,
             from shorts_clipper.social.youtube import upload_short
 
             meta["publish_status"] = "uploading"
+            meta["publish_progress"] = 0
             meta["publish_error"] = None
             try:
                 json_path.write_text(
@@ -326,10 +331,27 @@ def publish_clip(clip_name: str, background_tasks: BackgroundTasks) -> dict[str,
             except Exception:
                 pass
 
-            vid_id = upload_short(str(path), title=title, description=desc, tags=tags)
+            def _prog(pct: int) -> None:
+                meta["publish_progress"] = pct
+                try:
+                    json_path.write_text(
+                        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+                    )
+                except Exception:
+                    pass
+
+            vid_id = upload_short(
+                str(path),
+                title=title,
+                description=desc,
+                tags=tags,
+                privacy_status=privacy,
+                progress_callback=_prog,
+            )
 
             meta["publish_status"] = "success"
             meta["youtube_video_id"] = vid_id
+            meta["publish_progress"] = 100
             meta["publish_error"] = None
             try:
                 json_path.write_text(
@@ -353,7 +375,7 @@ def publish_clip(clip_name: str, background_tasks: BackgroundTasks) -> dict[str,
             logger.error("❌ Failed to upload clip %s: %s", clip_name, e)
 
     background_tasks.add_task(_upload)
-    return {"status": "started", "message": f"Publishing {clip_name} to YouTube..."}
+    return {"status": "started", "message": f"Publishing {clip_name} to YouTube (Visibility: {privacy})..."}
 
 
 @app.post("/api/clips/{clip_name}/autogen-title")
@@ -591,6 +613,19 @@ def youtube_callback(request: Request, code: str, state: str | None = None) -> H
             """,
             status_code=500,
         )
+
+
+@app.post("/api/youtube/disconnect")
+def disconnect_youtube() -> dict[str, Any]:
+    """Disconnect the YouTube account by deleting the cached token."""
+    token_path = Path(".cache/shorts-clipper/token.pickle")
+    if token_path.exists():
+        try:
+            token_path.unlink()
+            return {"success": True, "message": "YouTube account disconnected successfully."}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to delete token: {e}") from e
+    return {"success": True, "message": "YouTube account was already disconnected."}
 
 
 @app.get("/api/settings", response_model=SettingsModel)

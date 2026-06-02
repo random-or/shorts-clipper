@@ -931,6 +931,19 @@
                         <button class="btn btn-secondary btn-mini" onclick="refreshLibrary()">REFRESH</button>
                     </h2>
                     
+                    <!-- Library Tabs -->
+                    <div style="display: flex; gap: 1rem; border-bottom: 1px solid var(--wire); margin-bottom: 1.5rem; padding-bottom: 0.5rem;">
+                        <button id="tab-library-local" class="btn btn-mini" style="background: transparent; border: none; color: var(--gold); border-bottom: 2px solid var(--gold); font-weight: bold; border-radius: 0; padding: 4px 12px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" onclick="switchLibraryTab('local')">
+                            Ready to Publish
+                        </button>
+                        <button id="tab-library-published" class="btn btn-mini" style="background: transparent; border: none; color: var(--smoke); font-weight: 500; border-radius: 0; padding: 4px 12px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" onclick="switchLibraryTab('published')">
+                            Published to YouTube
+                        </button>
+                    </div>
+
+                    <!-- Active Uploading Status Widget -->
+                    <div id="active-uploading-container" style="display:none; margin-bottom: 1.5rem;"></div>
+
                     <div class="clips-grid" id="library-clips-container">
                         <!-- Populated dynamically -->
                     </div>
@@ -1406,12 +1419,12 @@
                 if (data.connected) {
                     box.innerHTML = `
                         <div style="display:flex; align-items:center; gap: 0.75rem;">
-                            <img src="${data.avatar_url || 'https://www.youtube.com/favicon.ico'}" style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--gold); box-shadow: 0 0 10px rgba(201,168,76,0.3);" />
+                            <img src="${data.avatar_url || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(data.channel_name)}" style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--gold); box-shadow: 0 0 10px rgba(201,168,76,0.3);" />
                             <div style="flex-grow:1; min-width: 0;">
                                 <div style="color: var(--gold); font-size: 0.82rem; font-weight: 700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${data.channel_name}</div>
                                 <div style="color: var(--ghost); font-size: 0.68rem; font-family:monospace; margin-top: 1px;">${parseInt(data.subscriber_count).toLocaleString()} Subs</div>
                             </div>
-                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;" title="Connected to YouTube"></span>
+                            <button class="btn btn-mini" onclick="disconnectYouTube()" style="border-color: #ef4444; color: #ef4444; padding: 2px 6px; font-size: 0.65rem; background: transparent; cursor: pointer; transition: all 0.2s;" title="Disconnect Account"><i class="fa-solid fa-power-off"></i></button>
                         </div>
                     `;
                 } else {
@@ -1454,6 +1467,20 @@
                 }, 3000);
             } catch(e) {
                 alert("Error connecting YouTube: " + e);
+            }
+        }
+
+        async function disconnectYouTube() {
+            if (!confirm("Are you sure you want to disconnect your YouTube account?")) {
+                return;
+            }
+            try {
+                const res = await fetch('/api/youtube/disconnect', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message || "Disconnected successfully!");
+                await checkYouTubeStatus();
+            } catch(e) {
+                alert("Error disconnecting YouTube: " + e);
             }
         }
 
@@ -1582,10 +1609,36 @@
             }
         }
 
+        let currentLibraryTab = 'local';
+        let lastUploadPcts = {}; // {clipName: {pct: Number, time: Number}}
+        let libraryPollInterval = null;
+
+        function switchLibraryTab(tabName) {
+            currentLibraryTab = tabName;
+            const localBtn = document.getElementById('tab-library-local');
+            const publishedBtn = document.getElementById('tab-library-published');
+            if (tabName === 'local') {
+                localBtn.style.color = 'var(--gold)';
+                localBtn.style.borderBottom = '2px solid var(--gold)';
+                localBtn.style.fontWeight = 'bold';
+                publishedBtn.style.color = 'var(--smoke)';
+                publishedBtn.style.borderBottom = 'none';
+                publishedBtn.style.fontWeight = '500';
+            } else {
+                publishedBtn.style.color = 'var(--gold)';
+                publishedBtn.style.borderBottom = '2px solid var(--gold)';
+                publishedBtn.style.fontWeight = 'bold';
+                localBtn.style.color = 'var(--smoke)';
+                localBtn.style.borderBottom = 'none';
+                localBtn.style.fontWeight = '500';
+            }
+            refreshLibrary();
+        }
+
         // Library video operations
         async function refreshLibrary() {
             const container = document.getElementById('library-clips-container');
-            container.innerHTML = '<div style="grid-column: span 4; text-align:center; color:var(--text-secondary);">Scanning outputs catalog directory...</div>';
+            const uploadContainer = document.getElementById('active-uploading-container');
             
             try {
                 const res = await fetch('/api/clips');
@@ -1594,13 +1647,100 @@
                 // Update total count badge
                 document.getElementById('stat-total-clips').textContent = clips.length;
                 
+                // Track active uploading state for real-time progress card
+                let uploadingClip = null;
+                clips.forEach(clip => {
+                    const meta = clip.metadata || {};
+                    if (meta.publish_status === 'uploading') {
+                        uploadingClip = clip;
+                    }
+                });
+                
+                if (uploadingClip) {
+                    uploadContainer.style.display = 'block';
+                    const pct = uploadingClip.metadata.publish_progress || 0;
+                    const now = Date.now();
+                    const size = uploadingClip.size;
+                    
+                    let speedStr = "Estimating speed...";
+                    let etaStr = "Calculating remaining time...";
+                    
+                    if (lastUploadPcts[uploadingClip.name]) {
+                        const lastVal = lastUploadPcts[uploadingClip.name];
+                        const elapsedSec = (now - lastVal.time) / 1000;
+                        const pctDiff = pct - lastVal.pct;
+                        
+                        if (elapsedSec > 0.5 && pctDiff > 0) {
+                            const speedBps = (size * (pctDiff / 100)) / elapsedSec;
+                            const speedMBps = speedBps / (1024 * 1024);
+                            speedStr = `${speedMBps.toFixed(1)} MB/s`;
+                            
+                            const remainingBytes = size * (1 - pct / 100);
+                            const etaSec = remainingBytes / speedBps;
+                            if (etaSec > 60) {
+                                etaStr = `${Math.floor(etaSec / 60)}m ${Math.floor(etaSec % 60)}s remaining`;
+                            } else {
+                                etaStr = `${Math.floor(etaSec)}s remaining`;
+                            }
+                        }
+                    }
+                    
+                    // Update cache
+                    if (!lastUploadPcts[uploadingClip.name] || lastUploadPcts[uploadingClip.name].pct !== pct) {
+                        lastUploadPcts[uploadingClip.name] = { pct: pct, time: now };
+                    }
+                    
+                    const titleText = uploadingClip.metadata.title || uploadingClip.name;
+                    uploadContainer.innerHTML = `
+                        <div style="background: rgba(201,168,76,0.04); border: 1.5px solid var(--gold); border-radius: 8px; padding: 1.25rem; box-shadow: 0 0 15px rgba(201,168,76,0.15); animation: pulse 2s infinite;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                                <span style="color: var(--gold); font-weight: bold; font-size: 0.88rem;"><i class="fa-solid fa-cloud-arrow-up fa-bounce" style="margin-right: 0.4rem;"></i> ACTIVELY UPLOADING SHORTS</span>
+                                <span style="color: var(--gold); font-family: monospace; font-weight: bold; font-size: 0.88rem;">${pct}%</span>
+                            </div>
+                            <div style="color: var(--smoke); font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${titleText}</div>
+                            <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; margin-bottom: 0.6rem; border: 1px solid var(--wire);">
+                                <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, var(--gold), var(--pink)); transition: width 0.4s ease-out; box-shadow: 0 0 8px var(--gold);"></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--ghost); font-family: monospace;">
+                                <span>Size: ${(size / (1024*1024)).toFixed(1)} MB</span>
+                                <span>Speed: ${speedStr}</span>
+                                <span>ETA: ${etaStr}</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Manage polling
+                    if (!libraryPollInterval) {
+                        libraryPollInterval = setInterval(refreshLibrary, 2000);
+                    }
+                } else {
+                    uploadContainer.innerHTML = "";
+                    uploadContainer.style.display = 'none';
+                    if (libraryPollInterval) {
+                        clearInterval(libraryPollInterval);
+                        libraryPollInterval = null;
+                    }
+                }
+                
+                // Filter clips based on current active tab
+                let filteredClips = clips;
+                if (currentLibraryTab === 'local') {
+                    filteredClips = clips.filter(c => !c.metadata || c.metadata.publish_status !== 'success');
+                } else {
+                    filteredClips = clips.filter(c => c.metadata && c.metadata.publish_status === 'success');
+                }
+                
                 container.innerHTML = "";
-                if (!clips.length) {
-                    container.innerHTML = '<div style="grid-column: span 4; text-align:center; color:var(--text-muted); padding: 3rem 0;">No clipped vertical videos generated yet. Launch autopilot or custom render above!</div>';
+                if (!filteredClips.length) {
+                    if (currentLibraryTab === 'local') {
+                        container.innerHTML = '<div style="grid-column: span 4; text-align:center; color:var(--text-muted); padding: 3rem 0;">No local draft clips left! Auto-scout or render more clips above.</div>';
+                    } else {
+                        container.innerHTML = '<div style="grid-column: span 4; text-align:center; color:var(--text-muted); padding: 3rem 0;">No clips have been published to YouTube yet. Pick a draft video and hit "Publish"!</div>';
+                    }
                     return;
                 }
                 
-                clips.forEach(clip => {
+                filteredClips.forEach(clip => {
                     const card = document.createElement('div');
                     card.className = 'clip-card';
                     
@@ -1620,7 +1760,7 @@
                             return `<span class="badge" style="font-size: 0.72rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600;"><i class="fa-solid fa-circle-check"></i> LIVE</span>`;
                         }
                         if (meta.publish_status === 'uploading') {
-                            return `<span class="badge" style="font-size: 0.72rem; background: rgba(201,168,76,0.15); color: var(--gold); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600;"><i class="fa-solid fa-circle-notch fa-spin"></i> UPLOADING</span>`;
+                            return `<span class="badge" style="font-size: 0.72rem; background: rgba(201,168,76,0.15); color: var(--gold); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600;"><i class="fa-solid fa-circle-notch fa-spin"></i> UPLOADING (${meta.publish_progress || 0}%)</span>`;
                         }
                         if (meta.publish_status === 'failed') {
                             return `<span class="badge" style="font-size: 0.72rem; background: rgba(239,68,68,0.15); color: #ef4444; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600; cursor: help;" title="${meta.publish_error || 'Upload failed'}"><i class="fa-solid fa-triangle-exclamation"></i> FAILED</span>`;
@@ -1631,6 +1771,27 @@
                     const metadata = clip.metadata || {};
                     const titleText = metadata.title || clip.name;
                     
+                    const actionPanel = currentLibraryTab === 'local' ? `
+                        <div class="clip-publish-actions" style="padding: 0.5rem 0.75rem 0.75rem 0.75rem; border-top: 1px solid rgba(255,255,255,0.03); display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div style="display: flex; gap: 0.5rem; width: 100%;">
+                                <select id="privacy-select-${clip.name}" style="background: var(--ink); border: 1px solid var(--wire); color: var(--smoke); font-size: 0.75rem; border-radius: 4px; padding: 4px; flex: 1; cursor: pointer;">
+                                    <option value="private" selected>🔒 Private</option>
+                                    <option value="unlisted">🔗 Unlisted</option>
+                                    <option value="public">🌍 Public</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; width: 100%;">
+                                <button class="btn btn-mini btn-secondary" onclick="publishClip('${clip.name}')" style="color: var(--gold); border-color: var(--gold); flex: 1;" ${metadata.publish_status === 'uploading' ? 'disabled' : ''}><i class="fa-brands fa-youtube" style="margin-right: 0.25rem;"></i> Publish</button>
+                                <button class="btn btn-mini btn-secondary" onclick="deleteClip('${clip.name}')" style="color: #ef4444; border-color: #ef4444;" ${metadata.publish_status === 'uploading' ? 'disabled' : ''}><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="clip-publish-actions" style="padding: 0.5rem 0.75rem 0.75rem 0.75rem; border-top: 1px solid rgba(255,255,255,0.03); display: flex; gap: 0.5rem;">
+                            <a class="btn btn-secondary btn-mini" href="https://www.youtube.com/watch?v=${metadata.youtube_video_id}" target="_blank" style="color: var(--gold); border-color: var(--gold); flex: 1; text-align: center; display: flex; align-items: center; justify-content: center; text-decoration: none;"><i class="fa-brands fa-youtube" style="margin-right: 0.25rem;"></i> View on YouTube</a>
+                            <button class="btn btn-mini btn-secondary" onclick="deleteClip('${clip.name}')" style="color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    `;
+
                     card.innerHTML = `
                         <div class="clip-preview-placeholder" style="${clip.thumbnail ? `background-image: url('${clip.thumbnail}'); background-size: cover; background-position: center;` : ''}">
                             <div class="clip-overlay-play" onclick="openVideoModal('${clip.name}', '${clip.path}')">
@@ -1658,10 +1819,7 @@
                                 <span>${formatDate(clip.created_at)}</span>
                             </div>
                         </div>
-                        <div class="clip-publish-actions" style="padding: 0.5rem 0.75rem 0.75rem 0.75rem; border-top: 1px solid rgba(255,255,255,0.03); display: flex; gap: 0.5rem;">
-                            <button class="btn btn-mini btn-secondary" onclick="publishClip('${clip.name}')" style="color: var(--gold); border-color: var(--gold); flex: 1;"><i class="fa-brands fa-youtube" style="margin-right: 0.25rem;"></i> Publish</button>
-                            <button class="btn btn-mini btn-secondary" onclick="deleteClip('${clip.name}')" style="color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash"></i></button>
-                        </div>
+                        ${actionPanel}
                     `;
                     container.appendChild(card);
                 });
@@ -1684,8 +1842,10 @@
         }
 
         async function publishClip(clipName) {
+            const privacySelect = document.getElementById('privacy-select-' + clipName);
+            const privacy = privacySelect ? privacySelect.value : 'private';
             try {
-                const res = await fetch('/api/clips/' + encodeURIComponent(clipName) + '/publish', { method: 'POST' });
+                const res = await fetch('/api/clips/' + encodeURIComponent(clipName) + '/publish?privacy=' + privacy, { method: 'POST' });
                 const data = await res.json();
                 alert(data.message);
                 // Refresh library to reveal "UPLOADING" badge immediately
