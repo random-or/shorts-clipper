@@ -295,35 +295,85 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.5rem;
             color: var(--ghost);
+            transition: all 0.3s ease;
         }
 
         .stage-icon {
-            display: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--ink);
+            border: 2px solid var(--wire);
+            font-size: 1.1rem;
+            color: var(--ghost);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
         .stage-label {
             color: var(--ghost);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .stage-step.active .stage-label {
-            color: var(--smoke);
+            color: var(--gold);
+            text-shadow: 0 0 8px rgba(201, 168, 76, 0.4);
+        }
+
+        .stage-step.active .stage-icon {
+            color: var(--gold);
+            border-color: var(--gold);
+            background: rgba(201, 168, 76, 0.08);
+            animation: pulseGlow 1.8s infinite ease-in-out;
         }
 
         .stage-step.done .stage-label {
-            color: var(--gold);
+            color: #10b981;
+        }
+
+        .stage-step.done .stage-icon {
+            color: #10b981;
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.08);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
         }
 
         .pipeline-bar {
-            height: 1px;
+            height: 2px;
             background: var(--wire);
             flex-grow: 1;
-            margin: 0 15px;
+            margin: 0 10px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .pipeline-bar.active {
+            background: linear-gradient(90deg, var(--wire) 30%, var(--gold) 50%, var(--wire) 70%);
+            background-size: 200% 100%;
+            animation: laserFlow 1.5s infinite linear;
         }
 
         .pipeline-bar.done {
-            background: var(--gold);
+            background: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+        }
+
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 5px rgba(201, 168, 76, 0.4), inset 0 0 5px rgba(201, 168, 76, 0.2); transform: scale(1); }
+            50% { box-shadow: 0 0 15px rgba(201, 168, 76, 0.8), inset 0 0 10px rgba(201, 168, 76, 0.4); transform: scale(1.05); }
+            100% { box-shadow: 0 0 5px rgba(201, 168, 76, 0.4), inset 0 0 5px rgba(201, 168, 76, 0.2); transform: scale(1); }
+        }
+
+        @keyframes laserFlow {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
 
         .status-dot {
@@ -716,29 +766,34 @@
             
             <!-- Pipeline Stage Badges -->
             <div class="stage-pipeline" id="progress-pipeline-bar">
-                <div class="stage-step" id="step-idle">
-                    <div class="stage-icon"></div>
+                <div class="stage-step active" id="step-idle">
+                    <div class="stage-icon"><i class="fa-solid fa-hourglass"></i></div>
                     <div class="stage-label">Idle</div>
                 </div>
                 <div class="pipeline-bar" id="bar-scouting"></div>
                 <div class="stage-step" id="step-scouting">
-                    <div class="stage-icon"></div>
+                    <div class="stage-icon"><i class="fa-solid fa-satellite-dish"></i></div>
                     <div class="stage-label">Scouting</div>
                 </div>
                 <div class="pipeline-bar" id="bar-downloading"></div>
                 <div class="stage-step" id="step-downloading">
-                    <div class="stage-icon"></div>
+                    <div class="stage-icon"><i class="fa-solid fa-cloud-arrow-down"></i></div>
                     <div class="stage-label">Downloading</div>
                 </div>
                 <div class="pipeline-bar" id="bar-transcribing"></div>
                 <div class="stage-step" id="step-transcribing">
-                    <div class="stage-icon"></div>
+                    <div class="stage-icon"><i class="fa-solid fa-brain"></i></div>
                     <div class="stage-label">Transcribing</div>
                 </div>
                 <div class="pipeline-bar" id="bar-rendering"></div>
                 <div class="stage-step" id="step-rendering">
-                    <div class="stage-icon"></div>
+                    <div class="stage-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
                     <div class="stage-label">Rendering</div>
+                </div>
+                <div class="pipeline-bar" id="bar-publishing"></div>
+                <div class="stage-step" id="step-publishing">
+                    <div class="stage-icon"><i class="fa-brands fa-youtube"></i></div>
+                    <div class="stage-label">Publishing</div>
                 </div>
             </div>
             
@@ -1021,37 +1076,74 @@
             const stepDownloading = document.getElementById('step-downloading');
             const stepTranscribing = document.getElementById('step-transcribing');
             const stepRendering = document.getElementById('step-rendering');
+            const stepPublishing = document.getElementById('step-publishing');
             
             const barScouting = document.getElementById('bar-scouting');
             const barDownloading = document.getElementById('bar-downloading');
             const barTranscribing = document.getElementById('bar-transcribing');
             const barRendering = document.getElementById('bar-rendering');
+            const barPublishing = document.getElementById('bar-publishing');
 
             if (logLine.includes('AUTOPILOT MODE: Scouting') || logLine.includes('🚀 ADVANCED VIRAL SCOUT')) {
                 resetPipelineProgress();
-                stepScouting.classList.add('active');
-            } else if (logLine.includes('⬇ Downloading') || logLine.includes('DOWNLOADING')) {
-                stepScouting.classList.remove('active');
-                stepScouting.classList.add('done');
-                barScouting.classList.add('done');
-                stepDownloading.classList.add('active');
-            } else if (logLine.includes('Running Whisper') || logLine.includes('🎙 Transcribing')) {
-                stepDownloading.classList.remove('active');
-                stepDownloading.classList.add('done');
-                barDownloading.classList.add('done');
-                stepTranscribing.classList.add('active');
-            } else if (logLine.includes('VERTICAL CROP') || logLine.includes('BURNING SUBTITLES')) {
-                stepTranscribing.classList.remove('active');
-                stepTranscribing.classList.add('done');
-                barTranscribing.classList.add('done');
-                stepRendering.classList.add('active');
-            } else if (logLine.includes('SUCCESS —') || logLine.includes('READY')) {
-                stepRendering.classList.remove('active');
-                stepRendering.classList.add('done');
-                barRendering.classList.add('done');
+                stepIdle.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar active';
+                stepScouting.className = 'stage-step active';
+            } else if (logLine.includes('⬇ Downloading') || logLine.includes('DOWNLOADING') || logLine.includes('rough_audio.m4a')) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                barDownloading.className = 'pipeline-bar active';
+                stepDownloading.className = 'stage-step active';
+            } else if (logLine.includes('Running Whisper') || logLine.includes('🎙 Transcribing') || logLine.includes('Transcribing audio sample')) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                stepDownloading.className = 'stage-step done';
+                barDownloading.className = 'pipeline-bar done';
+                barTranscribing.className = 'pipeline-bar active';
+                stepTranscribing.className = 'stage-step active';
+            } else if (logLine.includes('VERTICAL CROP') || logLine.includes('BURNING SUBTITLES') || logLine.includes('Burning subtitles') || logLine.includes('Cropping to vertical')) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                stepDownloading.className = 'stage-step done';
+                barDownloading.className = 'pipeline-bar done';
+                stepTranscribing.className = 'stage-step done';
+                barTranscribing.className = 'pipeline-bar done';
+                barRendering.className = 'pipeline-bar active';
+                stepRendering.className = 'stage-step active';
+            } else if (logLine.includes('Uploading') || logLine.includes('Publishing') || logLine.includes('Uploading Clip')) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                stepDownloading.className = 'stage-step done';
+                barDownloading.className = 'pipeline-bar done';
+                stepTranscribing.className = 'stage-step done';
+                barTranscribing.className = 'pipeline-bar done';
+                stepRendering.className = 'stage-step done';
+                barRendering.className = 'pipeline-bar done';
+                barPublishing.className = 'pipeline-bar active';
+                stepPublishing.className = 'stage-step active';
+            } else if (logLine.includes('SUCCESS —') || logLine.includes('READY') || logLine.includes('uploaded to YouTube successfully') || logLine.includes('✅ Custom rendered clip ready')) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                stepDownloading.className = 'stage-step done';
+                barDownloading.className = 'pipeline-bar done';
+                stepTranscribing.className = 'stage-step done';
+                barTranscribing.className = 'pipeline-bar done';
+                stepRendering.className = 'stage-step done';
+                barRendering.className = 'pipeline-bar done';
+                stepPublishing.className = 'stage-step done';
+                barPublishing.className = 'pipeline-bar done';
+                
+                // Immediately refresh library to show the new clip
+                refreshLibrary();
+                
                 setTimeout(() => {
                     resetPipelineProgress();
-                }, 10000);
+                }, 12000);
             }
         }
 
@@ -1290,6 +1382,23 @@
                         const d = new Date(isoStr);
                         return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     };
+
+                    const getPublishBadge = (meta) => {
+                        if (!meta) return '';
+                        if (meta.publish_status === 'success') {
+                            return `<span class="badge" style="font-size: 0.72rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600;"><i class="fa-solid fa-circle-check"></i> LIVE</span>`;
+                        }
+                        if (meta.publish_status === 'uploading') {
+                            return `<span class="badge" style="font-size: 0.72rem; background: rgba(201,168,76,0.15); color: var(--gold); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600;"><i class="fa-solid fa-circle-notch fa-spin"></i> UPLOADING</span>`;
+                        }
+                        if (meta.publish_status === 'failed') {
+                            return `<span class="badge" style="font-size: 0.72rem; background: rgba(239,68,68,0.15); color: #ef4444; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600; cursor: help;" title="${meta.publish_error || 'Upload failed'}"><i class="fa-solid fa-triangle-exclamation"></i> FAILED</span>`;
+                        }
+                        return '';
+                    };
+
+                    const metadata = clip.metadata || {};
+                    const titleText = metadata.title || clip.name;
                     
                     card.innerHTML = `
                         <div class="clip-preview-placeholder" style="${clip.thumbnail ? `background-image: url('${clip.thumbnail}'); background-size: cover; background-position: center;` : ''}">
@@ -1297,16 +1406,28 @@
                                 <i class="fa-solid fa-play"></i>
                             </div>
                         </div>
-                        <div class="clip-card-info">
-                            <div class="clip-card-name" title="${clip.name}">${clip.name}</div>
-                            <div class="clip-meta-row">
+                        <div class="clip-card-info" style="padding: 0.75rem;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 0.4rem; gap: 0.5rem;">
+                                <span style="font-size: 0.7rem; color: var(--ghost); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%;">${clip.name}</span>
+                                ${getPublishBadge(metadata)}
+                            </div>
+                            <div style="margin-bottom: 0.5rem; position: relative;">
+                                <input type="text" 
+                                       value="${titleText}" 
+                                       style="background: rgba(255,255,255,0.03); border: 1px solid var(--wire); color: var(--gold); font-size: 0.85rem; font-weight: 600; width: 100%; padding: 6px 8px; border-radius: 4px; transition: all 0.2s;"
+                                       onchange="saveClipTitle('${clip.name}', this.value)"
+                                       onfocus="this.style.borderColor='var(--gold)'; this.style.background='var(--ink)';"
+                                       onblur="this.style.borderColor='var(--wire)'; this.style.background='rgba(255,255,255,0.03)';"
+                                       placeholder="Enter viral title #shorts" />
+                            </div>
+                            <div class="clip-meta-row" style="font-size: 0.75rem;">
                                 <span>${formatSize(clip.size)}</span>
                                 <span>${formatDate(clip.created_at)}</span>
                             </div>
                         </div>
-                        <div class="clip-publish-actions">
-                            <button class="btn btn-mini btn-secondary" onclick="publishClip('${clip.name}')" style="color: var(--gold); border-color: var(--gold);"><i class="fa-brands fa-youtube" style="margin-right: 0.25rem;"></i> Publish</button>
-                            <button class="btn btn-mini btn-secondary" onclick="deleteClip('${clip.name}')" style="color: #c94a4a; border-color: #c94a4a;"><i class="fa-solid fa-trash" style="margin-right: 0.25rem;"></i> Delete</button>
+                        <div class="clip-publish-actions" style="padding: 0.5rem 0.75rem 0.75rem 0.75rem; border-top: 1px solid rgba(255,255,255,0.03); display: flex; gap: 0.5rem;">
+                            <button class="btn btn-mini btn-secondary" onclick="publishClip('${clip.name}')" style="color: var(--gold); border-color: var(--gold); flex: 1;"><i class="fa-brands fa-youtube" style="margin-right: 0.25rem;"></i> Publish</button>
+                            <button class="btn btn-mini btn-secondary" onclick="deleteClip('${clip.name}')" style="color: #ef4444; border-color: #ef4444;"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     `;
                     container.appendChild(card);
@@ -1316,11 +1437,26 @@
             }
         }
 
+        async function saveClipTitle(clipName, newTitle) {
+            try {
+                await fetch('/api/clips/' + encodeURIComponent(clipName) + '/metadata', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: newTitle })
+                });
+                console.log('Saved title for', clipName);
+            } catch(e) {
+                console.error('Failed to save title:', e);
+            }
+        }
+
         async function publishClip(clipName) {
             try {
                 const res = await fetch('/api/clips/' + encodeURIComponent(clipName) + '/publish', { method: 'POST' });
                 const data = await res.json();
                 alert(data.message);
+                // Refresh library to reveal "UPLOADING" badge immediately
+                setTimeout(refreshLibrary, 500);
             } catch(e) { alert('Error: ' + e); }
         }
 
