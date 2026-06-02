@@ -288,20 +288,52 @@ The Docker setup:
 
 ## 📤 YouTube Auto-Publishing Setup
 
-To enable automatic uploading to YouTube Shorts:
+Shorts Clipper is equipped with a premium, headless-safe, browser-redirect OAuth2 flow designed to work seamlessly on local machines, remote servers, or Docker setups without requiring command-line copy-pasting.
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a project.
-2. Enable the **YouTube Data API v3**.
-3. Create **OAuth 2.0 credentials** (Desktop application type).
-4. Download the credentials JSON and save it as `client_secret.json` in the project root.
-5. Run with `--upload` flag. On first run, a browser window will open for Google sign-in.
-6. After authentication, a token is cached locally — you won't need to sign in again.
+### Step 1 — Create Google Cloud Credentials
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a project.
+2. Search for and enable the **YouTube Data API v3**.
+3. Go to **APIs & Services** > **Credentials**, and click **Create Credentials** > **OAuth client ID**.
+4. Set the Application type to **Desktop application** (or **Web application**).
+5. Download your credentials JSON file, rename it to `client_secret.json`, and place it in the project root catalog.
 
-```bash
-python -m shorts_clipper autopilot --niche twitch --upload
-```
+### Step 2 — Configure User Access (Crucial for Development)
+By default, your Google Cloud project is in **Testing** status. Google blocks all accounts except explicitly registered developers:
+* **The 403 Block Fix**: Under the **OAuth Consent Screen** tab in your Google Cloud Console, scroll down to the **Test users** section.
+* Click **+ ADD USERS** and enter the email address of the channel you want to connect (e.g. `your-email@gmail.com`).
+* **Crucial**: Scroll to the bottom of the Cloud Console page and click **Save** (or **Save and Continue**) to apply the settings.
 
-Videos are uploaded as **Private** by default so you can review them before publishing.
+### Step 3 — Authenticate in the Dashboard
+1. Launch the Web Console: `python -m shorts_clipper web --port 8000` and open [http://localhost:8000](http://localhost:8000).
+2. Click the red **Link Account** button in the sidebar.
+3. Authenticate with your Google account. (You will be redirected back to the Web UI automatically once completed).
+4. *Your sidebar card will immediately show your connected channel name, live subscriber count, and active avatar!*
+
+---
+
+## 🎨 Premium Web UI Features
+
+Our newly redesigned dashboard provides elite visual controls for publishing vertical video shorts:
+
+### 🔒 Account Disconnecting (Logout)
+You can easily unlink your channel or switch accounts by clicking the red **Power** button directly inside your sidebar's YouTube status card. Your cached credentials are deleted safely.
+
+### 🌍 Dynamic Visibility Settings
+Before publishing any clip, use the inline dropdown selector on the video card to choose your YouTube visibility status:
+* 🔒 **Private**: (Default) Uploads privately so you can review the short first in your YouTube Studio.
+* 🔗 **Unlisted**: Shared only with people who have the video link.
+* 🌍 **Public**: Instantly visible to the public on YouTube Shorts feed!
+
+### 📊 Real-Time Active Upload Monitor
+When you click **Publish**, the video enters the background queue and is tracked live:
+* **Real-Time progress bar**: Dynamic glowing gradient bar showing exact progress (e.g., `45%`).
+* **Dynamic speed tracking**: Displays real-time upload speed (e.g., `2.5 MB/s`) updated on every chunk.
+* **Smart ETA calculator**: Automatically estimates remaining time (e.g., `12s remaining` or `1m 5s remaining`).
+
+### 📦 Dynamic Catalog Moving
+Clips are separated into two interactive views:
+1. **"Ready to Publish" Tab**: Contains your local drafts and failed publishing attempts.
+2. **"Published to YouTube" Tab**: Once an upload succeeds, the card dynamically slides into this catalog, revealing a direct **View on YouTube** button linking straight to your live Short!
 
 <br/>
 
