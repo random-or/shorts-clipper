@@ -14,7 +14,6 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 def get_youtube_service(client_secret_file: Path | str = "client_secret.json"):
     """Authenticate and return the YouTube service object."""
     from google.auth.transport.requests import Request
-    from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
 
     creds = None
@@ -26,16 +25,19 @@ def get_youtube_service(client_secret_file: Path | str = "client_secret.json"):
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+                token_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(token_path, "wb") as token:
+                    pickle.dump(creds, token)
+            except Exception as e:
+                raise RuntimeError(
+                    f"YouTube credentials expired and could not be refreshed: {e}"
+                ) from e
         else:
-            if not Path(client_secret_file).exists():
-                raise FileNotFoundError(f"Missing {client_secret_file} for YouTube API.")
-            flow = InstalledAppFlow.from_client_secrets_file(client_secret_file, SCOPES)
-            creds = flow.run_local_server(port=0)
-
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(token_path, "wb") as token:
-            pickle.dump(creds, token)
+            raise RuntimeError(
+                "YouTube channel is not connected. Please link your YouTube account from the Web UI sidebar first!"
+            )
 
     return build("youtube", "v3", credentials=creds)
 

@@ -1428,22 +1428,30 @@
         }
         
         async function connectYouTube() {
-            if(!confirm("Start local YouTube OAuth flow? Ensure your 'client_secret.json' is in the project root, and then check your server logs/terminal for the auth link!")) return;
             try {
-                const res = await fetch('/api/youtube/connect', { method: 'POST' });
+                const res = await fetch('/api/youtube/connect');
+                if (!res.ok) {
+                    const errData = await res.json();
+                    alert("Authentication Error: " + (errData.detail || "Make sure client_secret.json is in the project root."));
+                    return;
+                }
                 const data = await res.json();
-                alert(data.message);
                 
+                // Open auth page in new tab
+                window.open(data.auth_url, '_blank');
+                alert("Google Authorization window opened! Please sign in, authorize your channel, and return here when complete.");
+                
+                // Poll connection status every 3 seconds
                 let attempts = 0;
                 const statusInterval = setInterval(async () => {
                     attempts++;
                     await checkYouTubeStatus();
                     const currentRes = await fetch('/api/youtube/status');
                     const currentData = await currentRes.json();
-                    if (currentData.connected || attempts > 24) {
+                    if (currentData.connected || attempts > 30) {
                         clearInterval(statusInterval);
                     }
-                }, 5000);
+                }, 3000);
             } catch(e) {
                 alert("Error connecting YouTube: " + e);
             }

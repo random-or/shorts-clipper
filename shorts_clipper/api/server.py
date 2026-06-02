@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import anyio
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -448,29 +448,137 @@ def get_youtube_status() -> dict[str, Any]:
     }
 
 
-@app.post("/api/youtube/connect")
-def connect_youtube(background_tasks: BackgroundTasks) -> dict[str, str]:
-    """Trigger local OAuth flow to authorize YouTube upload access."""
+@app.get("/api/youtube/connect")
+def connect_youtube(request: Request) -> dict[str, str]:
+    """Generate dynamic Google OAuth URL for the user's browser."""
     if not Path("client_secret.json").exists():
         raise HTTPException(
             status_code=400,
             detail="Missing client_secret.json file in project root. Please follow the YouTube API Setup guide in the README.",
         )
 
-    def run_auth():
-        try:
-            from shorts_clipper.social.youtube import get_youtube_service
+    from google_auth_oauthlib.flow import Flow
 
-            get_youtube_service()
-            logger.info("✅ YouTube connection established successfully!")
-        except Exception as err:
-            logger.error("❌ YouTube authentication failed: %s", err)
+    # Construct the redirect URI based on the request's origin
+    origin = request.headers.get("origin") or f"{request.url.scheme}://{request.url.netloc}"
+    redirect_uri = f"{origin}/api/youtube/callback"
 
-    background_tasks.add_task(run_auth)
-    return {
-        "status": "started",
-        "message": "Local authentication server started on host. Please check your host console to authorize.",
-    }
+    SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+    try:
+        flow = Flow.from_client_secrets_file(
+            "client_secret.json", scopes=SCOPES, redirect_uri=redirect_uri
+        )
+        auth_url, _ = flow.authorization_url(
+            prompt="consent", access_type="offline", include_granted_scopes="true"
+        )
+        return {"auth_url": auth_url}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to generate OAuth URL: {exc}") from exc
+
+
+@app.get("/api/youtube/callback", response_class=HTMLResponse)
+def youtube_callback(request: Request, code: str, state: str | None = None) -> HTMLResponse:
+    """Exchange OAuth code for credentials token and save it to pickle."""
+    import pickle
+
+    from google_auth_oauthlib.flow import Flow
+
+    client_secret_file = "client_secret.json"
+    if not Path(client_secret_file).exists():
+        return HTMLResponse(
+            content="<h3>Error: Missing client_secret.json in project root.</h3>", status_code=400
+        )
+
+    SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+    redirect_uri = str(request.url).split("?")[0]
+
+    try:
+        flow = Flow.from_client_secrets_file(
+            client_secret_file, scopes=SCOPES, redirect_uri=redirect_uri
+        )
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+
+        token_path = Path(".cache/shorts-clipper/token.pickle")
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(token_path, "wb") as token:
+            pickle.dump(creds, token)
+
+        return HTMLResponse(
+            content="""
+            <html>
+                <head>
+                    <title>YouTube Linked Successfully</title>
+                    <style>
+                        body {
+                            background: #0b0d19;
+                            color: #f3f4f6;
+                            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                            height: 100vh;
+                            margin: 0;
+                            text-align: center;
+                        }
+                        .card {
+                            background: rgba(19, 23, 42, 0.6);
+                            border: 1px solid #c9a84c;
+                            box-shadow: 0 0 25px rgba(201, 168, 76, 0.2);
+                            border-radius: 12px;
+                            padding: 3rem;
+                            max-width: 450px;
+                        }
+                        h1 {
+                            color: #c9a84c;
+                            margin-top: 0;
+                        }
+                        p {
+                            color: #9ca3af;
+                            font-size: 1.05rem;
+                        }
+                        .btn-close {
+                            background: linear-gradient(135deg, #c9a84c, #f472b6);
+                            border: none;
+                            color: #0b0d19;
+                            padding: 10px 20px;
+                            border-radius: 6px;
+                            font-weight: bold;
+                            cursor: pointer;
+                            margin-top: 1.5rem;
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                        <h1>YouTube Linked!</h1>
+                        <p>Your YouTube Shorts channel has been authenticated successfully.</p>
+                        <p style="font-size: 0.9rem; color: #6b7280;">You can now close this browser tab and return to the Shorts Clipper Console.</p>
+                        <button class="btn-close" onclick="window.close()">Close Window</button>
+                    </div>
+                </body>
+            </html>
+            """
+        )
+    except Exception as e:
+        logger.error("OAuth token exchange failed: %s", e)
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <body style="background: #0b0d19; color: #ef4444; font-family: sans-serif; text-align:center; padding-top: 100px;">
+                    <h2>❌ Authentication Failed</h2>
+                    <p>{e}</p>
+                    <p style="color: #6b7280;">Make sure your Client Secret matches the redirect callback URI exactly.</p>
+                    <p><a href="/" style="color: #c9a84c;">Back to Dashboard</a></p>
+                </body>
+            </html>
+            """,
+            status_code=500,
+        )
 
 
 @app.get("/api/settings", response_model=SettingsModel)
