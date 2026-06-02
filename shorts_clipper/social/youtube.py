@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import pickle
+from collections.abc import Callable
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def upload_short(
     description: str = "#Shorts",
     tags: list[str] | None = None,
     privacy_status: str = "private",
-    progress_callback = None,
+    progress_callback: Callable[[int], None] | None = None,
 ) -> str:
     """Upload a video to YouTube as a Short.
 

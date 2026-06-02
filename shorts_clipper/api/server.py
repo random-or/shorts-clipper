@@ -6,6 +6,7 @@ performance feedback, and SSE live log streaming.
 
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import tempfile
@@ -189,8 +190,6 @@ def list_clips() -> list[dict[str, Any]]:
     if not out_dir.exists():
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    import json
-
     clips = []
     for path in sorted(out_dir.glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True):
         stat = path.stat()
@@ -268,7 +267,6 @@ def update_clip_metadata(clip_name: str, payload: ClipMetadataUpdate) -> dict[st
         raise HTTPException(status_code=404, detail="Clip not found")
 
     json_path = path.with_suffix(".json")
-    import json
 
     meta = {}
     if json_path.exists():
@@ -302,7 +300,6 @@ def publish_clip(
         raise HTTPException(status_code=404, detail="Clip not found")
 
     json_path = path.with_suffix(".json")
-    import json
 
     meta = {}
     if json_path.exists():
@@ -375,7 +372,10 @@ def publish_clip(
             logger.error("❌ Failed to upload clip %s: %s", clip_name, e)
 
     background_tasks.add_task(_upload)
-    return {"status": "started", "message": f"Publishing {clip_name} to YouTube (Visibility: {privacy})..."}
+    return {
+        "status": "started",
+        "message": f"Publishing {clip_name} to YouTube (Visibility: {privacy})...",
+    }
 
 
 @app.post("/api/clips/{clip_name}/autogen-title")
@@ -387,7 +387,6 @@ def autogen_clip_title(clip_name: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Clip not found")
 
     json_path = path.with_suffix(".json")
-    import json
 
     meta = {}
     if json_path.exists():
@@ -902,7 +901,6 @@ def trigger_clip_render(
                     logger.warning("Thumbnail extraction failed: %s", thumb_err)
 
                 # Generate viral metadata using Gemini and write sidecar .json file
-                import json
 
                 meta = {
                     "title": f"Custom Clip {ts} #shorts #viral",
