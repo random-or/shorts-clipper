@@ -466,7 +466,10 @@ def connect_youtube(request: Request) -> dict[str, str]:
     SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
     try:
         flow = Flow.from_client_secrets_file(
-            "client_secret.json", scopes=SCOPES, redirect_uri=redirect_uri
+            "client_secret.json",
+            scopes=SCOPES,
+            redirect_uri=redirect_uri,
+            autogenerate_code_verifier=False,
         )
         auth_url, _ = flow.authorization_url(
             prompt="consent", access_type="offline", include_granted_scopes="true"
@@ -494,7 +497,10 @@ def youtube_callback(request: Request, code: str, state: str | None = None) -> H
 
     try:
         flow = Flow.from_client_secrets_file(
-            client_secret_file, scopes=SCOPES, redirect_uri=redirect_uri
+            client_secret_file,
+            scopes=SCOPES,
+            redirect_uri=redirect_uri,
+            autogenerate_code_verifier=False,
         )
         flow.fetch_token(code=code)
         creds = flow.credentials
