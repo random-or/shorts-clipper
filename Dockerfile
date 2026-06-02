@@ -10,12 +10,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY shorts_clipper ./shorts_clipper
-COPY analyzer.py editor.py pipeline.py scout.py subtitles.py ./
-COPY tests ./tests
 
 RUN python -m pip install --upgrade pip \
     && pip install -e .
 
-CMD ["python", "pipeline.py"]
+EXPOSE 8000
+CMD ["uvicorn", "shorts_clipper.api.server:app", "--host", "0.0.0.0", "--port", "8000"]

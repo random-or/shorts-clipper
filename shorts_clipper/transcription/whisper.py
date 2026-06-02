@@ -42,7 +42,7 @@ def _transcribe_with_gemini(
     media_path: Path,
     api_key: str | None = None,
 ) -> list[TranscriptSegment] | None:
-    """Attempt to transcribe the media file using Gemini 3.5 Flash."""
+    """Attempt to transcribe the media file using Gemini 2.5 Flash."""
     try:
         from google import genai
         from google.genai import types
@@ -52,7 +52,7 @@ def _transcribe_with_gemini(
             log.warning("Gemini API key not found. Skipping Gemini transcription.")
             return None
 
-        log.info("🚀 Attempting fast transcription with Gemini 3.5 Flash...")
+        log.info("🚀 Attempting fast transcription with Gemini 2.5 Flash...")
         audio_bytes, mime_type = _get_audio_bytes(media_path)
 
         client = genai.Client(api_key=api_key)
@@ -73,7 +73,7 @@ def _transcribe_with_gemini(
         )
 
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-2.5-flash",
             contents=[types.Part.from_bytes(data=audio_bytes, mime_type=mime_type), prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",

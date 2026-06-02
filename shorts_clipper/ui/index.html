@@ -256,12 +256,15 @@
             align-items: center;
             justify-content: center;
             gap: 0.75rem;
-            transition: all 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transform: translateY(0);
         }
 
         .btn:hover {
             border-color: var(--gold);
             color: var(--gold);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2);
         }
 
         .btn-pink {
@@ -480,10 +483,13 @@
             border: 1px solid var(--wire);
             display: flex;
             flex-direction: column;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
         .clip-card:hover {
             border-color: var(--gold);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
         }
 
         .clip-preview-placeholder {
@@ -610,8 +616,16 @@
             gap: 0.75rem;
         }
 
+        @keyframes slideFadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .app-view { display: none; }
-        .app-view.active { display: block; }
+        .app-view.active { 
+            display: block; 
+            animation: slideFadeIn 0.4s ease-out forwards;
+        }
 
     </style>
 </head>
@@ -741,6 +755,7 @@
                                 <option value="drama">Drama & Podcast Debates</option>
                                 <option value="motivation">Motivation & Sports Commentary</option>
                                 <option value="gaming">Gaming & Streamer Rage</option>
+                                <option value="twitch">Twitch VOD Highlights</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -754,6 +769,10 @@
                         <div class="form-group">
                             <label for="auto-channel">Target Specific Channel (Optional)</label>
                             <input type="text" id="auto-channel" placeholder="e.g. @joe_rogan, podcast_channel">
+                        </div>
+                        <div class="form-group-full" style="flex-direction: row; align-items: center; gap: 1rem; margin-top: 0.5rem; background: var(--ink); padding: 1rem; border: 1px solid var(--wire);">
+                            <input type="checkbox" id="auto-upload" style="width: 18px; height: 18px; cursor: pointer;">
+                            <label for="auto-upload" style="cursor: pointer; color: var(--smoke); font-weight: 500;">Enable Auto-Upload to YouTube Shorts (Private)</label>
                         </div>
                     </div>
                     
@@ -1102,7 +1121,8 @@
                 niche: document.getElementById('auto-niche').value || null,
                 keyword: document.getElementById('auto-keyword').value || null,
                 channel: document.getElementById('auto-channel').value || null,
-                count: parseInt(document.getElementById('auto-count').value)
+                count: parseInt(document.getElementById('auto-count').value),
+                upload: document.getElementById('auto-upload').checked
             };
             
             try {
@@ -1272,9 +1292,10 @@
                     };
                     
                     card.innerHTML = `
-                        <div class="clip-preview-placeholder">
+                        <div class="clip-preview-placeholder" style="${clip.thumbnail ? `background-image: url('${clip.thumbnail}'); background-size: cover; background-position: center;` : ''}">
                             <div class="clip-overlay-play" onclick="openVideoModal('${clip.name}', '${clip.path}')">
-                                </div>
+                                <i class="fa-solid fa-play"></i>
+                            </div>
                         </div>
                         <div class="clip-card-info">
                             <div class="clip-card-name" title="${clip.name}">${clip.name}</div>
@@ -1284,8 +1305,8 @@
                             </div>
                         </div>
                         <div class="clip-publish-actions">
-                            <button class="btn btn-mini btn-secondary" onclick="publishMock('YouTube Shorts', '${clip.name}')">Publish</button>
-                            <button class="btn btn-mini btn-secondary" onclick="publishMock('Instagram Reels', '${clip.name}')">Publish</button>
+                            <button class="btn btn-mini btn-secondary" onclick="publishClip('${clip.name}')" style="color: var(--gold); border-color: var(--gold);"><i class="fa-brands fa-youtube" style="margin-right: 0.25rem;"></i> Publish</button>
+                            <button class="btn btn-mini btn-secondary" onclick="deleteClip('${clip.name}')" style="color: #c94a4a; border-color: #c94a4a;"><i class="fa-solid fa-trash" style="margin-right: 0.25rem;"></i> Delete</button>
                         </div>
                     `;
                     container.appendChild(card);
@@ -1295,9 +1316,24 @@
             }
         }
 
-        // Mock publishing adapter triggers
-        function publishMock(platform, clipName) {
-            alert(`🚀 [Vanguard Publisher Adapter] Triggered automatic publishing of clip "${clipName}" to ${platform} successfully!\n(Adapter mock simulation complete)`);
+        async function publishClip(clipName) {
+            try {
+                const res = await fetch('/api/clips/' + encodeURIComponent(clipName) + '/publish', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+            } catch(e) { alert('Error: ' + e); }
+        }
+
+        async function deleteClip(clipName) {
+            if(!confirm('Are you sure you want to delete ' + clipName + '?')) return;
+            try {
+                const res = await fetch('/api/clips/' + encodeURIComponent(clipName), { method: 'DELETE' });
+                if (res.ok) {
+                    refreshLibrary();
+                } else {
+                    alert('Delete failed.');
+                }
+            } catch(e) { alert('Error: ' + e); }
         }
 
         // Video modal controls

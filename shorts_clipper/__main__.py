@@ -27,8 +27,11 @@ def _cmd_clip(args: argparse.Namespace, settings: Settings) -> int:
 
     out = Path(args.output) if args.output else None
     count = getattr(args, "count", 1)
+    upload = getattr(args, "upload", False)
     try:
-        path_or_paths = run(args.url, settings=settings, output_path=out, count=count)
+        path_or_paths = run(
+            args.url, settings=settings, output_path=out, count=count, upload=upload
+        )
         if isinstance(path_or_paths, list):
             print("\n🔥 Clips ready:")
             for p in path_or_paths:
@@ -45,12 +48,14 @@ def _cmd_autopilot(args: argparse.Namespace, settings: Settings) -> int:
     from shorts_clipper.pipeline.runner import run_autopilot
 
     count = getattr(args, "count", 1)
+    upload = getattr(args, "upload", False)
     path_or_paths = run_autopilot(
         settings=settings,
         channel=getattr(args, "channel", None),
         niche=getattr(args, "niche", None),
         keyword=getattr(args, "keyword", None),
         count=count,
+        upload=upload,
     )
     if path_or_paths:
         if isinstance(path_or_paths, list):
@@ -139,6 +144,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="Number of viral clips to extract (default: 1)",
     )
+    clip_p.add_argument(
+        "--upload",
+        action="store_true",
+        help="Upload the resulting clips to YouTube Shorts",
+    )
 
     # ── autopilot ─────────────────────────────────────────────────────────
     autopilot_p = sub.add_parser(
@@ -163,6 +173,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="Number of viral clips to extract (default: 1)",
+    )
+    autopilot_p.add_argument(
+        "--upload",
+        action="store_true",
+        help="Upload the resulting clips to YouTube Shorts",
     )
 
     # ── scout ─────────────────────────────────────────────────────────────

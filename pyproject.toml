@@ -8,8 +8,12 @@ requires-python = ">=3.11"
 dependencies = [
   "faster-whisper>=1.0",
   "google-genai>=1.0",
-  "moviepy>=2.0",
   "yt-dlp>=2024.1.0",
+  "google-api-python-client>=2.0.0",
+  "google-auth-oauthlib>=1.0.0",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "anyio>=4.0",
 ]
 
 [project.scripts]
@@ -31,3 +35,6 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["shorts_clipper*"]

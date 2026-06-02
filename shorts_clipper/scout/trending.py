@@ -133,6 +133,13 @@ TREND_POOLS: dict[str, list[str]] = {
         "insane sports commentary english",
         "celebrity uncomfortable moment english",
     ],
+    "twitch": [
+        "twitch highlights english",
+        "funniest twitch moments english",
+        "streamer reaction english",
+        "best twitch clips english",
+        "xqc hasan kai cenat highlight english",
+    ],
 }
 
 VIRAL_VOCABULARY = [
@@ -234,12 +241,13 @@ def _generate_dynamic_queries(pool_name: str, count: int = 5) -> list[str]:
 
 
 def _search_and_fetch_metadata(query: str) -> list[dict]:
-    """Run search and dump full metadata for top results in a single yt-dlp execution."""
+    """Run search and dump flat metadata for top results."""
     cmd = [
         "yt-dlp",
         query,
         "--dump-json",
         "--skip-download",
+        "--flat-playlist",
         "--retries",
         "2",
         "--socket-timeout",
@@ -263,6 +271,27 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
     except Exception as exc:  # noqa: BLE001
         log.warning("Search and metadata fetch failed for query %r: %s", query, exc)
         return []
+
+
+def _fetch_video_metadata(vid_id: str) -> dict | None:
+    """Fetch full metadata for a specific video."""
+    cmd = [
+        "yt-dlp",
+        f"https://www.youtube.com/watch?v={vid_id}",
+        "--dump-json",
+        "--skip-download",
+        "--retries",
+        "2",
+        "--socket-timeout",
+        "10",
+        "--quiet",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        return json.loads(result.stdout)
+    except Exception as exc:
+        log.warning("Metadata fetch failed for %s: %s", vid_id, exc)
+        return None
 
 
 def _search_entries(query: str) -> list[dict]:
@@ -422,29 +451,56 @@ def _scout_pool(
     if "ytsearch5:" in query:
         modified_query = query.replace("ytsearch5:", "ytsearch12:")
 
-    infos = _search_and_fetch_metadata(modified_query)
-    if not infos:
+    flat_infos = _search_and_fetch_metadata(modified_query)
+    if not flat_infos:
         log.warning("No entries returned for query: %s", query)
         return []
 
     candidates: list[tuple[float, VideoCandidate]] = []
-    for info in infos:
+
+    def process_candidate(info: dict) -> tuple[float, VideoCandidate] | None:
         vid_id = info.get("id")
         if not vid_id or vid_id in seen:
-            continue
+            return None
 
-        if _is_suitable(info, seen, max_age_days):
+        # Pre-filter by duration from flat playlist if available
+        duration = float(info.get("duration") or 0)
+        if duration > 0 and not (_MIN_DURATION <= duration <= _MAX_DURATION):
+            return None
+
+        # Fetch full metadata
+        full_info = _fetch_video_metadata(vid_id)
+        if not full_info:
+            return None
+
+        if _is_suitable(full_info, seen, max_age_days):
             url = f"https://www.youtube.com/watch?v={vid_id}"
-            title = info.get("title", "Unknown")
-            duration = float(info.get("duration") or 0)
-            score = _calculate_virality_score(info)
-            candidates.append(
-                (
-                    score,
-                    VideoCandidate(url=url, video_id=vid_id, duration=duration, title=title),
-                )
+            title = full_info.get("title", "Unknown")
+            final_dur = float(full_info.get("duration") or duration)
+            score = _calculate_virality_score(full_info)
+            return (
+                score,
+                VideoCandidate(url=url, video_id=vid_id, duration=final_dur, title=title),
             )
-            log.info("🎯 Found valid candidate: [%s] %s (virality=%.2f)", vid_id, title, score)
+
+        return None
+
+    # Fetch full metadata concurrently for the pre-filtered candidates
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+        futures = [executor.submit(process_candidate, info) for info in flat_infos]
+        for future in as_completed(futures):
+            try:
+                res = future.result()
+                if res:
+                    candidates.append(res)
+                    log.info(
+                        "🎯 Found valid candidate: [%s] %s (virality=%.2f)",
+                        res[1].video_id,
+                        res[1].title,
+                        res[0],
+                    )
+            except Exception as exc:
+                log.warning("Failed to process candidate: %s", exc)
 
     candidates.sort(key=lambda x: x[0], reverse=True)
     return candidates
