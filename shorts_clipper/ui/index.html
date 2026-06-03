@@ -257,6 +257,11 @@
         .main-content {
             margin-left: 280px;
             padding: 3rem 4rem;
+            flex-grow: 1;
+            min-height: 100vh;
+            background: radial-gradient(circle at top right, rgba(0, 210, 255, 0.03), transparent 40%),
+                        radial-gradient(circle at bottom left, rgba(223, 178, 63, 0.02), transparent 45%),
+                        var(--ink);
             transition: margin-left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
@@ -374,16 +379,7 @@
             font-weight: 600;
         }
 
-        /* Main Content */
-        .main-content {
-            margin-left: 280px;
-            flex-grow: 1;
-            padding: 3rem 4rem;
-            min-height: 100vh;
-            background: radial-gradient(circle at top right, rgba(0, 210, 255, 0.03), transparent 40%),
-                        radial-gradient(circle at bottom left, rgba(223, 178, 63, 0.02), transparent 45%),
-                        var(--ink);
-        }
+        /* Main Content — see consolidated rule above */
 
         /* Compact Dashboard Stat Bar Ticker */
         .stats-bar {
@@ -1738,8 +1734,10 @@
                 document.getElementById('set-enable-gpu').checked = data.enable_gpu;
                 
                 // Update system statuses visually in navigation sidebar status box
-                document.getElementById('status-whisper').textContent = `${data.whisper_model.toUpperCase()} ${data.whisper_device.toUpperCase()}`;
-                document.getElementById('status-gpu').textContent = data.enable_gpu ? "Enabled (NVENC)" : "Disabled";
+                const elWhisper = document.getElementById('status-whisper');
+                if (elWhisper) elWhisper.textContent = `${data.whisper_model.toUpperCase()} ${data.whisper_device.toUpperCase()}`;
+                const elGpu = document.getElementById('status-gpu');
+                if (elGpu) elGpu.textContent = data.enable_gpu ? "Enabled (NVENC)" : "Disabled";
                 document.getElementById('stat-whisper-device').textContent = data.whisper_device.toUpperCase();
             } catch (err) {
                 console.error("Failed to load settings from server:", err);
