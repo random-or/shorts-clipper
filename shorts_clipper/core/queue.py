@@ -113,6 +113,14 @@ class JobQueue:
             _DB_PATH = Path(db_path)
         self._conn = _connect()
         _ensure_table(self._conn)
+        
+        # Reset any stuck 'running' or 'pending' jobs to failed on server start
+        with _lock:
+            self._conn.execute(
+                "UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE status IN (?, ?)",
+                (JobStatus.FAILED.value, "Interrupted by server restart", time.time(), JobStatus.RUNNING.value, JobStatus.PENDING.value)
+            )
+            self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
