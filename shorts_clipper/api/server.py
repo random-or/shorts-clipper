@@ -129,6 +129,7 @@ class AutopilotRequest(BaseModel):
     channel: str | None = None
     count: int = Field(default=3, ge=1, le=10)
     upload: bool = False
+    scout_duration: str | None = "all"  # "all" | "today" | "week" | "month"
 
 
 class CustomClipRequest(BaseModel):
@@ -746,6 +747,15 @@ def trigger_autopilot(
             def _prog(pct: int) -> None:
                 _job_queue.update_progress(job.id, pct)
 
+            # Map duration string to days
+            max_age_days = None
+            if payload.scout_duration == "today":
+                max_age_days = 1
+            elif payload.scout_duration == "week":
+                max_age_days = 7
+            elif payload.scout_duration == "month":
+                max_age_days = 30
+
             settings = Settings.from_env()
             result = run_autopilot(
                 settings=settings,
@@ -755,6 +765,7 @@ def trigger_autopilot(
                 count=payload.count,
                 upload=payload.upload,
                 progress_callback=_prog,
+                max_age_days=max_age_days,
             )
             output_paths = []
             if result:

@@ -276,6 +276,7 @@ def run_autopilot(
     count: int = 1,
     upload: bool = False,
     progress_callback: Callable[[int], None] | None = None,
+    max_age_days: int | None = None,
 ) -> Path | list[Path] | None:
     """
     Autopilot mode: scout a trending video, then run the full pipeline.
@@ -290,11 +291,12 @@ def run_autopilot(
     if progress_callback:
         progress_callback(5)
 
+    age_days = max_age_days if max_age_days is not None else settings.scout_max_age_days
     url = get_trending_link(
         channel=channel,
         niche=niche,
         keyword=keyword,
-        max_age_days=settings.scout_max_age_days,
+        max_age_days=age_days,
     )
     if not url:
         log.error("Scout returned no suitable video. Aborting.")
