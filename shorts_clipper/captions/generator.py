@@ -26,19 +26,38 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _ass_header() -> str:
-    """Build the ASS subtitle file header (spec lines are intentionally long)."""
+def _ass_header(style_name: str = "default") -> str:
+    """Build the ASS subtitle file header with custom style overrides."""
     style_format = (
         "Name, Fontname, Fontsize, PrimaryColour, SecondaryColour,"
         " OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut,"
         " ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow,"
         " Alignment, MarginL, MarginR, MarginV, Encoding"
     )
-    style_def = (
-        "Default,Inter Bold,58,"
-        "&H00F2F2F2&,&H000000FF,&H00000000,&H80000000,"
-        "-1,0,0,0,100,100,0,0,1,2.5,1,2,40,40,180,1"
-    )
+
+    style_name = str(style_name).lower()
+    if style_name == "mrbeast":
+        # Montserrat Black, size 68, Yellow Primary, heavy Black border (4.0), no shadow
+        style_def = (
+            "Default,Montserrat Black,68,"
+            "&H0000FFFF&,&H0000FF00&,&H00000000&,&H00000000&,"
+            "-1,0,0,0,100,100,0,0,1,4.0,0,2,40,40,220,1"
+        )
+    elif style_name == "minimal":
+        # Arial, size 50, solid white text, no outline, translucent black capsule background box (BorderStyle=3)
+        style_def = (
+            "Default,Arial,50,"
+            "&H00FFFFFF&,&H00000000&,&H00000000&,&H80000000&,"
+            "-1,0,0,0,100,100,0,0,3,0,0,2,40,40,180,1"
+        )
+    else:
+        # Default: Inter Bold, size 58, white text, outline 2.5, drop shadow 1
+        style_def = (
+            "Default,Inter Bold,58,"
+            "&H00F2F2F2&,&H00FFFF00&,&H00000000&,&H80000000&,"
+            "-1,0,0,0,100,100,0,0,1,2.5,1,2,40,40,180,1"
+        )
+
     event_format = "Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     return "\n".join(
         [
@@ -152,12 +171,13 @@ def generate_ass_file(
     start_offset: float,
     output_path: str | Path,
     pacing: float = 1.0,
+    style_name: str = "default",
 ) -> Path:
     """Generate an ASS subtitle file from transcript segments."""
     out = Path(output_path)
     chunks = _build_ass_chunks(segments, start_offset, pacing=pacing)
 
-    lines = [_ass_header(), ""]
+    lines = [_ass_header(style_name=style_name), ""]
 
     highlight_colors = [
         "&H00E6E64D&",  # Soft Cyan (BGR)
@@ -227,6 +247,7 @@ def burn_subtitles(
     preset: str = "ultrafast",
     pacing: float = 1.0,
     video_codec: str = "libx264",
+    style_name: str = "default",
 ) -> Path:
     """
     Burn subtitles into a video using FFmpeg's native ASS filter.
@@ -243,6 +264,7 @@ def burn_subtitles(
         preset:       FFmpeg encode preset (fast, medium, slow).
         pacing:       Speed multiplier (1.0 = no change, 1.15 = 15% faster).
         video_codec:  FFmpeg video encoder codec to use.
+        style_name:   Subtitles style preset to burn in (default, mrbeast, minimal).
 
     Returns:
         Path to the output video.
@@ -254,7 +276,7 @@ def burn_subtitles(
 
     with tempfile.TemporaryDirectory(prefix="ass_") as tmp:
         ass_path = Path(tmp) / "subs.ass"
-        generate_ass_file(segments, start_offset, ass_path, pacing=pacing)
+        generate_ass_file(segments, start_offset, ass_path, pacing=pacing, style_name=style_name)
 
         # FFmpeg ASS filter — libass renders directly during encode
         # On Linux the path needs colons escaped

@@ -12,26 +12,47 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-
         :root {
-            --ink: #0a0a0b;
-            --ink2: #16161a;
-            --ink3: #1e1e24;
-            --wire: #2c2c32;
-            --smoke: #e8e6e1;
-            --ash: #b0ada6;
-            --ghost: #6e6b65;
-            --gold: #c9a84c;
-            --gold2: #e8c97a;
-            --font-serif: Georgia, serif;
-            --font-ui: system-ui, -apple-system, sans-serif;
+            --ink: #06070d;
+            --ink2: #0d0e1b;
+            --ink3: #131427;
+            --wire: rgba(255, 255, 255, 0.07);
+            --wire-focus: rgba(0, 210, 255, 0.4);
+            --smoke: #f3f4f6;
+            --ash: #9ca3af;
+            --ghost: #6b7280;
+            --gold: #dfb23f;
+            --gold2: #ffd769;
+            --gold-glow: rgba(223, 178, 63, 0.35);
+            --cyan: #00d2ff;
+            --cyan-glow: rgba(0, 210, 255, 0.35);
+            --accent-green: #05da8a;
+            --green-glow: rgba(5, 218, 138, 0.35);
+            --text-muted: #6b7280;
+            --font-display: 'Outfit', sans-serif;
+            --font-ui: 'Inter', sans-serif;
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            user-select: none;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--ink);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--wire);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--ghost);
         }
 
         body {
@@ -40,27 +61,35 @@
             font-family: var(--font-ui);
             overflow-x: hidden;
             line-height: 1.5;
-            font-weight: 400;
+            -webkit-font-smoothing: antialiased;
         }
 
         /* Typography */
         .serif-text, .clip-card-name, .ts-text, .modal-title, .verdict-text {
-            font-family: var(--font-serif);
-            font-style: italic;
-            font-weight: 400;
+            font-family: var(--font-display);
+            font-weight: 600;
             color: var(--smoke);
         }
 
-        .ui-text, label, .ts-time, .btn, .nav-item, .stat-label, .panel-title, th, td, .status-row, .stage-label {
+        label {
             font-family: var(--font-ui);
-            font-size: 9px;
-            letter-spacing: 0.2em;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
-            font-weight: 400;
+            color: var(--ash);
+            margin-bottom: 0.3rem;
+            display: inline-block;
+        }
+
+        .ui-text, .ts-time, .btn, .nav-item, .stat-label, .panel-title, th, td, .status-row, .stage-label {
+            font-family: var(--font-ui);
         }
 
         h1, h2, h3, h4, h5, h6 {
-            font-weight: 400;
+            font-family: var(--font-display);
+            font-weight: 700;
+            letter-spacing: -0.02em;
         }
 
         /* Layout */
@@ -71,186 +100,225 @@
 
         /* Sidebar */
         .sidebar {
-            width: 260px;
+            width: 280px;
             background: var(--ink2);
             border-right: 1px solid var(--wire);
             display: flex;
             flex-direction: column;
-            padding: 2rem 1.5rem;
+            padding: 2.2rem 1.8rem;
             position: fixed;
             height: 100vh;
             z-index: 100;
-        }
-
-        .brand-container {
-            margin-bottom: 3rem;
-            display: flex;
-            align-items: center;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.4);
         }
 
         .brand-container {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem 0;
-            margin-bottom: 2rem;
+            gap: 0.85rem;
+            margin-bottom: 3.5rem;
         }
 
         .brand-name {
-            font-family: var(--font-ui);
-            font-size: 14px;
+            font-family: var(--font-display);
+            font-size: 16px;
             font-weight: 800;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.04em;
             text-transform: uppercase;
-            color: var(--smoke);
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
         }
 
         .brand-logo {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            background: linear-gradient(135deg, rgba(201, 168, 76, 0.15), rgba(244, 114, 182, 0.15));
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(223, 178, 63, 0.15), rgba(0, 210, 255, 0.15));
             border: 1px solid var(--wire);
-            box-shadow: 0 0 15px rgba(244, 114, 182, 0.2);
-            animation: logoGlow 3s infinite alternate ease-in-out;
+            box-shadow: 0 0 15px var(--cyan-glow);
+            animation: logoGlow 4s infinite alternate ease-in-out;
         }
 
         @keyframes logoGlow {
-            0% { box-shadow: 0 0 5px rgba(244,114,182,0.2), 0 0 10px rgba(201,168,76,0.1); border-color: var(--wire); }
-            100% { box-shadow: 0 0 15px rgba(244,114,182,0.5), 0 0 20px rgba(201,168,76,0.4); border-color: var(--gold); }
+            0% {
+                box-shadow: 0 0 5px var(--cyan-glow), 0 0 10px var(--gold-glow);
+                border-color: rgba(0, 210, 255, 0.2);
+            }
+            100% {
+                box-shadow: 0 0 20px var(--cyan-glow), 0 0 25px var(--gold-glow);
+                border-color: var(--gold);
+            }
         }
-
 
         .nav-menu {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.6rem;
             flex-grow: 1;
         }
 
         .nav-item {
             color: var(--ash);
             cursor: pointer;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid transparent;
-            transition: all 0.2s ease;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border: 1px solid transparent;
         }
 
         .nav-item:hover {
             color: var(--smoke);
+            background: rgba(255, 255, 255, 0.02);
+            border-color: var(--wire);
+            transform: translateX(3px);
         }
 
         .nav-item.active {
-            color: var(--gold);
-            border-bottom: 1px solid var(--gold);
+            color: var(--gold2);
+            background: rgba(223, 178, 63, 0.08);
+            border: 1px solid rgba(223, 178, 63, 0.25);
+            box-shadow: 0 4px 15px rgba(223, 178, 63, 0.05);
         }
 
         .system-status {
-            padding: 1rem;
-            background: var(--ink3);
+            padding: 1.25rem;
+            background: rgba(255, 255, 255, 0.01);
             border: 1px solid var(--wire);
+            border-radius: 12px;
+            margin-top: auto;
         }
 
         .status-header {
-            color: var(--ghost);
-            margin-bottom: 0.75rem;
+            color: var(--ash);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.85rem;
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            text-transform: uppercase;
         }
 
         .status-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 0.35rem;
+            margin-bottom: 0.45rem;
+            font-size: 11px;
             color: var(--ash);
         }
 
         .status-val {
             color: var(--smoke);
+            font-weight: 600;
         }
 
         /* Main Content */
         .main-content {
-            margin-left: 260px;
+            margin-left: 280px;
             flex-grow: 1;
-            padding: 2.5rem 3rem;
+            padding: 3rem 4rem;
             min-height: 100vh;
+            background: radial-gradient(circle at top right, rgba(0, 210, 255, 0.03), transparent 40%),
+                        radial-gradient(circle at bottom left, rgba(223, 178, 63, 0.02), transparent 45%),
+                        var(--ink);
         }
 
         /* Stat Bar */
         .stats-bar {
-            display: flex;
-            gap: 2rem;
-            margin-bottom: 2.5rem;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 3rem;
             border-bottom: 1px solid var(--wire);
-            padding-bottom: 1.5rem;
+            padding-bottom: 2rem;
         }
 
         .stat-card {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.4rem;
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid var(--wire);
+            padding: 1.25rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            border-color: rgba(223, 178, 63, 0.2);
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.02);
         }
 
         .stat-label {
             color: var(--ghost);
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }
 
         .stat-value {
-            font-family: var(--font-serif);
-            font-size: 16px;
+            font-family: var(--font-display);
+            font-size: 20px;
+            font-weight: 800;
             color: var(--smoke);
-        }
-
-        .stat-icon {
-            display: none;
         }
 
         /* Panels */
         .glass-panel {
             background: var(--ink3);
             border: 1px solid var(--wire);
-            padding: 2rem;
-            margin-bottom: 2rem;
+            border-radius: 16px;
+            padding: 2.2rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            position: relative;
+            overflow: hidden;
         }
 
         .panel-title {
             color: var(--smoke);
-            margin-bottom: 1.5rem;
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            margin-bottom: 2rem;
             border-bottom: 1px solid var(--wire);
-            padding-bottom: 0.75rem;
-        }
-
-        .panel-title i {
-            display: none;
+            padding-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            text-transform: uppercase;
         }
 
         /* Forms */
         .form-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
+            gap: 1.8rem;
+            margin-bottom: 1.8rem;
         }
 
         .form-group {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.4rem;
         }
 
         .form-group-full {
             grid-column: span 2;
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        label {
-            color: var(--ghost);
+            gap: 0.4rem;
         }
 
         input[type="text"], input[type="number"], select {
@@ -258,140 +326,178 @@
             border: 1px solid var(--wire);
             color: var(--smoke);
             font-family: var(--font-ui);
-            font-size: 10px;
-            padding: 0.8rem 1rem;
+            font-size: 13px;
+            padding: 0.85rem 1.1rem;
+            border-radius: 8px;
             outline: none;
-            transition: all 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         input:focus, select:focus {
             border-color: var(--gold);
+            box-shadow: 0 0 12px var(--gold-glow);
+            background: var(--ink3);
         }
 
         /* Buttons */
         .btn {
-            background: var(--ink2);
+            background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%), var(--ink2);
             border: 1px solid var(--wire);
             color: var(--smoke);
-            padding: 0.85rem 1.75rem;
+            padding: 0.95rem 2rem;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            border-radius: 8px;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 0.75rem;
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
         .btn:hover {
             border-color: var(--gold);
-            color: var(--gold);
+            color: var(--gold2);
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2);
+            box-shadow: 0 6px 20px var(--gold-glow);
         }
 
-        .btn-pink {
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-cyan {
+            border-color: var(--cyan);
+            color: var(--cyan);
+            background: linear-gradient(135deg, rgba(0, 210, 255, 0.05), rgba(0, 119, 255, 0.05));
+        }
+
+        .btn-cyan:hover {
             border-color: var(--gold);
-            color: var(--gold);
+            color: var(--gold2);
+            box-shadow: 0 6px 20px var(--cyan-glow);
         }
         
         .btn-secondary {
-            background: var(--ink);
+            background: rgba(255, 255, 255, 0.01);
         }
 
         .btn-mini {
-            padding: 0.45rem 0.5rem;
+            padding: 0.5rem 1rem;
+            font-size: 11px;
         }
 
-        /* Dots & Pipeline */
+        /* Pipeline Stages */
         .stage-pipeline {
             display: flex;
             align-items: center;
             justify-content: space-between;
             background: var(--ink2);
             border: 1px solid var(--wire);
-            padding: 1rem 1.5rem;
-            margin-bottom: 1.5rem;
+            padding: 1.5rem 2.5rem;
+            margin-bottom: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
 
         .stage-step {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.6rem;
             color: var(--ghost);
-            transition: all 0.3s ease;
+            transition: all 0.4s ease;
         }
 
         .stage-icon {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 44px;
-            height: 44px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             background: var(--ink);
             border: 2px solid var(--wire);
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             color: var(--ghost);
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
         .stage-label {
             color: var(--ghost);
-            font-size: 0.75rem;
-            font-weight: 600;
+            font-size: 10px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
 
+        /* Active Pipeline Stage */
         .stage-step.active .stage-label {
-            color: var(--gold);
-            text-shadow: 0 0 8px rgba(201, 168, 76, 0.4);
+            color: var(--cyan);
+            text-shadow: 0 0 10px var(--cyan-glow);
         }
 
         .stage-step.active .stage-icon {
-            color: var(--gold);
-            border-color: var(--gold);
-            background: rgba(201, 168, 76, 0.08);
+            color: var(--cyan);
+            border-color: var(--cyan);
+            background: rgba(0, 210, 255, 0.08);
             animation: pulseGlow 1.8s infinite ease-in-out;
         }
 
+        /* Prevent Idle stage from pulsing when active */
+        #step-idle.active .stage-icon {
+            animation: none;
+            color: var(--ash);
+            border-color: var(--wire);
+            background: rgba(255, 255, 255, 0.01);
+            box-shadow: none;
+        }
+        #step-idle.active .stage-label {
+            color: var(--ash);
+            text-shadow: none;
+        }
+
+        /* Completed Pipeline Stage */
         .stage-step.done .stage-label {
-            color: #10b981;
+            color: var(--accent-green);
         }
 
         .stage-step.done .stage-icon {
-            color: #10b981;
-            border-color: #10b981;
-            background: rgba(16, 185, 129, 0.08);
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+            border-color: var(--accent-green);
+            background: rgba(5, 218, 138, 0.08);
+            box-shadow: 0 0 12px var(--green-glow);
         }
 
         .pipeline-bar {
-            height: 2px;
+            height: 3px;
             background: var(--wire);
             flex-grow: 1;
-            margin: 0 10px;
+            margin: 0 12px;
             position: relative;
-            transition: all 0.3s ease;
+            transition: all 0.4s ease;
+            border-radius: 2px;
         }
 
         .pipeline-bar.active {
-            background: linear-gradient(90deg, var(--wire) 30%, var(--gold) 50%, var(--wire) 70%);
+            background: linear-gradient(90deg, var(--wire) 30%, var(--cyan) 50%, var(--wire) 70%);
             background-size: 200% 100%;
             animation: laserFlow 1.5s infinite linear;
         }
 
         .pipeline-bar.done {
-            background: #10b981;
-            box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+            background: var(--accent-green);
+            box-shadow: 0 0 8px var(--green-glow);
         }
 
         @keyframes pulseGlow {
-            0% { box-shadow: 0 0 5px rgba(201, 168, 76, 0.4), inset 0 0 5px rgba(201, 168, 76, 0.2); transform: scale(1); }
-            50% { box-shadow: 0 0 15px rgba(201, 168, 76, 0.8), inset 0 0 10px rgba(201, 168, 76, 0.4); transform: scale(1.05); }
-            100% { box-shadow: 0 0 5px rgba(201, 168, 76, 0.4), inset 0 0 5px rgba(201, 168, 76, 0.2); transform: scale(1); }
+            0% { box-shadow: 0 0 5px var(--cyan-glow), inset 0 0 5px rgba(0, 210, 255, 0.1); transform: scale(1); }
+            50% { box-shadow: 0 0 18px var(--cyan-glow), inset 0 0 12px rgba(0, 210, 255, 0.3); transform: scale(1.06); }
+            100% { box-shadow: 0 0 5px var(--cyan-glow), inset 0 0 5px rgba(0, 210, 255, 0.1); transform: scale(1); }
         }
 
         @keyframes laserFlow {
@@ -400,92 +506,111 @@
         }
 
         .status-dot {
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             display: inline-block;
-            background: var(--gold);
+            background: var(--accent-green);
+            box-shadow: 0 0 8px var(--green-glow);
         }
 
         /* Selection state */
         .selectable {
-            border-left: 2px solid transparent;
-            padding-left: 1rem;
-            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            padding-left: 1.25rem;
+            transition: all 0.3s ease;
         }
         .selectable:hover, .selectable.selected {
-            border-left: 2px solid var(--gold);
-            background: rgba(201, 168, 76, 0.06);
+            border-left: 3px solid var(--gold);
+            background: rgba(223, 178, 63, 0.05);
         }
 
-        /* Transcript */
+        /* Transcript List */
         .transcript-list {
-            max-height: 250px;
+            max-height: 280px;
             overflow-y: auto;
             border: 1px solid var(--wire);
-            padding: 1rem;
+            border-radius: 8px;
+            padding: 1.25rem;
             background: var(--ink);
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
+            gap: 0.6rem;
+            margin-bottom: 2rem;
         }
 
         .transcript-row {
             display: flex;
-            padding: 0.35rem 0.5rem;
+            padding: 0.5rem 0.75rem;
             border-left: 2px solid transparent;
+            border-radius: 0 6px 6px 0;
+            transition: all 0.2s ease;
         }
 
         .transcript-row:hover {
             border-left: 2px solid var(--gold);
-            background: rgba(201, 168, 76, 0.06);
+            background: rgba(223, 178, 63, 0.05);
         }
 
         .ts-time {
-            width: 70px;
+            width: 80px;
             color: var(--ghost);
             flex-shrink: 0;
+            font-size: 11px;
+            font-weight: 600;
         }
 
         .ts-text {
             font-size: 14px;
+            color: var(--smoke);
         }
 
         .ts-text.highlighted {
             color: var(--gold2);
+            text-shadow: 0 0 8px var(--gold-glow);
         }
 
-        /* Tables */
+        /* Table */
         .highlights-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--wire);
+            border-radius: 8px;
+            overflow: hidden;
         }
 
         .highlights-table th {
             text-align: left;
-            padding: 0.75rem 1rem;
-            color: var(--ghost);
+            padding: 1rem 1.25rem;
+            color: var(--ash);
+            background: var(--ink2);
             border-bottom: 1px solid var(--wire);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
         }
 
         .highlights-table td {
-            padding: 0.85rem 1rem;
+            padding: 1.1rem 1.25rem;
             border-bottom: 1px solid var(--wire);
-            color: var(--ash);
+            color: var(--smoke);
+            font-size: 13px;
         }
 
         .highlights-table tr:hover td {
-            background: rgba(201, 168, 76, 0.06);
+            background: rgba(255, 255, 255, 0.01);
         }
 
-        /* Terminal */
+        /* Terminal styling */
         .terminal-container {
-            background: var(--ink);
+            background: #030408;
             border: 1px solid var(--wire);
-            padding: 1.25rem;
+            border-radius: 10px;
+            padding: 1.5rem;
             margin-bottom: 1.5rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
         }
 
         .terminal-header {
@@ -493,149 +618,147 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid var(--wire);
-            padding-bottom: 0.5rem;
-            margin-bottom: 0.75rem;
+            padding-bottom: 0.75rem;
+            margin-bottom: 1rem;
         }
 
         .terminal-controls {
             display: flex;
-            gap: 0.4rem;
+            gap: 0.5rem;
         }
 
         .terminal-dot {
-            width: 6px;
-            height: 6px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
         }
 
-        .term-red { background: #c94a4a; }
+        .term-red { background: #ef4444; }
         .term-yel { background: var(--gold); }
-        .term-grn { background: var(--ghost); }
+        .term-grn { background: var(--accent-green); }
 
         .terminal-title {
             color: var(--ghost);
-            font-family: var(--font-ui);
-            font-size: 9px;
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
+            font-family: monospace;
+            font-size: 11px;
+            letter-spacing: 0.05em;
         }
 
         .terminal-body {
-            height: 250px;
+            height: 280px;
             overflow-y: auto;
-            color: var(--smoke);
+            color: rgba(255, 255, 255, 0.85);
             font-family: 'Courier New', Courier, monospace;
-            font-size: 11px;
+            font-size: 12px;
+            line-height: 1.6;
             white-space: pre-wrap;
             display: flex;
             flex-direction: column;
-            gap: 0.25rem;
+            gap: 0.35rem;
         }
 
-        /* Dots */
-        .dot-running { background: #4a9eff; animation: pulse 2.4s infinite; }
-        .dot-done { background: var(--gold); }
-        .dot-queue { background: var(--ghost); }
-        .dot-failed { background: #c94a4a; }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.4; }
-            100% { opacity: 1; }
-        }
-
-        /* Library Clips */
+        /* Library Grid and Cards */
         .clips-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 2rem;
         }
 
         .clip-card {
             background: var(--ink3);
             border: 1px solid var(--wire);
+            border-radius: 12px;
             display: flex;
             flex-direction: column;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            overflow: hidden;
         }
 
         .clip-card:hover {
             border-color: var(--gold);
-            transform: translateY(-4px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            transform: translateY(-5px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 15px var(--gold-glow);
         }
 
         .clip-preview-placeholder {
             width: 100%;
-            height: 280px;
+            height: 290px;
             background: var(--ink);
             position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
             border-bottom: 1px solid var(--wire);
+            transition: transform 0.3s ease;
         }
 
         .clip-overlay-play {
-            width: 40px;
-            height: 40px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
-            background: var(--wire);
-            color: var(--smoke);
+            background: rgba(223, 178, 63, 0.15);
+            color: var(--gold2);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            border: 1px solid var(--ash);
+            border: 1px solid var(--gold);
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px var(--gold-glow);
         }
 
         .clip-overlay-play:hover {
-            border-color: var(--gold);
-            color: var(--gold);
+            background: var(--gold);
+            color: var(--ink);
+            transform: scale(1.1);
         }
 
         .clip-card-info {
-            padding: 1rem;
+            padding: 1.2rem;
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.65rem;
         }
 
         .clip-card-name {
-            font-size: 14px;
-            height: 2.5rem;
+            font-size: 13px;
+            font-weight: 600;
+            height: 2.4rem;
             overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            color: var(--smoke);
         }
 
         .clip-meta-row {
             display: flex;
             justify-content: space-between;
             color: var(--ghost);
-            font-family: var(--font-ui);
-            font-size: 9px;
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: 500;
         }
 
         .clip-publish-actions {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.5rem;
             border-top: 1px solid var(--wire);
-            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.01);
         }
 
-        /* Modal */
+        /* Modal styling */
         .modal {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(10, 10, 11, 0.95);
+            background: rgba(4, 5, 10, 0.95);
+            backdrop-filter: blur(10px);
             z-index: 1000;
             display: flex;
             align-items: center;
             justify-content: center;
             opacity: 0;
             pointer-events: none;
+            transition: opacity 0.3s ease;
         }
 
         .modal.active {
@@ -646,14 +769,23 @@
         .modal-content {
             background: var(--ink2);
             border: 1px solid var(--wire);
-            width: 420px;
+            border-radius: 16px;
+            width: 440px;
             max-width: 90vw;
             display: flex;
             flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            overflow: hidden;
+            animation: modalSlide 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        @keyframes modalSlide {
+            from { transform: translateY(30px) scale(0.95); }
+            to { transform: translateY(0) scale(1); }
         }
 
         .modal-header {
-            padding: 1rem 1.5rem;
+            padding: 1.25rem 1.75rem;
             border-bottom: 1px solid var(--wire);
             display: flex;
             justify-content: space-between;
@@ -664,25 +796,228 @@
             background: none;
             border: none;
             color: var(--ghost);
-            font-size: 1.25rem;
+            font-size: 1.75rem;
             cursor: pointer;
+            line-height: 1;
+            transition: color 0.2s;
         }
         .modal-close:hover { color: var(--smoke); }
 
         .modal-body {
             padding: 1.5rem;
             background: var(--ink);
+            display: flex;
+            justify-content: center;
+        }
+
+        .btn-red {
+            border-color: #ff2255;
+            color: #ff2255;
+            background: linear-gradient(135deg, rgba(255, 34, 85, 0.05), rgba(255, 0, 50, 0.05));
+        }
+
+        .btn-red:hover {
+            border-color: var(--gold);
+            color: var(--gold2);
+            box-shadow: 0 6px 20px rgba(255, 34, 85, 0.35);
+        }
+
+        /* Phone Mockup Frame */
+        .phone-frame {
+            position: relative;
+            width: 304px;
+            height: 540px;
+            border-radius: 36px;
+            border: 8px solid #1a1a24;
+            box-shadow: 0 0 0 4px #2e2e3f, 0 25px 50px rgba(0,0,0,0.6);
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .phone-notch {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 110px;
+            height: 24px;
+            background: #1a1a24;
+            border-radius: 12px;
+            z-index: 10;
         }
 
         .modal-body video {
             width: 100%;
-            height: 520px;
+            height: 100%;
             object-fit: cover;
             outline: none;
+            border: none;
+            border-radius: 28px;
+        }
+
+        .phone-overlay-hud {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 5;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 16px;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        }
+
+        /* HUD controls on the right */
+        .hud-right-controls {
+            position: absolute;
+            right: 10px;
+            bottom: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            pointer-events: auto;
+        }
+
+        .hud-profile-pic {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .hud-profile-pic img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .hud-plus-badge {
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff2255;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hud-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 11px;
+            gap: 4px;
+        }
+
+        .hud-item i {
+            font-size: 22px;
+            color: #ffffff;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .hud-item i:hover {
+            transform: scale(1.15);
+        }
+
+        .hud-music-disc {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #333 30%, #111 80%);
+            border: 4px solid #222;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: spin 3s linear infinite;
+            margin-top: 8px;
+        }
+
+        .hud-music-disc i {
+            font-size: 12px;
+            color: #ffffff;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* HUD Bottom details */
+        .hud-bottom-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 80%;
+            margin-bottom: 12px;
+            pointer-events: auto;
+            text-align: left;
+        }
+
+        .hud-channel-tag {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hud-small-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .hud-channel-tag span {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .btn-hud-subscribe {
+            background: #ffffff;
+            color: #000000;
+            border: none;
+            border-radius: 12px;
+            padding: 3px 10px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .hud-caption {
+            font-size: 12px;
+            line-height: 1.4;
+            max-height: 48px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: normal;
+        }
+
+        .hud-soundtrack {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            opacity: 0.9;
         }
 
         .modal-footer {
-            padding: 1rem 1.5rem;
+            padding: 1.25rem 1.75rem;
             border-top: 1px solid var(--wire);
             display: flex;
             justify-content: flex-end;
@@ -690,16 +1025,15 @@
         }
 
         @keyframes slideFadeIn {
-            from { opacity: 0; transform: translateY(15px); }
+            from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         .app-view { display: none; }
         .app-view.active { 
             display: block; 
-            animation: slideFadeIn 0.4s ease-out forwards;
+            animation: slideFadeIn 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
         }
-
     </style>
 </head>
 <body>
@@ -713,7 +1047,7 @@
                 </div>
                 <div class="brand-name">
                     <span style="color: var(--gold); font-weight: 900; letter-spacing: 0.05em;">SHORTS</span>
-                    <span style="color: var(--pink); font-weight: 900; letter-spacing: 0.05em;">CLIPPER</span>
+                    <span style="color: var(--cyan); font-weight: 900; letter-spacing: 0.05em;">CLIPPER</span>
                 </div>
             </div>
             
@@ -776,7 +1110,7 @@
                         <div class="stat-label">Total Clips Rendered</div>
                         <div class="stat-value" id="stat-total-clips">0</div>
                     </div>
-                    <div class="stat-icon stat-pink">
+                    <div class="stat-icon stat-cyan">
                         </div>
                 </div>
                 <div class="stat-card">
@@ -830,6 +1164,13 @@
                 </div>
             </div>
             
+            <!-- Active Task Cancel Container -->
+            <div id="active-job-cancel-container" style="display: none; justify-content: flex-end; margin-top: -1.75rem; margin-bottom: 2rem;">
+                <button class="btn btn-red btn-mini" id="btn-cancel-job" onclick="cancelCurrentJob()" style="display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-circle-stop"></i> Cancel Active Task
+                </button>
+            </div>
+            
             <!-- VIEW: AUTOPILOT -->
             <div id="view-autopilot" class="app-view active">
                 <div class="glass-panel">
@@ -872,7 +1213,7 @@
                         </div>
                     </div>
                     
-                    <button class="btn btn-pink" onclick="launchAutopilot()">LAUNCH AUTOPILOT PIPELINE</button>
+                    <button class="btn btn-cyan" onclick="launchAutopilot()">LAUNCH AUTOPILOT PIPELINE</button>
                 </div>
             </div>
             
@@ -900,7 +1241,7 @@
                         
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
                             <h3 style="font-size:1.05rem; ">Gemini Highlight Candidates</h3>
-                            <button class="btn btn-mini btn-pink" onclick="generateHighlights()">DISCOVER HIGH-IMPACT CLIPS</button>
+                            <button class="btn btn-mini btn-cyan" onclick="generateHighlights()">DISCOVER HIGH-IMPACT CLIPS</button>
                         </div>
                         
                         <table class="highlights-table" id="highlights-table-container">
@@ -1003,13 +1344,21 @@
                             <label for="set-age-days">Max Search Video Age (Days)</label>
                             <input type="number" id="set-age-days" value="90">
                         </div>
+                        <div class="form-group">
+                            <label for="set-subtitle-style">Burnt-In Subtitle Style</label>
+                            <select id="set-subtitle-style">
+                                <option value="default">Default (Clean Cyberpunk Neon)</option>
+                                <option value="mrbeast">MrBeast Pop (Bold Impact Yellow)</option>
+                                <option value="minimal">Minimalist Capsule (Solid White Boxed)</option>
+                            </select>
+                        </div>
                         <div class="form-group" style="flex-direction:row; align-items:center; gap:1rem; padding-top:1.5rem;">
                             <input type="checkbox" id="set-enable-gpu" style="width:20px; height:20px;">
                             <label for="set-enable-gpu">Enable GPU Acceleration (NVENC/CUDA)</label>
                         </div>
                     </div>
                     
-                    <button class="btn btn-pink" onclick="saveSettings()">SAVE CONFIGURATION</button>
+                    <button class="btn btn-cyan" onclick="saveSettings()">SAVE CONFIGURATION</button>
                 </div>
             </div>
             
@@ -1045,11 +1394,58 @@
                 <button class="modal-close" onclick="closeVideoModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <video id="modal-video-player" controls></video>
+                <div class="phone-frame">
+                    <div class="phone-notch"></div>
+                    <video id="modal-video-player" controls></video>
+                    <div class="phone-overlay-hud">
+                        <!-- Right HUD Controls -->
+                        <div class="hud-right-controls">
+                            <div class="hud-profile-pic">
+                                <img src="https://api.dicebear.com/7.x/identicon/svg?seed=creator" alt="Avatar">
+                                <div class="hud-plus-badge">+</div>
+                            </div>
+                            <div class="hud-item">
+                                <i class="fa-solid fa-heart"></i>
+                                <span>12.4K</span>
+                            </div>
+                            <div class="hud-item">
+                                <i class="fa-solid fa-comment"></i>
+                                <span>856</span>
+                            </div>
+                            <div class="hud-item">
+                                <i class="fa-solid fa-share"></i>
+                                <span>Share</span>
+                            </div>
+                            <div class="hud-item">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span>Remix</span>
+                            </div>
+                            <div class="hud-music-disc">
+                                <i class="fa-solid fa-music"></i>
+                            </div>
+                        </div>
+                        
+                        <!-- Bottom HUD details -->
+                        <div class="hud-bottom-details">
+                            <div class="hud-channel-tag">
+                                <img src="https://api.dicebear.com/7.x/identicon/svg?seed=creator" alt="Avatar" class="hud-small-avatar">
+                                <span>@vanguard_clipper</span>
+                                <button class="btn-hud-subscribe">Subscribe</button>
+                            </div>
+                            <div class="hud-caption" id="hud-clip-caption">
+                                Viral clip title goes here... #viral #shorts
+                            </div>
+                            <div class="hud-soundtrack">
+                                <i class="fa-solid fa-music" style="font-size: 9px;"></i>
+                                <span>Original Sound - vanguard_clipper</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-mini" onclick="closeVideoModal()">Close</button>
-                <a id="modal-video-download" href="#" download class="btn btn-pink btn-mini">Download</a>
+                <a id="modal-video-download" href="#" download class="btn btn-cyan btn-mini">Download</a>
             </div>
         </div>
     </div>
@@ -1104,7 +1500,9 @@
                         term.appendChild(row);
                         
                         // Dynamically update progress status pipeline bar badges based on logs
-                        updatePipelineProgress(line);
+                        if (activeJobPollInterval !== null) {
+                            updatePipelineProgress(line);
+                        }
                     });
                     term.scrollTop = term.scrollHeight;
                 }
@@ -1123,8 +1521,25 @@
             };
         }
 
-        // Parse logs in real-time to update the pipeline status visually
-        function updatePipelineProgress(logLine) {
+        let currentProgressPct = 0;
+
+        function resetPipelineProgress() {
+            currentProgressPct = 0;
+            document.querySelectorAll('.stage-step').forEach(step => {
+                step.className = 'stage-step';
+            });
+            document.querySelectorAll('.pipeline-bar').forEach(bar => {
+                bar.className = 'pipeline-bar';
+            });
+            document.getElementById('step-idle').classList.add('active');
+        }
+
+        // Set the active stage of the pipeline based on percentage
+        function setPipelineProgress(pct) {
+            if (pct > currentProgressPct) {
+                currentProgressPct = pct;
+            }
+
             const stepIdle = document.getElementById('step-idle');
             const stepScouting = document.getElementById('step-scouting');
             const stepDownloading = document.getElementById('step-downloading');
@@ -1138,48 +1553,21 @@
             const barRendering = document.getElementById('bar-rendering');
             const barPublishing = document.getElementById('bar-publishing');
 
-            if (logLine.includes('AUTOPILOT MODE: Scouting') || logLine.includes('🚀 ADVANCED VIRAL SCOUT')) {
-                resetPipelineProgress();
-                stepIdle.className = 'stage-step done';
-                barScouting.className = 'pipeline-bar active';
-                stepScouting.className = 'stage-step active';
-            } else if (logLine.includes('⬇ Downloading') || logLine.includes('DOWNLOADING') || logLine.includes('rough_audio.m4a')) {
-                stepIdle.className = 'stage-step done';
-                stepScouting.className = 'stage-step done';
-                barScouting.className = 'pipeline-bar done';
-                barDownloading.className = 'pipeline-bar active';
-                stepDownloading.className = 'stage-step active';
-            } else if (logLine.includes('Running Whisper') || logLine.includes('🎙 Transcribing') || logLine.includes('Transcribing audio sample')) {
-                stepIdle.className = 'stage-step done';
-                stepScouting.className = 'stage-step done';
-                barScouting.className = 'pipeline-bar done';
-                stepDownloading.className = 'stage-step done';
-                barDownloading.className = 'pipeline-bar done';
-                barTranscribing.className = 'pipeline-bar active';
-                stepTranscribing.className = 'stage-step active';
-            } else if (logLine.includes('VERTICAL CROP') || logLine.includes('BURNING SUBTITLES') || logLine.includes('Burning subtitles') || logLine.includes('Cropping to vertical')) {
-                stepIdle.className = 'stage-step done';
-                stepScouting.className = 'stage-step done';
-                barScouting.className = 'pipeline-bar done';
-                stepDownloading.className = 'stage-step done';
-                barDownloading.className = 'pipeline-bar done';
-                stepTranscribing.className = 'stage-step done';
-                barTranscribing.className = 'pipeline-bar done';
-                barRendering.className = 'pipeline-bar active';
-                stepRendering.className = 'stage-step active';
-            } else if (logLine.includes('Uploading') || logLine.includes('Publishing') || logLine.includes('Uploading Clip')) {
-                stepIdle.className = 'stage-step done';
-                stepScouting.className = 'stage-step done';
-                barScouting.className = 'pipeline-bar done';
-                stepDownloading.className = 'stage-step done';
-                barDownloading.className = 'pipeline-bar done';
-                stepTranscribing.className = 'stage-step done';
-                barTranscribing.className = 'pipeline-bar done';
-                stepRendering.className = 'stage-step done';
-                barRendering.className = 'pipeline-bar done';
-                barPublishing.className = 'pipeline-bar active';
-                stepPublishing.className = 'stage-step active';
-            } else if (logLine.includes('SUCCESS —') || logLine.includes('READY') || logLine.includes('uploaded to YouTube successfully') || logLine.includes('✅ Custom rendered clip ready')) {
+            // Reset classes
+            stepIdle.className = 'stage-step';
+            stepScouting.className = 'stage-step';
+            stepDownloading.className = 'stage-step';
+            stepTranscribing.className = 'stage-step';
+            stepRendering.className = 'stage-step';
+            stepPublishing.className = 'stage-step';
+
+            barScouting.className = 'pipeline-bar';
+            barDownloading.className = 'pipeline-bar';
+            barTranscribing.className = 'pipeline-bar';
+            barRendering.className = 'pipeline-bar';
+            barPublishing.className = 'pipeline-bar';
+
+            if (currentProgressPct >= 100) {
                 stepIdle.className = 'stage-step done';
                 stepScouting.className = 'stage-step done';
                 barScouting.className = 'pipeline-bar done';
@@ -1191,6 +1579,65 @@
                 barRendering.className = 'pipeline-bar done';
                 stepPublishing.className = 'stage-step done';
                 barPublishing.className = 'pipeline-bar done';
+            } else if (currentProgressPct >= 95) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                stepDownloading.className = 'stage-step done';
+                barDownloading.className = 'pipeline-bar done';
+                stepTranscribing.className = 'stage-step done';
+                barTranscribing.className = 'pipeline-bar done';
+                stepRendering.className = 'stage-step done';
+                barRendering.className = 'pipeline-bar done';
+                barPublishing.className = 'pipeline-bar active';
+                stepPublishing.className = 'stage-step active';
+            } else if (currentProgressPct >= 70) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                stepDownloading.className = 'stage-step done';
+                barDownloading.className = 'pipeline-bar done';
+                stepTranscribing.className = 'stage-step done';
+                barTranscribing.className = 'pipeline-bar done';
+                barRendering.className = 'pipeline-bar active';
+                stepRendering.className = 'stage-step active';
+            } else if (currentProgressPct >= 50) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                stepDownloading.className = 'stage-step done';
+                barDownloading.className = 'pipeline-bar done';
+                barTranscribing.className = 'pipeline-bar active';
+                stepTranscribing.className = 'stage-step active';
+            } else if (currentProgressPct >= 30) {
+                stepIdle.className = 'stage-step done';
+                stepScouting.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar done';
+                barDownloading.className = 'pipeline-bar active';
+                stepDownloading.className = 'stage-step active';
+            } else if (currentProgressPct >= 5) {
+                stepIdle.className = 'stage-step done';
+                barScouting.className = 'pipeline-bar active';
+                stepScouting.className = 'stage-step active';
+            } else {
+                stepIdle.className = 'stage-step active';
+            }
+        }
+
+        // Parse logs in real-time to update the pipeline status visually
+        function updatePipelineProgress(logLine) {
+            if (logLine.includes('AUTOPILOT MODE: Scouting') || logLine.includes('🚀 ADVANCED VIRAL SCOUT')) {
+                setPipelineProgress(5);
+            } else if (logLine.includes('⬇ Downloading') || logLine.includes('DOWNLOADING') || logLine.includes('rough_audio.m4a')) {
+                setPipelineProgress(30);
+            } else if (logLine.includes('Running Whisper') || logLine.includes('🎙 Transcribing') || logLine.includes('Transcribing audio sample')) {
+                setPipelineProgress(50);
+            } else if (logLine.includes('VERTICAL CROP') || logLine.includes('BURNING SUBTITLES') || logLine.includes('Burning subtitles') || logLine.includes('Cropping to vertical')) {
+                setPipelineProgress(70);
+            } else if (logLine.includes('Uploading') || logLine.includes('Publishing') || logLine.includes('Uploading Clip')) {
+                setPipelineProgress(95);
+            } else if (logLine.includes('SUCCESS —') || logLine.includes('READY') || logLine.includes('uploaded to YouTube successfully') || logLine.includes('✅ Custom rendered clip ready')) {
+                setPipelineProgress(100);
                 
                 // Immediately refresh library to show the new clip
                 refreshLibrary();
@@ -1199,16 +1646,6 @@
                     resetPipelineProgress();
                 }, 12000);
             }
-        }
-
-        function resetPipelineProgress() {
-            document.querySelectorAll('.stage-step').forEach(step => {
-                step.className = 'stage-step';
-            });
-            document.querySelectorAll('.pipeline-bar').forEach(bar => {
-                bar.className = 'pipeline-bar';
-            });
-            document.getElementById('step-idle').classList.add('active');
         }
 
         // Fetch server system config values and settings
@@ -1224,6 +1661,7 @@
                 document.getElementById('set-video-codec').value = data.video_codec;
                 document.getElementById('set-video-preset').value = data.video_preset;
                 document.getElementById('set-age-days').value = data.scout_max_age_days;
+                document.getElementById('set-subtitle-style').value = data.subtitle_style || "default";
                 document.getElementById('set-enable-gpu').checked = data.enable_gpu;
                 
                 // Update system statuses visually in navigation sidebar status box
@@ -1244,7 +1682,8 @@
                 video_codec: document.getElementById('set-video-codec').value,
                 video_preset: document.getElementById('set-video-preset').value,
                 scout_max_age_days: parseInt(document.getElementById('set-age-days').value),
-                enable_gpu: document.getElementById('set-enable-gpu').checked
+                enable_gpu: document.getElementById('set-enable-gpu').checked,
+                subtitle_style: document.getElementById('set-subtitle-style').value
             };
             
             try {
@@ -1263,6 +1702,44 @@
 
         // Autopilot controls
         let activeJobPollInterval = null;
+        let activeJobId = null;
+
+        async function cancelCurrentJob() {
+            if (!activeJobId) return;
+            if (!confirm("Are you sure you want to cancel the active task? This will terminate all rendering processes immediately.")) return;
+            
+            const btn = document.getElementById('btn-cancel-job');
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Cancelling...`;
+            
+            try {
+                const res = await fetch(`/api/jobs/${activeJobId}/cancel`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.detail || "Cancellation failed");
+                }
+                const data = await res.json();
+                console.log("Cancel request sent:", data);
+                
+                // Clear interval immediately and reset progress
+                if (activeJobPollInterval) {
+                    clearInterval(activeJobPollInterval);
+                    activeJobPollInterval = null;
+                }
+                activeJobId = null;
+                document.getElementById('active-job-cancel-container').style.display = 'none';
+                resetPipelineProgress();
+                alert("Task cancellation triggered successfully.");
+            } catch (err) {
+                alert("Failed to cancel job: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
+        }
         
         function toggleCustomNicheInput(val) {
             const container = document.getElementById('custom-niche-container');
@@ -1307,11 +1784,12 @@
         function trackJobProgress(jobId) {
             if (activeJobPollInterval) clearInterval(activeJobPollInterval);
             
-            // Switch progress pipeline to Scouting phase
+            activeJobId = jobId;
+            document.getElementById('active-job-cancel-container').style.display = 'flex';
+            
+            // Clear previous progress and set starting phase immediately
             resetPipelineProgress();
-            document.getElementById('step-idle').className = 'stage-step done';
-            document.getElementById('bar-scouting').className = 'pipeline-bar active';
-            document.getElementById('step-scouting').className = 'stage-step active';
+            setPipelineProgress(5);
             
             activeJobPollInterval = setInterval(async () => {
                 try {
@@ -1319,79 +1797,15 @@
                     if (!res.ok) return;
                     const job = await res.json();
                     
-                    const stepIdle = document.getElementById('step-idle');
-                    const stepScouting = document.getElementById('step-scouting');
-                    const stepDownloading = document.getElementById('step-downloading');
-                    const stepTranscribing = document.getElementById('step-transcribing');
-                    const stepRendering = document.getElementById('step-rendering');
-                    const stepPublishing = document.getElementById('step-publishing');
-                    
-                    const barScouting = document.getElementById('bar-scouting');
-                    const barDownloading = document.getElementById('bar-downloading');
-                    const barTranscribing = document.getElementById('bar-transcribing');
-                    const barRendering = document.getElementById('bar-rendering');
-                    const barPublishing = document.getElementById('bar-publishing');
-                    
-                    const progress = job.progress || 0;
-                    
                     if (job.status === 'running') {
-                        if (progress <= 15) {
-                            stepIdle.className = 'stage-step done';
-                            barScouting.className = 'pipeline-bar active';
-                            stepScouting.className = 'stage-step active';
-                        } else if (progress <= 35) {
-                            stepIdle.className = 'stage-step done';
-                            stepScouting.className = 'stage-step done';
-                            barScouting.className = 'pipeline-bar done';
-                            barDownloading.className = 'pipeline-bar active';
-                            stepDownloading.className = 'stage-step active';
-                        } else if (progress <= 55) {
-                            stepIdle.className = 'stage-step done';
-                            stepScouting.className = 'stage-step done';
-                            barScouting.className = 'pipeline-bar done';
-                            stepDownloading.className = 'stage-step done';
-                            barDownloading.className = 'pipeline-bar done';
-                            barTranscribing.className = 'pipeline-bar active';
-                            stepTranscribing.className = 'stage-step active';
-                        } else if (progress <= 75) {
-                            stepIdle.className = 'stage-step done';
-                            stepScouting.className = 'stage-step done';
-                            barScouting.className = 'pipeline-bar done';
-                            stepDownloading.className = 'stage-step done';
-                            barDownloading.className = 'pipeline-bar done';
-                            stepTranscribing.className = 'stage-step done';
-                            barTranscribing.className = 'pipeline-bar done';
-                            barRendering.className = 'pipeline-bar active';
-                            stepRendering.className = 'stage-step active';
-                        } else {
-                            stepIdle.className = 'stage-step done';
-                            stepScouting.className = 'stage-step done';
-                            barScouting.className = 'pipeline-bar done';
-                            stepDownloading.className = 'stage-step done';
-                            barDownloading.className = 'pipeline-bar done';
-                            stepTranscribing.className = 'stage-step done';
-                            barTranscribing.className = 'pipeline-bar done';
-                            stepRendering.className = 'stage-step done';
-                            barRendering.className = 'pipeline-bar done';
-                            barPublishing.className = 'pipeline-bar active';
-                            stepPublishing.className = 'stage-step active';
-                        }
+                        setPipelineProgress(job.progress || 5);
                     } else if (job.status === 'done') {
                         clearInterval(activeJobPollInterval);
                         activeJobPollInterval = null;
+                        activeJobId = null;
+                        document.getElementById('active-job-cancel-container').style.display = 'none';
                         
-                        stepIdle.className = 'stage-step done';
-                        stepScouting.className = 'stage-step done';
-                        barScouting.className = 'pipeline-bar done';
-                        stepDownloading.className = 'stage-step done';
-                        barDownloading.className = 'pipeline-bar done';
-                        stepTranscribing.className = 'stage-step done';
-                        barTranscribing.className = 'pipeline-bar done';
-                        stepRendering.className = 'stage-step done';
-                        barRendering.className = 'pipeline-bar done';
-                        stepPublishing.className = 'stage-step done';
-                        barPublishing.className = 'pipeline-bar done';
-                        
+                        setPipelineProgress(100);
                         refreshLibrary();
                         
                         setTimeout(() => {
@@ -1400,8 +1814,18 @@
                     } else if (job.status === 'failed') {
                         clearInterval(activeJobPollInterval);
                         activeJobPollInterval = null;
+                        activeJobId = null;
+                        document.getElementById('active-job-cancel-container').style.display = 'none';
                         
                         alert("Clipper Job failed: " + (job.error || "Unknown error"));
+                        resetPipelineProgress();
+                    } else if (job.status === 'cancelled') {
+                        clearInterval(activeJobPollInterval);
+                        activeJobPollInterval = null;
+                        activeJobId = null;
+                        document.getElementById('active-job-cancel-container').style.display = 'none';
+                        
+                        alert("Clipper Job was cancelled.");
                         resetPipelineProgress();
                     }
                 } catch (e) {
@@ -1699,7 +2123,7 @@
                             </div>
                             <div style="color: var(--smoke); font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${titleText}</div>
                             <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; margin-bottom: 0.6rem; border: 1px solid var(--wire);">
-                                <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, var(--gold), var(--pink)); transition: width 0.4s ease-out; box-shadow: 0 0 8px var(--gold);"></div>
+                                <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, var(--gold), var(--cyan)); transition: width 0.4s ease-out; box-shadow: 0 0 8px var(--gold);"></div>
                             </div>
                             <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--ghost); font-family: monospace;">
                                 <span>Size: ${(size / (1024*1024)).toFixed(1)} MB</span>
@@ -1812,7 +2236,7 @@
                                        onfocus="this.style.borderColor='var(--gold)'; this.style.background='var(--ink)';"
                                        onblur="this.style.borderColor='var(--wire)'; this.style.background='rgba(255,255,255,0.03)';"
                                        placeholder="Enter viral title #shorts" />
-                                <button class="btn btn-mini" onclick="autoGenTitle('${clip.name}', this)" style="padding: 0 8px; border-color: var(--pink); color: var(--pink); display: flex; align-items: center; justify-content: center;" title="Auto-Generate Viral Title using Gemini AI"><i class="fa-solid fa-sparkles"></i></button>
+                                <button class="btn btn-mini" onclick="autoGenTitle('${clip.name}', this)" style="padding: 0 8px; border-color: var(--cyan); color: var(--cyan); display: flex; align-items: center; justify-content: center;" title="Auto-Generate Viral Title using Gemini AI"><i class="fa-solid fa-sparkles"></i></button>
                             </div>
                             <div class="clip-meta-row" style="font-size: 0.75rem;">
                                 <span>${formatSize(clip.size)}</span>
@@ -1878,7 +2302,7 @@
                         input.value = data.title;
                     }
                     // Color pop feedback!
-                    input.style.borderColor = 'var(--pink)';
+                    input.style.borderColor = 'var(--cyan)';
                     setTimeout(() => { input.style.borderColor = 'var(--wire)'; }, 1000);
                 } else {
                     const data = await res.json();
@@ -1903,6 +2327,10 @@
             player.src = path;
             download.href = path;
             
+            // Format name for overlay HUD caption: remove extension, replace underscores with spaces
+            let formattedName = name.replace(/\.mp4$/i, '').replace(/_/g, ' ');
+            document.getElementById('hud-clip-caption').textContent = formattedName + " #shorts #viral";
+            
             modal.classList.add('active');
             player.play();
         }
@@ -1921,6 +2349,16 @@
             fetchSettings();
             checkYouTubeStatus();
             refreshLibrary();
+            
+            // Check if there is an active running job from a previous session/refresh
+            fetch('/api/jobs?status=running')
+                .then(res => res.json())
+                .then(jobs => {
+                    if (jobs && jobs.length > 0) {
+                        console.log("Resuming active background job tracking:", jobs[0].id);
+                        trackJobProgress(jobs[0].id);
+                    }
+                }).catch(err => console.error("Error checking active jobs:", err));
             
             // Periodically refresh the stats counts & library status
             setInterval(() => {

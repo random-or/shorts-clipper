@@ -572,15 +572,8 @@ def get_trending_link(
         if not trending_kws:
             trending_kws = TRENDING_TOPICS_FALLBACK
 
-        # 2. Get current date/time context
-        now = datetime.now()
-        year_str = now.strftime("%Y")
-        month_str = now.strftime("%B")
-        day_str = now.strftime("%A")
-        week_str = f"week {now.isocalendar()[1]}"
-
-        # Define 5 premium queries with time context & trending keyword injection
-        # to ensure results are completely fresh and relevant.
+        # Define 5 premium queries with trending keyword injection
+        # to ensure results are fresh and relevant, without restricting text matching with calendar dates.
         global _NICHE_ROTATION_INDEX
         idx = _NICHE_ROTATION_INDEX
 
@@ -591,11 +584,11 @@ def get_trending_link(
         kw5 = trending_kws[(idx + 4) % len(trending_kws)]
 
         base_queries = [
-            f"ytsearch5:viral {niche} {kw1} english {day_str} today",
-            f"ytsearch5:best {niche} {kw2} highlights english this week {week_str}",
-            f"ytsearch5:insane {niche} {kw3} moment english {month_str} {year_str}",
-            f"ytsearch5:heated {niche} {kw4} debate english this month {year_str}",
-            f"ytsearch5:shocking {niche} {kw5} revelation english {year_str} new",
+            f"ytsearch5:viral {niche} {kw1} english",
+            f"ytsearch5:best {niche} {kw2} highlights english",
+            f"ytsearch5:insane {niche} {kw3} moment english",
+            f"ytsearch5:heated {niche} {kw4} debate english",
+            f"ytsearch5:shocking {niche} {kw5} english",
         ]
 
         # Rotate the order of queries based on rotation index
@@ -603,7 +596,7 @@ def get_trending_link(
         fixed_queries = base_queries[idx_rot:] + base_queries[:idx_rot]
         _NICHE_ROTATION_INDEX += 1
         log.info(
-            "📢 Niche mode (with trending & time context) enabled."
+            "📢 Niche mode (with trending context) enabled."
             " Target niche: %s (rotated start index: %d)",
             niche,
             idx_rot,
@@ -611,11 +604,11 @@ def get_trending_link(
     elif keyword:
         fixed_queries = [
             f"ytsearch5:{keyword}",
-            f"scsearch5:{keyword}",
-            f"gvsearch5:{keyword}",
-            f"yvsearch5:{keyword}",
+            f"ytsearch5:viral {keyword}",
+            f"ytsearch5:best {keyword} moments",
+            f"ytsearch5:insane {keyword}",
         ]
-        log.info("📢 Keyword mode enabled. Target: %s (across multiple platforms)", keyword)
+        log.info("📢 Keyword mode enabled. Target: %s", keyword)
 
     available_pools = list(TREND_POOLS.keys())
     pools_to_search = (

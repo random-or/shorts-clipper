@@ -46,6 +46,7 @@ class Settings:
     video_codec: str = "libx264"
     video_preset: str = "ultrafast"
     scout_max_age_days: int = 90
+    subtitle_style: str = "default"
 
     @classmethod
     def from_env(cls, env_path: str | Path = ".env") -> Settings:
@@ -78,6 +79,7 @@ class Settings:
         )
 
         scout_max_age_days = int(_env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90")
+        subtitle_style = _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
 
         return cls(
             gemini_api_key=_env("GEMINI_API_KEY", file_values),
@@ -100,4 +102,5 @@ class Settings:
             video_codec=video_codec,
             video_preset=video_preset,
             scout_max_age_days=scout_max_age_days,
+            subtitle_style=subtitle_style,
         )

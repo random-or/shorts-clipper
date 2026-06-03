@@ -10,6 +10,9 @@ import json
 import logging
 import queue
 import tempfile
+import subprocess
+import threading
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -67,6 +70,49 @@ sse_handler = SSELogHandler()
 sse_formatter = logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
 sse_handler.setFormatter(sse_formatter)
 logger.addHandler(sse_handler)
+
+# ContextVar to track the job ID for the current background task thread
+active_job_id: ContextVar[str | None] = ContextVar("active_job_id", default=None)
+
+# Registry mapping job_id -> list of active subprocess Popen objects
+_proc_lock = threading.Lock()
+_active_processes: dict[str, list[subprocess.Popen]] = {}
+
+# Intercept subprocess.Popen creation to automatically register processes for active jobs
+_original_popen_init = subprocess.Popen.__init__
+
+def _tracked_popen_init(self, *args, **kwargs):
+    _original_popen_init(self, *args, **kwargs)
+    job_id = active_job_id.get()
+    if job_id:
+        with _proc_lock:
+            if job_id not in _active_processes:
+                _active_processes[job_id] = []
+            _active_processes[job_id].append(self)
+            logger.info("Registered subprocess PID %s for active job %s", self.pid, job_id)
+
+subprocess.Popen.__init__ = _tracked_popen_init
+
+def cancel_job(job_id: str) -> None:
+    """Terminate and kill all active subprocesses registered for a job, and mark it cancelled."""
+    _job_queue.update_status(job_id, JobStatus.CANCELLED, error="Job cancelled by user.")
+    with _proc_lock:
+        procs = _active_processes.pop(job_id, [])
+
+    logger.info("Cancelling job %s: terminating %d processes", job_id, len(procs))
+    for proc in procs:
+        try:
+            logger.info("Terminating subprocess PID %s...", proc.pid)
+            proc.terminate()
+        except OSError:
+            pass
+
+    # Give them a short time to terminate, then force kill
+    for proc in procs:
+        try:
+            proc.kill()
+        except OSError:
+            pass
 
 # Singletons — initialized once at import
 _job_queue = JobQueue()
@@ -128,6 +174,7 @@ class SettingsModel(BaseModel):
     video_preset: str = "ultrafast"
     scout_max_age_days: int = 90
     enable_gpu: bool = False
+    subtitle_style: str = "default"
 
 
 class FeedbackModel(BaseModel):
@@ -175,6 +222,19 @@ def delete_job(job_id: str) -> dict[str, str]:
     if _job_queue.delete(job_id):
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Job not found")
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_active_job(job_id: str) -> dict[str, str]:
+    """Cancel an active job and terminate its subprocesses."""
+    job = _job_queue.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status not in (JobStatus.PENDING, JobStatus.RUNNING):
+        return {"status": "ignored", "message": f"Job is in '{job.status}' state, cannot cancel."}
+
+    cancel_job(job_id)
+    return {"status": "cancelled", "message": f"Job {job_id} cancellation triggered."}
 
 
 # ---------------------------------------------------------------------------
@@ -640,6 +700,7 @@ def get_settings() -> SettingsModel:
         video_preset=s.video_preset,
         scout_max_age_days=s.scout_max_age_days,
         enable_gpu=s.enable_gpu,
+        subtitle_style=s.subtitle_style,
     )
 
 
@@ -657,6 +718,7 @@ def save_settings(payload: SettingsModel) -> dict[str, str]:
         env_lines.append(f"SHORTS_VIDEO_PRESET={payload.video_preset}")
         env_lines.append(f"SHORTS_SCOUT_MAX_AGE_DAYS={payload.scout_max_age_days}")
         env_lines.append(f"SHORTS_ENABLE_GPU={'true' if payload.enable_gpu else 'false'}")
+        env_lines.append(f"SHORTS_SUBTITLE_STYLE={payload.subtitle_style}")
 
         Path(".env").write_text("\n".join(env_lines), encoding="utf-8")
         return {"status": "success", "message": "Settings saved to .env file successfully."}
@@ -677,9 +739,13 @@ def trigger_autopilot(
     job = _job_queue.create("autopilot", payload.model_dump())
 
     def task_worker() -> None:
+        active_job_id.set(job.id)
         try:
             _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
             logger.info("🤖 Starting Autopilot background task (job %s)...", job.id)
+            def _prog(pct: int) -> None:
+                _job_queue.update_progress(job.id, pct)
+
             settings = Settings.from_env()
             result = run_autopilot(
                 settings=settings,
@@ -688,6 +754,7 @@ def trigger_autopilot(
                 keyword=payload.keyword,
                 count=payload.count,
                 upload=payload.upload,
+                progress_callback=_prog,
             )
             output_paths = []
             if result:
@@ -705,8 +772,15 @@ def trigger_autopilot(
             )
             logger.info("✅ Autopilot background task finished successfully!")
         except Exception as err:
-            logger.exception("❌ Autopilot background task failed")
-            _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
+            current_job = _job_queue.get(job.id)
+            if current_job and current_job.status == JobStatus.CANCELLED:
+                logger.info("Job %s was cancelled. Skipping failure status update.", job.id)
+            else:
+                logger.exception("❌ Autopilot background task failed")
+                _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
+        finally:
+            with _proc_lock:
+                _active_processes.pop(job.id, None)
 
     background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Autopilot pipeline triggered."}
@@ -718,6 +792,7 @@ def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) 
     job = _job_queue.create("clip", payload.model_dump())
 
     def task_worker() -> None:
+        active_job_id.set(job.id)
         try:
             _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
             logger.info(
@@ -726,7 +801,16 @@ def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) 
                 job.id,
             )
             settings = Settings.from_env()
-            result = run(payload.url, settings=settings, count=payload.count, upload=payload.upload)
+            def _prog(pct: int) -> None:
+                _job_queue.update_progress(job.id, pct)
+
+            result = run(
+                payload.url,
+                settings=settings,
+                count=payload.count,
+                upload=payload.upload,
+                progress_callback=_prog,
+            )
             output_paths = []
             if isinstance(result, list):
                 output_paths = [str(p) for p in result]
@@ -742,8 +826,15 @@ def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) 
             )
             logger.info("✅ Custom Clip background task finished successfully!")
         except Exception as err:
-            logger.exception("❌ Custom Clip background task failed")
-            _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
+            current_job = _job_queue.get(job.id)
+            if current_job and current_job.status == JobStatus.CANCELLED:
+                logger.info("Job %s was cancelled. Skipping failure status update.", job.id)
+            else:
+                logger.exception("❌ Custom Clip background task failed")
+                _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
+        finally:
+            with _proc_lock:
+                _active_processes.pop(job.id, None)
 
     background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Clipper pipeline triggered."}
@@ -822,6 +913,7 @@ def trigger_clip_render(
     job = _job_queue.create("render", payload.model_dump())
 
     def task_worker() -> None:
+        active_job_id.set(job.id)
         try:
             _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
             logger.info(
@@ -889,6 +981,7 @@ def trigger_clip_render(
                     pacing=1.15,
                     video_codec=settings.video_codec,
                     preset=settings.video_preset,
+                    style_name=settings.subtitle_style,
                 )
                 _job_queue.update_progress(job.id, 90)
 
@@ -937,8 +1030,15 @@ def trigger_clip_render(
                 )
                 logger.info("✅ Custom rendered clip ready at: %s", current_output_path)
         except Exception as err:
-            logger.exception("❌ Precision render task failed")
-            _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
+            current_job = _job_queue.get(job.id)
+            if current_job and current_job.status == JobStatus.CANCELLED:
+                logger.info("Job %s was cancelled. Skipping failure status update.", job.id)
+            else:
+                logger.exception("❌ Precision render task failed")
+                _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
+        finally:
+            with _proc_lock:
+                _active_processes.pop(job.id, None)
 
     background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Precision render task triggered."}

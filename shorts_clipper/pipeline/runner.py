@@ -13,6 +13,7 @@ so we never triple-encode the video.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import logging
 import tempfile
 from datetime import datetime
@@ -44,6 +45,7 @@ def run(
     output_path: Path | None = None,
     count: int = 1,
     upload: bool = False,
+    progress_callback: Callable[[int], None] | None = None,
 ) -> Path | list[Path]:
     """
     Run the full shorts clipping pipeline for a given YouTube URL.
@@ -79,6 +81,8 @@ def run(
         try:
             # ── PASS 1: ROUGH TRANSCRIPT FOR AI SELECTION ────────────────
             log.info("\n--- PASS 1: ROUGH TRANSCRIPT FOR AI SELECTION ---")
+            if progress_callback:
+                progress_callback(10)
             rough_segments = fetch_subtitles(url, work_path)
 
             if not rough_segments:
@@ -130,12 +134,16 @@ def run(
 
                 # ── PASS 2: PRECISION TRANSCRIPTION ───────────────────────
                 log.info("\n--- PASS 2: PRECISION TRANSCRIPTION ---")
+                if progress_callback:
+                    progress_callback(30)
                 download_clip(url, micro_path, start_time=window.start, end_time=window.end)
 
                 log.info(
                     "Running Whisper (%s) on micro-clip for word-level timing...",
                     settings.whisper_model,
                 )
+                if progress_callback:
+                    progress_callback(50)
                 precision_segments = transcribe_clip(
                     micro_path,
                     model_size=settings.whisper_model,
@@ -145,6 +153,8 @@ def run(
 
                 # ── Step 3: Vertical crop ─────────────────────────────────────
                 log.info("\n--- VERTICAL CROP ---")
+                if progress_callback:
+                    progress_callback(70)
                 cropped_path = clip_work_dir / "cropped.mp4"
                 process_to_vertical(
                     micro_path,
@@ -156,6 +166,8 @@ def run(
 
                 # ── Step 4: Burn subtitles + 1.15× pacing (single pass) ───────
                 log.info("\n--- BURNING SUBTITLES + PACING ---")
+                if progress_callback:
+                    progress_callback(85)
                 burn_subtitles(
                     cropped_path,
                     precision_segments,
@@ -164,6 +176,7 @@ def run(
                     pacing=1.15,
                     video_codec=settings.video_codec,
                     preset=settings.video_preset,
+                    style_name=settings.subtitle_style,
                 )
 
                 try:
@@ -207,6 +220,8 @@ def run(
                 log.info("✅ Clip %d ready at: %s", idx, current_output_path)
 
                 if upload:
+                    if progress_callback:
+                        progress_callback(95)
                     log.info("Uploading Clip %d to YouTube Shorts...", idx)
                     try:
                         meta["publish_status"] = "uploading"
@@ -260,6 +275,7 @@ def run_autopilot(
     keyword: str | None = None,
     count: int = 1,
     upload: bool = False,
+    progress_callback: Callable[[int], None] | None = None,
 ) -> Path | list[Path] | None:
     """
     Autopilot mode: scout a trending video, then run the full pipeline.
@@ -271,6 +287,9 @@ def run_autopilot(
         settings = Settings.from_env()
 
     log.info("🤖 AUTOPILOT MODE: Scouting trending content...")
+    if progress_callback:
+        progress_callback(5)
+
     url = get_trending_link(
         channel=channel,
         niche=niche,
@@ -281,4 +300,10 @@ def run_autopilot(
         log.error("Scout returned no suitable video. Aborting.")
         return None
 
-    return run(url, settings=settings, count=count, upload=upload)
+    return run(
+        url,
+        settings=settings,
+        count=count,
+        upload=upload,
+        progress_callback=progress_callback,
+    )

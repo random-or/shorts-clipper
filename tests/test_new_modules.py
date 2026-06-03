@@ -261,28 +261,22 @@ class ScoutQueryTests(unittest.TestCase):
     @patch("shorts_clipper.scout.trending._get_current_trending_keywords")
     @patch("shorts_clipper.scout.trending._scout_pool")
     def test_scout_by_niche_rotation(self, mock_scout_pool, mock_get_kws):
-        from datetime import datetime
-
         from shorts_clipper.scout.trending import get_trending_link
 
         mock_scout_pool.return_value = []
         mock_get_kws.return_value = ["podcast", "drama"]
 
-        now = datetime.now()
-        day_str = now.strftime("%A")
-        week_str = f"week {now.isocalendar()[1]}"
-
         # Call first time
         get_trending_link(niche="cooking", cache=False, max_retries=1)
         first_call_queries = [call.args[0] for call in mock_scout_pool.call_args_list]
-        expected = f"ytsearch5:viral cooking podcast english {day_str} today"
+        expected = "ytsearch5:viral cooking podcast english"
         self.assertIn(expected, first_call_queries)
 
         mock_scout_pool.reset_mock()
         # Call second time to ensure rotation index changed
         get_trending_link(niche="cooking", cache=False, max_retries=1)
         second_call_queries = [call.args[0] for call in mock_scout_pool.call_args_list]
-        expected = f"ytsearch5:best cooking podcast highlights english this week {week_str}"
+        expected = "ytsearch5:best cooking podcast highlights english"
         self.assertIn(expected, second_call_queries)
 
     @patch("shorts_clipper.scout.trending._scout_pool")
@@ -295,9 +289,9 @@ class ScoutQueryTests(unittest.TestCase):
         queries = [call.args[0] for call in mock_scout_pool.call_args_list]
 
         self.assertIn("ytsearch5:clash", queries)
-        self.assertIn("scsearch5:clash", queries)
-        self.assertIn("gvsearch5:clash", queries)
-        self.assertIn("yvsearch5:clash", queries)
+        self.assertIn("ytsearch5:viral clash", queries)
+        self.assertIn("ytsearch5:best clash moments", queries)
+        self.assertIn("ytsearch5:insane clash", queries)
 
     def test_is_suitable_rejects_low_resolution(self):
         from shorts_clipper.scout.trending import _is_suitable
