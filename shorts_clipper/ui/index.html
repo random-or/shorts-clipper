@@ -98,18 +98,82 @@
             min-height: 100vh;
         }
 
-        /* Sidebar */
+        /* Sidebar layout & transitions */
         .sidebar {
             width: 280px;
             background: var(--ink2);
             border-right: 1px solid var(--wire);
             display: flex;
             flex-direction: column;
+            justify-content: space-between;
             padding: 2.2rem 1.8rem;
             position: fixed;
             height: 100vh;
             z-index: 100;
             box-shadow: 10px 0 30px rgba(0, 0, 0, 0.4);
+            transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), padding 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .sidebar-toggle {
+            position: absolute;
+            top: 2rem;
+            right: -15px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--ink2);
+            border: 1px solid var(--wire);
+            color: var(--ghost);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 110;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+        .sidebar-toggle:hover {
+            color: var(--gold);
+            border-color: var(--gold);
+        }
+
+        /* Collapsed Sidebar overrides */
+        body.sidebar-collapsed .sidebar {
+            width: 80px;
+            padding: 2.2rem 1rem;
+        }
+
+        body.sidebar-collapsed .main-content {
+            margin-left: 80px;
+        }
+
+        body.sidebar-collapsed .brand-name,
+        body.sidebar-collapsed .nav-item span,
+        body.sidebar-collapsed #system-status-box,
+        body.sidebar-collapsed #youtube-connection-box .yt-details,
+        body.sidebar-collapsed #youtube-connection-box .btn,
+        body.sidebar-collapsed #nav-item-settings {
+            display: none !important;
+        }
+
+        body.sidebar-collapsed .collapsed-footer {
+            display: flex !important;
+        }
+
+        body.sidebar-collapsed .nav-item {
+            justify-content: center;
+            padding: 0.85rem 0;
+        }
+        
+        body.sidebar-collapsed .nav-item i {
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
+        .main-content {
+            margin-left: 280px;
+            padding: 3rem 4rem;
+            transition: margin-left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
         .brand-container {
@@ -181,6 +245,9 @@
             border-color: var(--wire);
             transform: translateX(3px);
         }
+        body.sidebar-collapsed .nav-item:hover {
+            transform: scale(1.05);
+        }
 
         .nav-item.active {
             color: var(--gold2);
@@ -233,31 +300,32 @@
                         var(--ink);
         }
 
-        /* Stat Bar */
+        /* Compact Dashboard Stat Bar Ticker */
         .stats-bar {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1.5rem;
-            margin-bottom: 3rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
             border-bottom: 1px solid var(--wire);
-            padding-bottom: 2rem;
+            padding-bottom: 0.75rem;
         }
 
         .stat-card {
             display: flex;
-            flex-direction: column;
-            gap: 0.4rem;
-            background: rgba(255, 255, 255, 0.01);
+            flex-direction: row;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.02);
             border: 1px solid var(--wire);
-            padding: 1.25rem;
-            border-radius: 12px;
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
             transition: all 0.3s ease;
         }
 
         .stat-card:hover {
-            border-color: rgba(223, 178, 63, 0.2);
-            transform: translateY(-2px);
-            background: rgba(255, 255, 255, 0.02);
+            border-color: rgba(0, 210, 255, 0.3);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-1px);
         }
 
         .stat-label {
@@ -265,13 +333,13 @@
             font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.05em;
         }
 
         .stat-value {
-            font-family: var(--font-display);
-            font-size: 20px;
-            font-weight: 800;
+            font-family: var(--font-ui);
+            font-size: 11px;
+            font-weight: 700;
             color: var(--smoke);
         }
 
@@ -856,7 +924,11 @@
     <div class="app-container">
         
         <!-- Sidebar -->
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
+            <button class="sidebar-toggle" onclick="toggleSidebar()">
+                <i class="fa-solid fa-angle-left" id="toggle-icon"></i>
+            </button>
+            
             <div class="brand-container">
                 <div class="brand-logo">
                     <i class="fa-solid fa-clapperboard" style="color: var(--gold); font-size: 1.15rem; text-shadow: 0 0 10px rgba(201,168,76,0.6);"></i>
@@ -868,42 +940,62 @@
             </div>
             
             <div class="nav-menu">
-                <div class="nav-item active" onclick="switchView('view-autopilot')">
-                    Autopilot Launchpad
+                <div class="nav-item active" onclick="switchView('view-autopilot')" id="nav-item-autopilot" title="Autopilot Launchpad">
+                    <i class="fa-solid fa-rocket"></i>
+                    <span>Autopilot Launchpad</span>
                 </div>
-                <div class="nav-item" onclick="switchView('view-clipper')">
-                    Interactive Clipper
+                <div class="nav-item" onclick="switchView('view-clipper')" id="nav-item-clipper" title="Interactive Clipper">
+                    <i class="fa-solid fa-scissors"></i>
+                    <span>Interactive Clipper</span>
                 </div>
-                <div class="nav-item" onclick="switchView('view-library')">
-                    Clips Library
-                </div>
-                <div class="nav-item" onclick="switchView('view-settings')">
-                    Console Settings
+                <div class="nav-item" onclick="switchView('view-library')" id="nav-item-library" title="Clips Library">
+                    <i class="fa-solid fa-video"></i>
+                    <span>Clips Library</span>
                 </div>
             </div>
 
-            <!-- YouTube Account Connection Box -->
-            <div id="youtube-connection-box" style="margin-bottom: 2rem; padding: 0.85rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 8px; transition: all 0.3s ease;">
-                <!-- Populated dynamically -->
-            </div>
+            <!-- Bottom Section of Sidebar -->
+            <div class="sidebar-bottom">
+                <!-- YouTube Account Connection Box -->
+                <div id="youtube-connection-box" style="margin-bottom: 1.5rem; transition: all 0.3s ease;">
+                    <!-- Populated dynamically -->
+                </div>
 
-            
-            <div class="system-status">
-                <div class="status-header">
-                    <span>SYSTEM STATE</span>
-                    <span class="status-dot"></span>
+                <div class="system-status" id="system-status-box">
+                    <div class="status-header">
+                        <span>SYSTEM STATE</span>
+                        <span class="status-dot"></span>
+                    </div>
+                    <div class="status-row">
+                        <span>API Endpoint</span>
+                        <span class="status-val">FastAPI Online</span>
+                    </div>
+                    <div class="status-row">
+                        <span>Whisper Engine</span>
+                        <span class="status-val" id="status-whisper">Tiny.en CPU</span>
+                    </div>
+                    <div class="status-row">
+                        <span>GPU Mode</span>
+                        <span class="status-val" id="status-gpu">Disabled</span>
+                    </div>
                 </div>
-                <div class="status-row">
-                    <span>API Endpoint</span>
-                    <span class="status-val">FastAPI Online</span>
+
+                <!-- Console Settings at bottom -->
+                <div class="nav-item nav-settings-btn" id="nav-item-settings" onclick="switchView('view-settings')" title="Console Settings" style="margin-top: 1.5rem; margin-bottom: 0;">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>Console Settings</span>
                 </div>
-                <div class="status-row">
-                    <span>Whisper Engine</span>
-                    <span class="status-val" id="status-whisper">Tiny.en CPU</span>
-                </div>
-                <div class="status-row">
-                    <span>GPU Mode</span>
-                    <span class="status-val" id="status-gpu">Disabled</span>
+
+                <!-- Collapsed Footer (only shown when sidebar is collapsed) -->
+                <div class="collapsed-footer" style="display: none; align-items: center; justify-content: center; gap: 0.8rem; margin-top: 1rem; border-top: 1px solid var(--wire); padding-top: 1rem;">
+                    <!-- YouTube Status Mini -->
+                    <div id="youtube-mini-status"></div>
+                    <!-- FastAPI status green dot -->
+                    <div class="status-dot" style="margin: 0; background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green);" title="FastAPI Online"></div>
+                    <!-- Mini Settings Gear Button -->
+                    <div onclick="switchView('view-settings')" id="mini-settings-btn-el" style="cursor: pointer; color: var(--ghost); transition: color 0.2s;" title="Console Settings">
+                        <i class="fa-solid fa-gear" style="font-size: 1.1rem;"></i>
+                    </div>
                 </div>
             </div>
         </div>
@@ -914,36 +1006,20 @@
             <!-- Statistics Bar -->
             <div class="stats-bar">
                 <div class="stat-card">
-                    <div>
-                        <div class="stat-label">Autopilot Runs</div>
-                        <div class="stat-value" id="stat-autopilot-count">Ready</div>
-                    </div>
-                    <div class="stat-icon stat-blue">
-                        </div>
+                    <span class="stat-label">Autopilot:</span>
+                    <span class="stat-value" id="stat-autopilot-count">Ready</span>
                 </div>
                 <div class="stat-card">
-                    <div>
-                        <div class="stat-label">Total Clips Rendered</div>
-                        <div class="stat-value" id="stat-total-clips">0</div>
-                    </div>
-                    <div class="stat-icon stat-cyan">
-                        </div>
+                    <span class="stat-label">Clips:</span>
+                    <span class="stat-value" id="stat-total-clips">0</span>
                 </div>
                 <div class="stat-card">
-                    <div>
-                        <div class="stat-label">Whisper Device</div>
-                        <div class="stat-value" id="stat-whisper-device">CPU</div>
-                    </div>
-                    <div class="stat-icon stat-green">
-                        </div>
+                    <span class="stat-label">Whisper:</span>
+                    <span class="stat-value" id="stat-whisper-device">CPU</span>
                 </div>
                 <div class="stat-card">
-                    <div>
-                        <div class="stat-label">Gemini Selected</div>
-                        <div class="stat-value">2.5 Flash</div>
-                    </div>
-                    <div class="stat-icon stat-amber">
-                        </div>
+                    <span class="stat-label">Gemini:</span>
+                    <span class="stat-value">2.5 Flash</span>
                 </div>
             </div>
             
@@ -1047,44 +1123,41 @@
                 <div class="glass-panel">
                     <h2 class="panel-title">Interactive Manual Clipper Studio</h2>
                     
-                    <div class="form-grid" style="margin-bottom: 1.5rem;">
+                    <div class="form-grid" style="margin-bottom: 2rem;">
                         <div class="form-group-full">
                             <label for="manual-url">YouTube Video URL</label>
                             <div style="display:flex; gap:1rem;">
                                 <input type="text" id="manual-url" style="flex-grow:1;" placeholder="https://www.youtube.com/watch?v=...">
-                                <button class="btn" onclick="fetchTranscript()">ANALYZE VIDEO</button>
+                                <button class="btn btn-cyan" id="btn-manual-analyze" onclick="analyzeVideoInteractive()">ANALYZE VIDEO</button>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Transcript display -->
+                    <!-- Video Details Card -->
+                    <div id="interactive-video-card" class="glass-panel" style="display:none; gap: 1.5rem; padding: 1.25rem; margin-bottom: 2rem; border-color: rgba(0, 210, 255, 0.2); background: rgba(255, 255, 255, 0.01); align-items: center;">
+                        <img id="inter-video-thumb" src="" style="width: 140px; height: 90px; border-radius: 8px; object-fit: cover; border: 1px solid var(--wire);" alt="Video Thumbnail">
+                        <div style="display:flex; flex-direction:column; justify-content:center; min-width:0; flex-grow:1;">
+                            <h3 id="inter-video-title" style="font-size: 1.1rem; color: var(--gold); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom: 0.25rem;">Video Title</h3>
+                            <div id="inter-video-url" style="font-size: 0.8rem; font-family: monospace; color: var(--ghost); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">URL</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Analysis Progress Status -->
+                    <div id="clipper-loading-panel" style="display:none; text-align:center; padding: 3rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 12px; margin-bottom: 2rem;">
+                        <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2.5rem; color: var(--gold); margin-bottom: 1.5rem;"></i>
+                        <h3 id="clipper-loading-text" style="font-size: 1.15rem; color: var(--smoke);">Analyzing video transcript & generating viral clips...</h3>
+                    </div>
+
+                    <!-- Clipper Results Panel -->
                     <div id="clipper-results-panel" style="display:none;">
-                        <h3 style="margin-bottom: 0.75rem; font-size:1.05rem; ">Rough Transcript Preview</h3>
-                        <div class="transcript-list" id="preview-transcript-container">
+                        <h3 style="margin-bottom: 1.25rem; font-size:1.15rem; color: var(--smoke); display:flex; align-items:center; gap:8px;">
+                            <i class="fa-solid fa-sparkles" style="color:var(--gold);"></i> AI-Scored Clip Highlights (Max 5)
+                        </h3>
+
+                        <!-- Highlights Recommendations Grid -->
+                        <div id="highlights-cards-grid" style="display:grid; grid-template-columns: 1fr; gap: 1.5rem; margin-bottom: 2rem;">
                             <!-- Populated dynamically -->
                         </div>
-                        
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
-                            <h3 style="font-size:1.05rem; ">Gemini Highlight Candidates</h3>
-                            <button class="btn btn-mini btn-cyan" onclick="generateHighlights()">DISCOVER HIGH-IMPACT CLIPS</button>
-                        </div>
-                        
-                        <table class="highlights-table" id="highlights-table-container">
-                            <thead>
-                                <tr>
-                                    <th>Segment Window</th>
-                                    <th>Duration</th>
-                                    <th>Crop Framing</th>
-                                    <th>Virality Rating</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="highlights-tbody">
-                                <tr>
-                                    <td colspan="5" style="text-align:center; color:var(--text-muted);">No highlight recommendations analyzed yet. Click "Discover High-Impact Clips".</td>
-                                </tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
@@ -1242,10 +1315,44 @@
                 item.classList.remove('active');
             });
             document.getElementById(viewId).classList.add('active');
-            event.currentTarget.classList.add('active');
+            
+            // Highlight the correct menu item
+            if (viewId === 'view-autopilot') {
+                document.getElementById('nav-item-autopilot').classList.add('active');
+            } else if (viewId === 'view-clipper') {
+                document.getElementById('nav-item-clipper').classList.add('active');
+            } else if (viewId === 'view-library') {
+                document.getElementById('nav-item-library').classList.add('active');
+            } else if (viewId === 'view-settings') {
+                document.getElementById('nav-item-settings').classList.add('active');
+            }
+            
+            // Highlight/unhighlight mini settings button
+            const miniGear = document.getElementById('mini-settings-btn-el');
+            if (miniGear) {
+                if (viewId === 'view-settings') {
+                    miniGear.style.color = 'var(--gold2)';
+                } else {
+                    miniGear.style.color = '';
+                }
+            }
             
             if (viewId === 'view-library') {
                 refreshLibrary();
+            }
+        }
+
+        // Toggle sidebar collapse state
+        function toggleSidebar() {
+            const body = document.body;
+            const icon = document.getElementById('toggle-icon');
+            body.classList.toggle('sidebar-collapsed');
+            if (body.classList.contains('sidebar-collapsed')) {
+                icon.className = 'fa-solid fa-angle-right';
+                localStorage.setItem('sidebar-collapsed', 'true');
+            } else {
+                icon.className = 'fa-solid fa-angle-left';
+                localStorage.setItem('sidebar-collapsed', 'false');
             }
         }
 
@@ -1565,6 +1672,8 @@
             
             activeJobId = jobId;
             document.getElementById('active-job-cancel-container').style.display = 'flex';
+            document.getElementById('stat-autopilot-count').textContent = "Running";
+            document.getElementById('stat-autopilot-count').style.color = "var(--cyan)";
             
             // Clear previous progress and set starting phase immediately
             resetPipelineProgress();
@@ -1583,6 +1692,8 @@
                         activeJobPollInterval = null;
                         activeJobId = null;
                         document.getElementById('active-job-cancel-container').style.display = 'none';
+                        document.getElementById('stat-autopilot-count').textContent = "Ready";
+                        document.getElementById('stat-autopilot-count').style.color = "";
                         
                         setPipelineProgress(100);
                         refreshLibrary();
@@ -1595,6 +1706,8 @@
                         activeJobPollInterval = null;
                         activeJobId = null;
                         document.getElementById('active-job-cancel-container').style.display = 'none';
+                        document.getElementById('stat-autopilot-count').textContent = "Ready";
+                        document.getElementById('stat-autopilot-count').style.color = "";
                         
                         alert("Clipper Job failed: " + (job.error || "Unknown error"));
                         resetPipelineProgress();
@@ -1603,6 +1716,8 @@
                         activeJobPollInterval = null;
                         activeJobId = null;
                         document.getElementById('active-job-cancel-container').style.display = 'none';
+                        document.getElementById('stat-autopilot-count').textContent = "Ready";
+                        document.getElementById('stat-autopilot-count').style.color = "";
                         
                         alert("Clipper Job was cancelled.");
                         resetPipelineProgress();
@@ -1615,13 +1730,14 @@
 
         async function checkYouTubeStatus() {
             const box = document.getElementById('youtube-connection-box');
+            const miniBox = document.getElementById('youtube-mini-status');
             try {
                 const res = await fetch('/api/youtube/status');
                 const data = await res.json();
                 
                 if (data.connected) {
                     box.innerHTML = `
-                        <div style="display:flex; align-items:center; gap: 0.75rem;">
+                        <div class="yt-details" style="display:flex; align-items:center; gap: 0.75rem;">
                             <img src="${data.avatar_url || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(data.channel_name)}" style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--gold); box-shadow: 0 0 10px rgba(201,168,76,0.3);" />
                             <div style="flex-grow:1; min-width: 0;">
                                 <div style="color: var(--gold); font-size: 0.82rem; font-weight: 700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${data.channel_name}</div>
@@ -1630,13 +1746,23 @@
                             <button class="btn btn-mini" onclick="disconnectYouTube()" style="border-color: #ef4444; color: #ef4444; padding: 2px 6px; font-size: 0.65rem; background: transparent; cursor: pointer; transition: all 0.2s;" title="Disconnect Account"><i class="fa-solid fa-power-off"></i></button>
                         </div>
                     `;
+                    if (miniBox) {
+                        miniBox.innerHTML = `
+                            <img src="${data.avatar_url || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(data.channel_name)}" style="width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--gold);" title="${data.channel_name} Connected" />
+                        `;
+                    }
                 } else {
                     box.innerHTML = `
-                        <div style="text-align: center;">
+                        <div class="yt-details" style="text-align: center;">
                             <div style="color: var(--ash); font-size: 0.72rem; margin-bottom: 0.4rem; font-weight:600;"><i class="fa-brands fa-youtube" style="color: #ef4444; margin-right: 4px;"></i> YouTube Setup</div>
                             <button class="btn btn-mini btn-secondary" onclick="connectYouTube()" style="width: 100%; border-color: #ef4444; color: #ef4444; font-size:0.7rem; padding: 4px 0;"><i class="fa-solid fa-link"></i> Link Account</button>
                         </div>
                     `;
+                    if (miniBox) {
+                        miniBox.innerHTML = `
+                            <i class="fa-brands fa-youtube" style="color: #ef4444; font-size: 1.25rem;" title="YouTube Disconnected"></i>
+                        `;
+                    }
                 }
             } catch(e) {
                 console.error("YouTube status error:", e);
@@ -1689,7 +1815,51 @@
 
 
         // Manual clipper controls
-        async function fetchTranscript() {
+        let lastFetchedUrl = "";
+        let fetchedDetailsCache = null;
+
+        async function fetchVideoDetails(url) {
+            if (url === lastFetchedUrl && fetchedDetailsCache) return fetchedDetailsCache;
+            lastFetchedUrl = url;
+
+            const detailsCard = document.getElementById('interactive-video-card');
+            const titleEl = document.getElementById('inter-video-title');
+            const thumbEl = document.getElementById('inter-video-thumb');
+            const urlEl = document.getElementById('inter-video-url');
+
+            // Show details card with loading state
+            detailsCard.style.display = 'flex';
+            titleEl.textContent = "Fetching video details...";
+            thumbEl.src = "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320";
+            urlEl.textContent = url;
+
+            try {
+                const res = await fetch('/api/scout/video-details', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    titleEl.textContent = data.title;
+                    thumbEl.src = data.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320";
+                    fetchedDetailsCache = data;
+                    return data;
+                } else {
+                    titleEl.textContent = "YouTube Video Loaded (Ready to Analyze)";
+                    fetchedDetailsCache = { title: "YouTube Video", thumbnail: "" };
+                    return fetchedDetailsCache;
+                }
+            } catch (err) {
+                console.error("Error fetching video details:", err);
+                titleEl.textContent = "YouTube Video Loaded (Ready to Analyze)";
+                fetchedDetailsCache = { title: "YouTube Video", thumbnail: "" };
+                return fetchedDetailsCache;
+            }
+        }
+
+        // Manual clipper controls
+        async function analyzeVideoInteractive() {
             const url = document.getElementById('manual-url').value.trim();
             if (!url) {
                 alert("Please enter a valid YouTube URL first!");
@@ -1697,100 +1867,153 @@
             }
             
             currentUrlTranscript = url;
-            const container = document.getElementById('preview-transcript-container');
-            container.innerHTML = '<div style=" font-weight:600;">Downloading and analyzing video transcript (usually 20-40 seconds)...</div>';
-            document.getElementById('clipper-results-panel').style.display = 'block';
+            
+            const loadingPanel = document.getElementById('clipper-loading-panel');
+            const loadingText = document.getElementById('clipper-loading-text');
+            const resultsPanel = document.getElementById('clipper-results-panel');
+            
+            loadingPanel.style.display = 'block';
+            resultsPanel.style.display = 'none';
             
             try {
-                const res = await fetch('/api/scout/transcript', {
+                // Ensure video details are fetched/loaded
+                const details = await fetchVideoDetails(url);
+                
+                // Step 2: Download/Get Transcript
+                loadingText.textContent = "[1/2] Fetching or transcribing rough audio sample (may take 20-30s)...";
+                const transcriptRes = await fetch('/api/scout/transcript', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: url })
                 });
                 
-                const data = await res.json();
-                currentSegments = data.segments;
+                if (!transcriptRes.ok) {
+                    const errData = await transcriptRes.json();
+                    throw new Error(errData.detail || "Failed to retrieve transcript");
+                }
                 
-                // Populate preview transcript
-                container.innerHTML = "";
-                data.segments.forEach(seg => {
-                    const row = document.createElement('div');
-                    row.className = 'transcript-row';
-                    
-                    const formatTime = (sec) => {
-                        const m = Math.floor(sec / 60);
-                        const s = Math.floor(sec % 60);
-                        return `${m}:${s < 10 ? '0' : ''}${s}`;
-                    };
-                    
-                    row.innerHTML = `
-                        <span class="ts-time">[${formatTime(seg.start)}]</span>
-                        <span class="ts-text">${seg.text}</span>
-                    `;
-                    container.appendChild(row);
-                });
+                const transcriptData = await transcriptRes.json();
+                currentSegments = transcriptData.segments;
                 
-            } catch (err) {
-                container.innerHTML = `<div style="color: var(--ash); font-weight:600;">Failed to download transcript: ${err}</div>`;
-            }
-        }
-
-        async function generateHighlights() {
-            if (!currentSegments.length) {
-                alert("Please analyze a video first!");
-                return;
-            }
-            
-            const tbody = document.getElementById('highlights-tbody');
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;  font-weight:600;">Consulting Gemini thinking engine to discover virality hooks...</td></tr>';
-            
-            try {
-                const res = await fetch('/api/scout/highlights', {
+                // Step 3: Consulting Gemini to Select Top Highlights
+                loadingText.textContent = "[2/2] AI Ranking viral clips using Gemini Thinking engine...";
+                const highlightsRes = await fetch('/api/scout/highlights', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         segments: currentSegments,
-                        count: 3
+                        count: 5 // Limit to maximum 5
                     })
                 });
                 
-                const data = await res.json();
-                tbody.innerHTML = "";
-                
-                if (!data.highlights || !data.highlights.length) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No viral clips found above the 85+ score threshold.</td></tr>';
-                    return;
+                if (!highlightsRes.ok) {
+                    const errData = await highlightsRes.json();
+                    throw new Error(errData.detail || "Failed to generate highlights");
                 }
                 
-                data.highlights.forEach((hl, index) => {
-                    const tr = document.createElement('tr');
-                    
-                    const formatTime = (sec) => {
-                        const m = Math.floor(sec / 60);
-                        const s = Math.floor(sec % 60);
-                        return `${m}:${s < 10 ? '0' : ''}${s}`;
-                    };
-                    
-                    tr.innerHTML = `
-                        <td><strong>${formatTime(hl.start)}</strong> ➔ <strong>${formatTime(hl.end)}</strong></td>
-                        <td>${hl.duration} seconds</td>
-                        <td><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${hl.layout}</code></td>
-                        <td><span class="badge-virality badge-virality-high">GEMINI OK</span></td>
-                        <td>
-                            <button class="btn btn-mini" onclick="renderCustomHighlight(${hl.start}, ${hl.end}, '${hl.layout}')">
-                                Render Precise Clip
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
+                const highlightsData = await highlightsRes.json();
                 
+                // Populate Cards Grid
+                const grid = document.getElementById('highlights-cards-grid');
+                grid.innerHTML = "";
+                
+                if (!highlightsData.highlights || !highlightsData.highlights.length) {
+                    grid.innerHTML = '<div style="text-align:center; padding: 2rem; color: var(--ghost); font-weight:600;">No viral clips found above the score threshold.</div>';
+                } else {
+                    const thumbUrl = (details && details.thumbnail) || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320";
+                    
+                    highlightsData.highlights.slice(0, 5).forEach((hl, index) => {
+                        const card = document.createElement('div');
+                        card.className = 'glass-panel';
+                        card.style.padding = '1.25rem';
+                        card.style.marginBottom = '0';
+                        card.style.borderColor = 'var(--wire)';
+                        card.style.display = 'flex';
+                        card.style.flexDirection = 'column';
+                        card.style.gap = '1rem';
+                        card.style.position = 'relative';
+
+                        const formatTime = (sec) => {
+                            const m = Math.floor(sec / 60);
+                            const s = Math.floor(sec % 60);
+                            return `${m}:${s < 10 ? '0' : ''}${s}`;
+                        };
+
+                        card.innerHTML = `
+                            <div style="display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap;">
+                                <!-- Clip Thumbnail Area with Time Badges -->
+                                <div style="position: relative; width: 140px; height: 90px; flex-shrink: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--wire); background: var(--ink);">
+                                    <img src="${thumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+                                    <span style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.85); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-family: monospace; font-weight: 700;">
+                                        ${formatTime(hl.start)} - ${formatTime(hl.end)}
+                                    </span>
+                                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15);">
+                                        <i class="fa-solid fa-scissors" style="color: #fff; text-shadow: 0 0 5px rgba(0,0,0,0.9); font-size: 1.2rem;"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Clip Info & Actions -->
+                                <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 0.4rem;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--wire); padding-bottom: 0.4rem; gap: 0.5rem; flex-wrap: wrap;">
+                                        <h4 style="color: var(--gold); font-weight: 800; font-size: 0.95rem; margin: 0; line-height: 1.2;">
+                                            ${hl.title || ('Clip Highlight #' + (index + 1))}
+                                        </h4>
+                                        <div style="display:flex; align-items:center; gap: 0.5rem;">
+                                            <span class="badge" style="background: rgba(0, 210, 255, 0.1); color: var(--cyan); padding: 2px 6px; border-radius: 4px; font-size:0.7rem; font-weight:600;"><i class="fa-solid fa-crop"></i> ${hl.layout}</span>
+                                            <span class="badge" style="background: rgba(52, 211, 153, 0.1); color: #34d399; padding: 2px 6px; border-radius: 4px; font-size:0.7rem; font-weight:600;"><i class="fa-solid fa-chart-line"></i> Virality: ${hl.virality_score}%</span>
+                                        </div>
+                                    </div>
+                                    
+                                    ${hl.strongest_hook_line ? `
+                                    <div style="background: rgba(255, 255, 255, 0.01); border-left: 3px solid var(--gold); padding: 0.35rem 0.75rem; border-radius: 4px; font-style: italic; font-size:0.8rem; color: var(--smoke);">
+                                        "${hl.strongest_hook_line}"
+                                    </div>` : ''}
+                                    
+                                    <div style="font-size:0.8rem; color: var(--ghost); line-height: 1.4;">
+                                        <strong>Engagement Rationale:</strong> ${hl.reason}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bottom Row Controls -->
+                            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; border-top: 1px solid var(--wire); padding-top: 0.75rem; margin-top: 0.25rem; gap: 1rem;">
+                                <div style="display:flex; align-items:center; gap:1.25rem;">
+                                    <label style="display:inline-flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.8rem; color: var(--smoke);">
+                                        <input type="checkbox" id="post-check-${index}" checked style="width: 15px; height: 15px; cursor:pointer;">
+                                        <span>Post directly to YouTube</span>
+                                    </label>
+                                    <select id="post-privacy-${index}" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border:1px solid var(--wire); background: var(--ink); color: var(--smoke);">
+                                        <option value="private" selected>Private</option>
+                                        <option value="public">Public</option>
+                                    </select>
+                                </div>
+
+                                <button class="btn btn-mini btn-cyan" id="btn-render-hl-${index}" onclick="renderDetailedHighlight(${index}, ${hl.start}, ${hl.end}, '${hl.layout}')">
+                                    <i class="fa-solid fa-play"></i> Render & Publish
+                                </button>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+                
+                resultsPanel.style.display = 'block';
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--ash); font-weight:600;">Failed to generate highlights: ${err}</td></tr>`;
+                alert("Analysis failed: " + err.message);
+            } finally {
+                loadingPanel.style.display = 'none';
             }
         }
 
-        async function renderCustomHighlight(start, end, layout) {
+        async function renderDetailedHighlight(index, start, end, layout) {
+            const upload = document.getElementById(`post-check-${index}`).checked;
+            const privacy = document.getElementById(`post-privacy-${index}`).value;
+            
+            const btn = document.getElementById(`btn-render-hl-${index}`);
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Rendering...`;
+            
             try {
                 const res = await fetch('/api/clip/render', {
                     method: 'POST',
@@ -1799,16 +2022,27 @@
                         url: currentUrlTranscript,
                         start: start,
                         end: end,
-                        layout: layout
+                        layout: layout,
+                        upload: upload,
+                        privacy: privacy
                     })
                 });
+                
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.detail || "Render trigger failed");
+                }
+                
                 const data = await res.json();
-                alert("Clip rendering started in background! Follow the log feed below.");
+                alert("Manual clipping task triggered. Track it in the progress bar!");
                 if (data.job_id) {
                     trackJobProgress(data.job_id);
                 }
             } catch (err) {
-                alert("Failed to render custom clip: " + err);
+                alert("Failed to render highlight: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
             }
         }
 
@@ -2120,10 +2354,28 @@
 
         // App Bootloader
         window.addEventListener('DOMContentLoaded', () => {
+            // Restore sidebar state
+            if (localStorage.getItem('sidebar-collapsed') === 'true') {
+                document.body.classList.add('sidebar-collapsed');
+                const icon = document.getElementById('toggle-icon');
+                if (icon) icon.className = 'fa-solid fa-angle-right';
+            }
+            
             initLogStream();
             fetchSettings();
             checkYouTubeStatus();
             refreshLibrary();
+            
+            // Auto-fetch video details on paste/input
+            const manualUrlInput = document.getElementById('manual-url');
+            if (manualUrlInput) {
+                manualUrlInput.addEventListener('input', (e) => {
+                    const url = e.target.value.trim();
+                    if (url.includes('youtube.com/') || url.includes('youtu.be/')) {
+                        fetchVideoDetails(url);
+                    }
+                });
+            }
             
             // Check if there is an active running job from a previous session/refresh
             fetch('/api/jobs?status=running')

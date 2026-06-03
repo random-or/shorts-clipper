@@ -158,6 +158,8 @@ class CustomClipRenderRequest(BaseModel):
     start: float
     end: float
     layout: str = "crop_center"
+    upload: bool = False
+    privacy: str = "private"  # "private" | "public"
 
 
 class ClipMetadataUpdate(BaseModel):
@@ -884,6 +886,27 @@ def trigger_scout_transcript(payload: TranscriptRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.post("/api/scout/video-details")
+def get_video_details(payload: TranscriptRequest) -> dict[str, str]:
+    """Get video title and thumbnail URL via yt-dlp."""
+    logger.info("📺 Fetching video details for: %s", payload.url)
+    try:
+        import subprocess
+        # Get title and thumbnail URL in one fast check
+        cmd = ["yt-dlp", "--skip-download", "--print", "%(title)s\n%(thumbnail)s", payload.url]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=15)
+        lines = res.stdout.strip().split("\n")
+        title = lines[0] if len(lines) > 0 else "YouTube Video"
+        thumbnail = lines[1] if len(lines) > 1 else ""
+        return {"title": title, "thumbnail": thumbnail}
+    except Exception as e:
+        logger.warning("Failed to fetch video details via yt-dlp: %s. Using placeholder.", e)
+        return {
+            "title": "YouTube Video",
+            "thumbnail": "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320"
+        }
+
+
 @app.post("/api/scout/highlights")
 def trigger_scout_highlights(payload: HighlightsRequest) -> dict[str, Any]:
     """Send transcript segments to Gemini and retrieve scored candidate highlight clips."""
@@ -897,20 +920,8 @@ def trigger_scout_highlights(payload: HighlightsRequest) -> dict[str, Any]:
         settings = Settings.from_env()
         provider = GeminiProvider(api_key=settings.gemini_api_key)
 
-        # We consult the multi-clip selection logic
-        clips = provider.select_multiple_clips(segments, count=payload.count)
-
-        return {
-            "highlights": [
-                {
-                    "start": window.start,
-                    "end": window.end,
-                    "layout": layout,
-                    "duration": round(window.end - window.start, 1),
-                }
-                for window, layout in clips
-            ]
-        }
+        clips = provider.select_multiple_clips_detailed(segments, count=payload.count)
+        return {"highlights": clips}
     except Exception as exc:
         logger.error("Failed to fetch highlights from Gemini: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -1023,6 +1034,25 @@ def trigger_clip_render(
                 meta["segments"] = [
                     {"start": s.start, "end": s.end, "text": s.text} for s in precision_segments
                 ]
+
+                if payload.upload:
+                    logger.info("📤 Uploading manually selected clip to YouTube (%s)...", payload.privacy)
+                    try:
+                        from shorts_clipper.social.youtube import upload_short
+                        video_id = upload_short(
+                            current_output_path,
+                            title=meta["title"],
+                            description=meta["description"],
+                            tags=meta["tags"],
+                            privacy_status=payload.privacy
+                        )
+                        meta["youtube_video_id"] = video_id
+                        meta["publish_status"] = "published"
+                        logger.info("🚀 Uploaded manual clip successfully! Video ID: %s", video_id)
+                    except Exception as upload_err:
+                        logger.error("Failed to upload manual clip: %s", upload_err)
+                        meta["publish_status"] = "failed"
+                        meta["publish_error"] = str(upload_err)
 
                 json_path = current_output_path.with_suffix(".json")
                 try:

@@ -122,6 +122,7 @@ Return ONLY valid JSON as a list/array of objects. No markdown, no commentary:
     "virality_score": <int 0-100>,
     "emotional_category": "<tension|shock|humor|confrontation|revelation>",
     "strongest_hook_line": "<exact phrase from transcript>",
+    "title": "<short engaging viral title for this clip>",
     "reason": "<one sentence why this clip meets the criteria and how it was scored>"
   }}
 ]"""
@@ -332,6 +333,75 @@ class GeminiProvider(HighlightProvider):
             log.warning("Gemini multi-clip selection failed (%s). Using fallback.", exc)
             win, lay = self.select_clip_raw(segments)
             return [(win, lay)]
+
+    def select_multiple_clips_detailed(
+        self, segments: Sequence[TranscriptSegment], count: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return a detailed list of dictionaries representing the best clips from Gemini."""
+        transcript_text = format_transcript(segments)
+        prompt = _MULTI_PROMPT_TEMPLATE.format(count=count, transcript=transcript_text)
+        try:
+            response = self._generate_content_with_retry(prompt)
+            raw = response.text.strip()
+            json_str = raw
+            json_match = re.search(r"```(?:json)?(.*?)```", raw, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1).strip()
+            
+            items = json.loads(json_str)
+            if not isinstance(items, list):
+                return []
+            
+            sanitized = []
+            for item in items[:count]:
+                start = float(item.get("start", 0.0))
+                end = float(item.get("end", 0.0))
+                layout = str(item.get("layout", self._fallback_layout)).strip()
+                score = int(item.get("virality_score", 85))
+                reason = str(item.get("reason", "Highly engaging interaction segment."))
+                hook = str(item.get("strongest_hook_line", ""))
+                emo = str(item.get("emotional_category", ""))
+                title = str(item.get("title", "Engaging Highlight")).strip()
+                
+                # Clamp duration
+                duration = end - start
+                if duration < 30:
+                    end = start + 35
+                elif duration > 65:
+                    end = start + 55
+                
+                sanitized.append({
+                    "start": start,
+                    "end": end,
+                    "layout": layout,
+                    "virality_score": score,
+                    "strongest_hook_line": hook,
+                    "emotional_category": emo,
+                    "title": title,
+                    "reason": reason,
+                    "duration": round(end - start, 1)
+                })
+            return sanitized
+        except Exception as e:
+            log.warning("Detailed Gemini highlights fetch failed: %s. Using simple fallback.", e)
+            try:
+                simple_clips = self.select_multiple_clips(segments, count=count)
+                return [
+                    {
+                        "start": win.start,
+                        "end": win.end,
+                        "layout": lay,
+                        "virality_score": 85,
+                        "strongest_hook_line": "",
+                        "emotional_category": "highlights",
+                        "title": f"Clip Highlight #{i + 1}",
+                        "reason": "AI Selected engaging segment.",
+                        "duration": round(win.end - win.start, 1)
+                    }
+                    for i, (win, lay) in enumerate(simple_clips)
+                ]
+            except Exception:
+                return []
 
     def generate_clip_metadata(self, segments: Sequence[TranscriptSegment]) -> dict:
         """Generate a viral title, description, and keywords for a clip using Gemini."""
