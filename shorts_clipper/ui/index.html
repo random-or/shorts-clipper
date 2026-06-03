@@ -975,7 +975,7 @@
             box-shadow: 0 6px 20px rgba(255, 34, 85, 0.35);
         }
 
-        .modal-body video {
+        .modal-body video, .modal-body iframe {
             width: 304px;
             height: 540px;
             object-fit: cover;
@@ -1353,6 +1353,7 @@
             </div>
             <div class="modal-body">
                 <video id="modal-video-player" controls></video>
+                <iframe id="modal-youtube-player" style="display: none;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-mini" onclick="closeVideoModal()">Close</button>
@@ -1998,11 +1999,11 @@
                                 <!-- Clip Thumbnail Area with Time Badges -->
                                 <div style="position: relative; width: 140px; height: 90px; flex-shrink: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--wire); background: var(--ink);">
                                     <img src="${thumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
-                                    <span style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.85); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-family: monospace; font-weight: 700;">
+                                    <span style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.85); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-family: monospace; font-weight: 700; z-index: 5;">
                                         ${formatTime(hl.start)} - ${formatTime(hl.end)}
                                     </span>
-                                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15);">
-                                        <i class="fa-solid fa-scissors" style="color: #fff; text-shadow: 0 0 5px rgba(0,0,0,0.9); font-size: 1.2rem;"></i>
+                                    <div onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${currentUrlTranscript}', ${hl.start}, ${hl.end})" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.55)'" onmouseout="this.style.background='rgba(0,0,0,0.25)'" title="Preview Segment Clip">
+                                        <i class="fa-solid fa-circle-play" style="color: #fff; text-shadow: 0 0 8px rgba(0,0,0,0.9); font-size: 1.8rem; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'"></i>
                                     </div>
                                 </div>
                                 
@@ -2042,9 +2043,14 @@
                                     </select>
                                 </div>
 
-                                <button class="btn btn-mini btn-cyan" id="btn-render-hl-${index}" onclick="renderDetailedHighlight(${index}, ${hl.start}, ${hl.end}, '${hl.layout}')">
-                                    <i class="fa-solid fa-play"></i> Render & Publish
-                                </button>
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <button class="btn btn-mini btn-secondary" onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${currentUrlTranscript}', ${hl.start}, ${hl.end})">
+                                        <i class="fa-solid fa-circle-play"></i> Preview Clip
+                                    </button>
+                                    <button class="btn btn-mini btn-cyan" id="btn-render-hl-${index}" onclick="renderDetailedHighlight(${index}, ${hl.start}, ${hl.end}, '${hl.layout}')">
+                                        <i class="fa-solid fa-play"></i> Render & Publish
+                                    </button>
+                                </div>
                             </div>
                         `;
                         grid.appendChild(card);
@@ -2383,16 +2389,59 @@
             }
         }
 
+        function getYoutubeId(url) {
+            if (!url) return null;
+            let match = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+            if (match) return match[1];
+            
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        function openYoutubePreviewModal(name, videoUrl, start, end) {
+            const videoId = getYoutubeId(videoUrl);
+            if (!videoId) {
+                alert("Could not parse YouTube video ID.");
+                return;
+            }
+            
+            const modal = document.getElementById('preview-modal');
+            const player = document.getElementById('modal-video-player');
+            const ytPlayer = document.getElementById('modal-youtube-player');
+            const title = document.getElementById('modal-video-title');
+            const download = document.getElementById('modal-video-download');
+            
+            title.textContent = `${name} (Clip: ${Math.floor(start)}s - ${Math.floor(end)}s)`;
+            
+            player.style.display = 'none';
+            player.src = "";
+            
+            ytPlayer.style.display = 'block';
+            ytPlayer.src = `https://www.youtube.com/embed/${videoId}?start=${Math.floor(start)}&end=${Math.floor(end)}&autoplay=1`;
+            
+            download.style.display = 'none';
+            
+            modal.classList.add('active');
+        }
+
         // Video modal controls
         function openVideoModal(name, path) {
             const modal = document.getElementById('preview-modal');
             const player = document.getElementById('modal-video-player');
+            const ytPlayer = document.getElementById('modal-youtube-player');
             const title = document.getElementById('modal-video-title');
             const download = document.getElementById('modal-video-download');
             
             title.textContent = name;
             player.src = path;
+            player.style.display = 'block';
+            
+            ytPlayer.src = "";
+            ytPlayer.style.display = 'none';
+            
             download.href = path;
+            download.style.display = 'inline-flex';
             
             modal.classList.add('active');
             player.play();
@@ -2401,8 +2450,17 @@
         function closeVideoModal() {
             const modal = document.getElementById('preview-modal');
             const player = document.getElementById('modal-video-player');
+            const ytPlayer = document.getElementById('modal-youtube-player');
+            const download = document.getElementById('modal-video-download');
+            
             player.pause();
             player.src = "";
+            player.style.display = 'block';
+            
+            ytPlayer.src = "";
+            ytPlayer.style.display = 'none';
+            
+            download.style.display = 'inline-flex';
             modal.classList.remove('active');
         }
 
