@@ -1187,7 +1187,19 @@
                         <div class="form-group-full">
                             <label for="manual-url">YouTube Video URL</label>
                             <div style="display:flex; gap:1rem;">
-                                <input type="text" id="manual-url" style="flex-grow:1;" placeholder="https://www.youtube.com/watch?v=...">
+                                <div style="position:relative; flex-grow:1; display:flex; align-items:center;">
+                                    <input type="text" id="manual-url" style="width:100%; padding-right: 70px;" placeholder="https://www.youtube.com/watch?v=...">
+                                    <div style="position:absolute; right:12px; display:flex; gap:0.4rem; align-items:center; z-index: 10;">
+                                        <!-- Paste Button -->
+                                        <button onclick="pasteClipboardUrl()" style="background:none; border:none; color:var(--ghost); cursor:pointer; font-size:0.9rem; padding: 4px; transition:color 0.2s;" title="Paste from clipboard" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--ghost)'">
+                                            <i class="fa-solid fa-paste"></i>
+                                        </button>
+                                        <!-- Clear/Cross Button -->
+                                        <button onclick="clearManualClipper()" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:0.9rem; padding: 4px; transition:color 0.2s;" title="Clear Link & Results" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#ef4444'">
+                                            <i class="fa-solid fa-circle-xmark"></i>
+                                        </button>
+                                    </div>
+                                </div>
                                 <button class="btn btn-cyan" id="btn-manual-analyze" onclick="analyzeVideoInteractive()">ANALYZE VIDEO</button>
                             </div>
                         </div>
@@ -1874,6 +1886,9 @@
         let fetchedDetailsCache = null;
 
         async function fetchVideoDetails(url) {
+            if (url !== lastFetchedUrl) {
+                fetchedDetailsCache = null;
+            }
             if (url === lastFetchedUrl && fetchedDetailsCache) return fetchedDetailsCache;
             lastFetchedUrl = url;
 
@@ -2058,10 +2073,168 @@
                 }
                 
                 resultsPanel.style.display = 'block';
+                
+                // Store results in localStorage for persistence
+                localStorage.setItem('interactive-manual-url', url);
+                localStorage.setItem('interactive-manual-results', JSON.stringify({
+                    details: details,
+                    highlights: highlightsData.highlights
+                }));
             } catch (err) {
                 alert("Analysis failed: " + err.message);
             } finally {
                 loadingPanel.style.display = 'none';
+            }
+        }
+
+        async function pasteClipboardUrl() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text) {
+                    document.getElementById('manual-url').value = text;
+                    const event = new Event('input', { bubbles: true });
+                    document.getElementById('manual-url').dispatchEvent(event);
+                }
+            } catch (err) {
+                console.error("Failed to read clipboard:", err);
+                alert("Please allow clipboard permissions or paste manually.");
+            }
+        }
+
+        function clearManualClipper() {
+            document.getElementById('manual-url').value = "";
+            document.getElementById('interactive-video-card').style.display = 'none';
+            document.getElementById('clipper-results-panel').style.display = 'none';
+            document.getElementById('clipper-loading-panel').style.display = 'none';
+            document.getElementById('inter-video-title').textContent = "";
+            document.getElementById('inter-video-thumb').src = "";
+            document.getElementById('inter-video-url').textContent = "";
+            document.getElementById('highlights-cards-grid').innerHTML = "";
+            
+            lastFetchedUrl = "";
+            fetchedDetailsCache = null;
+            currentUrlTranscript = "";
+            currentSegments = [];
+            
+            localStorage.removeItem('interactive-manual-url');
+            localStorage.removeItem('interactive-manual-results');
+        }
+
+        function restoreInteractiveClipperState() {
+            const storedUrl = localStorage.getItem('interactive-manual-url');
+            const storedResultsStr = localStorage.getItem('interactive-manual-results');
+            if (storedUrl && storedResultsStr) {
+                try {
+                    const saved = JSON.parse(storedResultsStr);
+                    document.getElementById('manual-url').value = storedUrl;
+                    currentUrlTranscript = storedUrl;
+                    
+                    // Restore Cache
+                    fetchedDetailsCache = saved.details;
+                    lastFetchedUrl = storedUrl;
+                    
+                    // Render details card
+                    const detailsCard = document.getElementById('interactive-video-card');
+                    const titleEl = document.getElementById('inter-video-title');
+                    const thumbEl = document.getElementById('inter-video-thumb');
+                    const urlEl = document.getElementById('inter-video-url');
+                    
+                    detailsCard.style.display = 'flex';
+                    titleEl.textContent = saved.details.title;
+                    thumbEl.src = saved.details.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320";
+                    urlEl.textContent = storedUrl;
+                    
+                    // Restore Highlights Grid
+                    const grid = document.getElementById('highlights-cards-grid');
+                    grid.innerHTML = "";
+                    const resultsPanel = document.getElementById('clipper-results-panel');
+                    
+                    if (saved.highlights && saved.highlights.length) {
+                        const thumbUrl = saved.details.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320";
+                        
+                        saved.highlights.forEach((hl, index) => {
+                            const card = document.createElement('div');
+                            card.className = 'glass-panel';
+                            card.style.padding = '1.25rem';
+                            card.style.marginBottom = '0';
+                            card.style.borderColor = 'var(--wire)';
+                            card.style.display = 'flex';
+                            card.style.flexDirection = 'column';
+                            card.style.gap = '1rem';
+                            card.style.position = 'relative';
+
+                            const formatTime = (sec) => {
+                                const m = Math.floor(sec / 60);
+                                const s = Math.floor(sec % 60);
+                                return `${m}:${s < 10 ? '0' : ''}${s}`;
+                            };
+
+                            card.innerHTML = `
+                                <div style="display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap;">
+                                    <!-- Clip Thumbnail Area with Time Badges -->
+                                    <div style="position: relative; width: 140px; height: 90px; flex-shrink: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--wire); background: var(--ink);">
+                                        <img src="${thumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+                                        <span style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.85); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-family: monospace; font-weight: 700; z-index: 5;">
+                                            ${formatTime(hl.start)} - ${formatTime(hl.end)}
+                                        </span>
+                                        <div onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${storedUrl}', ${hl.start}, ${hl.end})" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.55)'" onmouseout="this.style.background='rgba(0,0,0,0.25)'" title="Preview Segment Clip">
+                                            <i class="fa-solid fa-circle-play" style="color: #fff; text-shadow: 0 0 8px rgba(0,0,0,0.9); font-size: 1.8rem; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Clip Info & Actions -->
+                                    <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 0.4rem;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--wire); padding-bottom: 0.4rem; gap: 0.5rem; flex-wrap: wrap;">
+                                            <h4 style="color: var(--gold); font-weight: 800; font-size: 0.95rem; margin: 0; line-height: 1.2;">
+                                                ${hl.title || ('Clip Highlight #' + (index + 1))}
+                                            </h4>
+                                            <div style="display:flex; align-items:center; gap: 0.5rem;">
+                                                <span class="badge" style="background: rgba(0, 210, 255, 0.1); color: var(--cyan); padding: 2px 6px; border-radius: 4px; font-size:0.7rem; font-weight:600;"><i class="fa-solid fa-crop"></i> ${hl.layout}</span>
+                                                <span class="badge" style="background: rgba(52, 211, 153, 0.1); color: #34d399; padding: 2px 6px; border-radius: 4px; font-size:0.7rem; font-weight:600;"><i class="fa-solid fa-chart-line"></i> Virality: ${hl.virality_score}%</span>
+                                            </div>
+                                        </div>
+                                        
+                                        ${hl.strongest_hook_line ? `
+                                        <div style="background: rgba(255, 255, 255, 0.01); border-left: 3px solid var(--gold); padding: 0.35rem 0.75rem; border-radius: 4px; font-style: italic; font-size:0.8rem; color: var(--smoke);">
+                                            "${hl.strongest_hook_line}"
+                                        </div>` : ''}
+                                        
+                                        <div style="font-size:0.8rem; color: var(--ghost); line-height: 1.4;">
+                                            <strong>Engagement Rationale:</strong> ${hl.reason}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bottom Row Controls -->
+                                <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; border-top: 1px solid var(--wire); padding-top: 0.75rem; margin-top: 0.25rem; gap: 1rem;">
+                                    <div style="display:flex; align-items:center; gap:1.25rem;">
+                                        <label style="display:inline-flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.8rem; color: var(--smoke);">
+                                            <input type="checkbox" id="post-check-${index}" checked style="width: 15px; height: 15px; cursor:pointer;">
+                                            <span>Post directly to YouTube</span>
+                                        </label>
+                                        <select id="post-privacy-${index}" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border:1px solid var(--wire); background: var(--ink); color: var(--smoke);">
+                                            <option value="private" selected>Private</option>
+                                            <option value="public">Public</option>
+                                        </select>
+                                    </div>
+
+                                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                                        <button class="btn btn-mini btn-secondary" onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${storedUrl}', ${hl.start}, ${hl.end})">
+                                            <i class="fa-solid fa-circle-play"></i> Preview Clip
+                                        </button>
+                                        <button class="btn btn-mini btn-cyan" id="btn-render-hl-${index}" onclick="renderDetailedHighlight(${index}, ${hl.start}, ${hl.end}, '${hl.layout}')">
+                                            <i class="fa-solid fa-play"></i> Render & Publish
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                            grid.appendChild(card);
+                        });
+                        resultsPanel.style.display = 'block';
+                    }
+                } catch (e) {
+                    console.error("Failed to restore manual clipper state:", e);
+                }
             }
         }
 
@@ -2477,6 +2650,7 @@
             fetchSettings();
             checkYouTubeStatus();
             refreshLibrary();
+            restoreInteractiveClipperState();
             
             // Auto-fetch video details on paste/input
             const manualUrlInput = document.getElementById('manual-url');
