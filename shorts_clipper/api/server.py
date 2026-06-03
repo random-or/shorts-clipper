@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import queue
-import tempfile
 import subprocess
+import tempfile
 import threading
 from contextvars import ContextVar
 from datetime import datetime
@@ -81,6 +81,7 @@ _active_processes: dict[str, list[subprocess.Popen]] = {}
 # Intercept subprocess.Popen creation to automatically register processes for active jobs
 _original_popen_init = subprocess.Popen.__init__
 
+
 def _tracked_popen_init(self, *args, **kwargs):
     _original_popen_init(self, *args, **kwargs)
     job_id = active_job_id.get()
@@ -91,7 +92,9 @@ def _tracked_popen_init(self, *args, **kwargs):
             _active_processes[job_id].append(self)
             logger.info("Registered subprocess PID %s for active job %s", self.pid, job_id)
 
+
 subprocess.Popen.__init__ = _tracked_popen_init
+
 
 def cancel_job(job_id: str) -> None:
     """Terminate and kill all active subprocesses registered for a job, and mark it cancelled."""
@@ -113,6 +116,7 @@ def cancel_job(job_id: str) -> None:
             proc.kill()
         except OSError:
             pass
+
 
 # Singletons — initialized once at import
 _job_queue = JobQueue()
@@ -746,6 +750,7 @@ def trigger_autopilot(
         try:
             _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
             logger.info("🤖 Starting Autopilot background task (job %s)...", job.id)
+
             def _prog(pct: int) -> None:
                 _job_queue.update_progress(job.id, pct)
 
@@ -814,6 +819,7 @@ def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) 
                 job.id,
             )
             settings = Settings.from_env()
+
             def _prog(pct: int) -> None:
                 _job_queue.update_progress(job.id, pct)
 
@@ -892,6 +898,7 @@ def get_video_details(payload: TranscriptRequest) -> dict[str, str]:
     logger.info("📺 Fetching video details for: %s", payload.url)
     try:
         import subprocess
+
         # Get title and thumbnail URL in one fast check
         cmd = ["yt-dlp", "--skip-download", "--print", "%(title)s\n%(thumbnail)s", payload.url]
         res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=15)
@@ -903,7 +910,7 @@ def get_video_details(payload: TranscriptRequest) -> dict[str, str]:
         logger.warning("Failed to fetch video details via yt-dlp: %s. Using placeholder.", e)
         return {
             "title": "YouTube Video",
-            "thumbnail": "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320"
+            "thumbnail": "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320",
         }
 
 
@@ -1036,15 +1043,18 @@ def trigger_clip_render(
                 ]
 
                 if payload.upload:
-                    logger.info("📤 Uploading manually selected clip to YouTube (%s)...", payload.privacy)
+                    logger.info(
+                        "📤 Uploading manually selected clip to YouTube (%s)...", payload.privacy
+                    )
                     try:
                         from shorts_clipper.social.youtube import upload_short
+
                         video_id = upload_short(
                             current_output_path,
                             title=meta["title"],
                             description=meta["description"],
                             tags=meta["tags"],
-                            privacy_status=payload.privacy
+                            privacy_status=payload.privacy,
                         )
                         meta["youtube_video_id"] = video_id
                         meta["publish_status"] = "published"

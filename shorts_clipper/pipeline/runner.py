@@ -13,9 +13,9 @@ so we never triple-encode the video.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import logging
 import tempfile
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 

@@ -11,6 +11,7 @@ import logging
 import os
 import re
 from collections.abc import Sequence
+from typing import Any
 
 from shorts_clipper.core.exceptions import ProviderError
 from shorts_clipper.core.models import ClipWindow, TranscriptSegment
@@ -347,11 +348,11 @@ class GeminiProvider(HighlightProvider):
             json_match = re.search(r"```(?:json)?(.*?)```", raw, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1).strip()
-            
+
             items = json.loads(json_str)
             if not isinstance(items, list):
                 return []
-            
+
             sanitized = []
             for item in items[:count]:
                 start = float(item.get("start", 0.0))
@@ -362,25 +363,27 @@ class GeminiProvider(HighlightProvider):
                 hook = str(item.get("strongest_hook_line", ""))
                 emo = str(item.get("emotional_category", ""))
                 title = str(item.get("title", "Engaging Highlight")).strip()
-                
+
                 # Clamp duration
                 duration = end - start
                 if duration < 30:
                     end = start + 35
                 elif duration > 65:
                     end = start + 55
-                
-                sanitized.append({
-                    "start": start,
-                    "end": end,
-                    "layout": layout,
-                    "virality_score": score,
-                    "strongest_hook_line": hook,
-                    "emotional_category": emo,
-                    "title": title,
-                    "reason": reason,
-                    "duration": round(end - start, 1)
-                })
+
+                sanitized.append(
+                    {
+                        "start": start,
+                        "end": end,
+                        "layout": layout,
+                        "virality_score": score,
+                        "strongest_hook_line": hook,
+                        "emotional_category": emo,
+                        "title": title,
+                        "reason": reason,
+                        "duration": round(end - start, 1),
+                    }
+                )
             return sanitized
         except Exception as e:
             log.warning("Detailed Gemini highlights fetch failed: %s. Using simple fallback.", e)
@@ -396,7 +399,7 @@ class GeminiProvider(HighlightProvider):
                         "emotional_category": "highlights",
                         "title": f"Clip Highlight #{i + 1}",
                         "reason": "AI Selected engaging segment.",
-                        "duration": round(win.end - win.start, 1)
+                        "duration": round(win.end - win.start, 1),
                     }
                     for i, (win, lay) in enumerate(simple_clips)
                 ]

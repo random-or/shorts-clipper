@@ -432,9 +432,9 @@
         .glass-panel {
             background: var(--ink3);
             border: 1px solid var(--wire);
-            border-radius: 16px;
-            padding: 2.2rem;
-            margin-bottom: 2.5rem;
+            border-radius: 12px;
+            padding: 1.5rem 1.8rem;
+            margin-bottom: 1.5rem;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
             position: relative;
             overflow: hidden;
@@ -442,12 +442,12 @@
 
         .panel-title {
             color: var(--smoke);
-            font-size: 16px;
-            font-weight: 800;
-            letter-spacing: 0.02em;
-            margin-bottom: 2rem;
-            border-bottom: 1px solid var(--wire);
-            padding-bottom: 1rem;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            margin-bottom: 1.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            padding-bottom: 0.5rem;
             display: flex;
             align-items: center;
             text-transform: uppercase;
@@ -1123,6 +1123,17 @@
                 </button>
             </div>
             
+            <!-- Uploading Detail Bar Container (Thin and Classic) -->
+            <div id="active-upload-progress-container" style="display: none; flex-direction: column; gap: 0.35rem; margin-top: -1.25rem; margin-bottom: 1.25rem; background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.04); padding: 0.5rem 0.75rem; border-radius: 6px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.7rem;">
+                    <span style="color:var(--ghost); font-weight:600; display:flex; align-items:center; gap:5px;"><i class="fa-solid fa-cloud-arrow-up" style="color:var(--cyan); font-size: 0.75rem;"></i> Uploading to YouTube...</span>
+                    <span id="active-upload-stats" style="color:var(--smoke); font-family:monospace; font-weight:500;">0% | Speed: Calculating... | ETA: Calculating...</span>
+                </div>
+                <div style="width:100%; height:3px; background:rgba(0,0,0,0.3); border-radius:1.5px; overflow:hidden;">
+                    <div id="active-upload-progress-bar" style="width:0%; height:100%; background: var(--cyan); transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+            
             <!-- VIEW: AUTOPILOT -->
             <div id="view-autopilot" class="app-view active">
                 <div class="glass-panel">
@@ -1379,6 +1390,100 @@
         let currentUrlTranscript = "";
         let currentSegments = [];
 
+        // Upload progress tracking
+        let uploadStartTime = null;
+        let lastUploadPct = 0;
+
+        function handleUploadProgress(logLine) {
+            const container = document.getElementById('active-upload-progress-container');
+            if (!container) return;
+            const stats = document.getElementById('active-upload-stats');
+            const bar = document.getElementById('active-upload-progress-bar');
+            
+            const isUploadStart = (logLine.includes('Uploading') && (logLine.includes('YouTube') || logLine.includes('stream'))) || 
+                                  logLine.includes('Initializing upload') || 
+                                  logLine.includes('Uploading Clip') ||
+                                  logLine.includes('Uploading to YouTube');
+                                  
+            if (isUploadStart) {
+                container.style.display = 'flex';
+                if (!uploadStartTime) {
+                    uploadStartTime = Date.now();
+                }
+                lastUploadPct = 0;
+                bar.style.width = '0%';
+                stats.textContent = '0% | Speed: Calculating... | ETA: Calculating...';
+                return;
+            }
+            
+            const match = logLine.match(/Uploaded\s+(\d+)%/i);
+            if (match) {
+                const pct = parseInt(match[1], 10);
+                container.style.display = 'flex';
+                bar.style.width = pct + '%';
+                
+                if (!uploadStartTime) {
+                    uploadStartTime = Date.now();
+                }
+                
+                const elapsed = (Date.now() - uploadStartTime) / 1000;
+                let speedText = "Calculating...";
+                let etaText = "Calculating...";
+                
+                if (elapsed > 0.5 && pct > 0) {
+                    const estSizeMB = 10.0; // typical short video size
+                    const uploadedMB = (pct / 100) * estSizeMB;
+                    const speed = uploadedMB / elapsed; // MB/s
+                    
+                    if (speed < 1) {
+                        speedText = Math.round(speed * 1024) + " KB/s";
+                    } else {
+                        speedText = speed.toFixed(1) + " MB/s";
+                    }
+                    
+                    const remainingSeconds = (estSizeMB - uploadedMB) / speed;
+                    if (remainingSeconds <= 0.1) {
+                        etaText = "Finishing...";
+                    } else if (remainingSeconds < 60) {
+                        etaText = Math.round(remainingSeconds) + "s left";
+                    } else {
+                        const mins = Math.floor(remainingSeconds / 60);
+                        const secs = Math.round(remainingSeconds % 60);
+                        etaText = `${mins}m ${secs}s left`;
+                    }
+                }
+                
+                stats.textContent = `${pct}% | Speed: ${speedText} | ETA: ${etaText}`;
+                return;
+            }
+            
+            const isDone = logLine.includes('uploaded to YouTube successfully') || 
+                           logLine.includes('Upload Complete') || 
+                           logLine.includes('Uploaded manual clip successfully') ||
+                           logLine.includes('successfully published to YouTube');
+                           
+            if (isDone) {
+                container.style.display = 'flex';
+                bar.style.width = '100%';
+                stats.textContent = '100% | Upload Complete!';
+                setTimeout(() => {
+                    container.style.display = 'none';
+                    uploadStartTime = null;
+                }, 4000);
+                return;
+            }
+            
+            const isError = logLine.includes('failed') || 
+                            logLine.includes('cancelled') ||
+                            logLine.includes('Error') ||
+                            logLine.includes('ERROR');
+                            
+            if (isError && (logLine.includes('Upload') || logLine.includes('Publish') || logLine.includes('publish') || logLine.includes('youtube') || logLine.includes('YouTube'))) {
+                container.style.display = 'none';
+                uploadStartTime = null;
+            }
+        }
+
         // App page navigation router
         function switchView(viewId) {
             document.querySelectorAll('.app-view').forEach(view => {
@@ -1457,6 +1562,9 @@
                         
                         term.appendChild(row);
                         
+                        // Track upload statistics in real-time
+                        handleUploadProgress(line);
+                        
                         // Dynamically update progress status pipeline bar badges based on logs
                         if (activeJobPollInterval !== null) {
                             updatePipelineProgress(line);
@@ -1490,6 +1598,13 @@
                 bar.className = 'pipeline-bar';
             });
             document.getElementById('step-idle').classList.add('active');
+            
+            // Also hide active upload container and reset start time
+            const container = document.getElementById('active-upload-progress-container');
+            if (container) {
+                container.style.display = 'none';
+            }
+            uploadStartTime = null;
         }
 
         // Set the active stage of the pipeline based on percentage
