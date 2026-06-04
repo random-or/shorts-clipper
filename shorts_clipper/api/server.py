@@ -28,7 +28,6 @@ from shorts_clipper.analyze.feedback import ClipFeedback, FeedbackStore
 from shorts_clipper.core.queue import JobQueue, JobStatus
 from shorts_clipper.core.settings import Settings
 from shorts_clipper.downloader.yt_dlp import download_audio, fetch_subtitles
-from shorts_clipper.pipeline.runner import run, run_autopilot
 from shorts_clipper.providers.gemini import GeminiProvider
 from shorts_clipper.transcription.whisper import transcribe_clip
 
@@ -96,26 +95,45 @@ def _tracked_popen_init(self, *args, **kwargs):
 subprocess.Popen.__init__ = _tracked_popen_init
 
 
+def ensure_worker_running() -> None:
+    import sys
+    import time
+    heartbeat_path = Path("outputs/worker_heartbeat.txt")
+    worker_running = False
+    if heartbeat_path.exists():
+        try:
+            last_heartbeat = float(heartbeat_path.read_text(encoding="utf-8").strip())
+            if time.time() - last_heartbeat < 15.0:
+                worker_running = True
+        except Exception:
+            pass
+            
+    if not worker_running:
+        logger.info("⚠️  Background worker not running. Spawning new worker process...")
+        try:
+            subprocess.Popen(
+                [sys.executable, "-m", "shorts_clipper.core.worker"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True
+            )
+            logger.info("✅ Worker process spawned successfully.")
+        except Exception as e:
+            logger.error("Failed to spawn worker process: %s", e)
+
+
+@app.on_event("startup")
+def startup_event():
+    from shorts_clipper.core.logging import configure_logging
+    settings = Settings.from_env()
+    configure_logging(settings.log_level)
+    ensure_worker_running()
+
+
 def cancel_job(job_id: str) -> None:
-    """Terminate and kill all active subprocesses registered for a job, and mark it cancelled."""
+    """Cancel a job by updating its status in the DB. The worker polls this status and cancels its subprocesses."""
     _job_queue.update_status(job_id, JobStatus.CANCELLED, error="Job cancelled by user.")
-    with _proc_lock:
-        procs = _active_processes.pop(job_id, [])
-
-    logger.info("Cancelling job %s: terminating %d processes", job_id, len(procs))
-    for proc in procs:
-        try:
-            logger.info("Terminating subprocess PID %s...", proc.pid)
-            proc.terminate()
-        except OSError:
-            pass
-
-    # Give them a short time to terminate, then force kill
-    for proc in procs:
-        try:
-            proc.kill()
-        except OSError:
-            pass
+    logger.info("Job %s cancelled in SQLite DB; worker will handle termination.", job_id)
 
 
 # Singletons — initialized once at import
@@ -125,6 +143,34 @@ _feedback_store = FeedbackStore()
 # ---------------------------------------------------------------------------
 # Data Models
 # ---------------------------------------------------------------------------
+
+
+class JobResponse(BaseModel):
+    id: str
+    kind: str
+    status: str
+    progress: int
+    error: str
+    created_at: float
+    updated_at: float
+    output_paths: list[str]
+
+
+class StatusResponse(BaseModel):
+    status: str
+    message: str | None = None
+    job_id: str | None = None
+
+
+class GeminiChatRequest(BaseModel):
+    prompt: str
+    context: str
+    history: list[dict[str, str]] = []
+
+
+class WatchdogConfigRequest(BaseModel):
+    enabled: bool
+    channels: list[dict[str, Any]]
 
 
 class AutopilotRequest(BaseModel):
@@ -738,124 +784,19 @@ def save_settings(payload: SettingsModel) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-@app.post("/api/autopilot")
-def trigger_autopilot(
-    payload: AutopilotRequest, background_tasks: BackgroundTasks
-) -> dict[str, Any]:
+@app.post("/api/autopilot", response_model=StatusResponse)
+def trigger_autopilot(payload: AutopilotRequest) -> dict[str, Any]:
     """Trigger Autopilot mode with job tracking."""
+    ensure_worker_running()
     job = _job_queue.create("autopilot", payload.model_dump())
-
-    def task_worker() -> None:
-        active_job_id.set(job.id)
-        try:
-            _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
-            logger.info("🤖 Starting Autopilot background task (job %s)...", job.id)
-
-            def _prog(pct: int) -> None:
-                _job_queue.update_progress(job.id, pct)
-
-            # Map duration string to days
-            max_age_days = None
-            if payload.scout_duration == "today":
-                max_age_days = 1
-            elif payload.scout_duration == "week":
-                max_age_days = 7
-            elif payload.scout_duration == "month":
-                max_age_days = 30
-
-            settings = Settings.from_env()
-            result = run_autopilot(
-                settings=settings,
-                channel=payload.channel,
-                niche=payload.niche,
-                keyword=payload.keyword,
-                count=payload.count,
-                upload=payload.upload,
-                progress_callback=_prog,
-                max_age_days=max_age_days,
-            )
-            output_paths = []
-            if result:
-                if isinstance(result, list):
-                    output_paths = [str(p) for p in result]
-                else:
-                    output_paths = [str(result)]
-
-            _job_queue.update_status(
-                job.id,
-                JobStatus.DONE,
-                progress=100,
-                output_paths=output_paths,
-                result={"clip_count": len(output_paths)},
-            )
-            logger.info("✅ Autopilot background task finished successfully!")
-        except Exception as err:
-            current_job = _job_queue.get(job.id)
-            if current_job and current_job.status == JobStatus.CANCELLED:
-                logger.info("Job %s was cancelled. Skipping failure status update.", job.id)
-            else:
-                logger.exception("❌ Autopilot background task failed")
-                _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
-        finally:
-            with _proc_lock:
-                _active_processes.pop(job.id, None)
-
-    background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Autopilot pipeline triggered."}
 
 
-@app.post("/api/clip")
-def trigger_clip(payload: CustomClipRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+@app.post("/api/clip", response_model=StatusResponse)
+def trigger_clip(payload: CustomClipRequest) -> dict[str, Any]:
     """Run standard clipper for a specific YouTube URL with job tracking."""
+    ensure_worker_running()
     job = _job_queue.create("clip", payload.model_dump())
-
-    def task_worker() -> None:
-        active_job_id.set(job.id)
-        try:
-            _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
-            logger.info(
-                "🎬 Starting Custom Clip background task for URL: %s (job %s)...",
-                payload.url,
-                job.id,
-            )
-            settings = Settings.from_env()
-
-            def _prog(pct: int) -> None:
-                _job_queue.update_progress(job.id, pct)
-
-            result = run(
-                payload.url,
-                settings=settings,
-                count=payload.count,
-                upload=payload.upload,
-                progress_callback=_prog,
-            )
-            output_paths = []
-            if isinstance(result, list):
-                output_paths = [str(p) for p in result]
-            else:
-                output_paths = [str(result)]
-
-            _job_queue.update_status(
-                job.id,
-                JobStatus.DONE,
-                progress=100,
-                output_paths=output_paths,
-                result={"clip_count": len(output_paths)},
-            )
-            logger.info("✅ Custom Clip background task finished successfully!")
-        except Exception as err:
-            current_job = _job_queue.get(job.id)
-            if current_job and current_job.status == JobStatus.CANCELLED:
-                logger.info("Job %s was cancelled. Skipping failure status update.", job.id)
-            else:
-                logger.exception("❌ Custom Clip background task failed")
-                _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
-        finally:
-            with _proc_lock:
-                _active_processes.pop(job.id, None)
-
-    background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Clipper pipeline triggered."}
 
 
@@ -934,165 +875,93 @@ def trigger_scout_highlights(payload: HighlightsRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/api/clip/render")
-def trigger_clip_render(
-    payload: CustomClipRenderRequest, background_tasks: BackgroundTasks
-) -> dict[str, Any]:
+@app.post("/api/clip/render", response_model=StatusResponse)
+def trigger_clip_render(payload: CustomClipRenderRequest) -> dict[str, Any]:
     """Force rendering a specific custom timestamp window from a video."""
+    ensure_worker_running()
     job = _job_queue.create("render", payload.model_dump())
-
-    def task_worker() -> None:
-        active_job_id.set(job.id)
-        try:
-            _job_queue.update_status(job.id, JobStatus.RUNNING, progress=5)
-            logger.info(
-                "🎬 Rendering precise custom clip window: %.1fs–%.1fs [%s] from %s (job %s)...",
-                payload.start,
-                payload.end,
-                payload.layout,
-                payload.url,
-                job.id,
-            )
-
-            settings = Settings.from_env()
-
-            with tempfile.TemporaryDirectory(prefix="vanguard_render_") as work_dir:
-                work_path = Path(work_dir)
-                clip_work_dir = work_path / "clip_1"
-                clip_work_dir.mkdir(parents=True, exist_ok=True)
-
-                micro_path = clip_work_dir / "micro_clip.mp4"
-                logger.info(
-                    "⬇ Downloading precise section %.1fs–%.1fs...", payload.start, payload.end
-                )
-
-                from shorts_clipper.downloader.yt_dlp import download_clip
-
-                download_clip(
-                    payload.url, micro_path, start_time=payload.start, end_time=payload.end
-                )
-                _job_queue.update_progress(job.id, 30)
-
-                logger.info("Transcribing micro-clip for word timing...")
-                precision_segments = transcribe_clip(
-                    micro_path,
-                    model_size=settings.whisper_model,
-                    device=settings.whisper_device,
-                    compute_type=settings.whisper_compute_type,
-                )
-                _job_queue.update_progress(job.id, 50)
-
-                logger.info("Cropping to vertical layout...")
-                cropped_path = clip_work_dir / "cropped.mp4"
-                from shorts_clipper.rendering.crop import process_to_vertical
-
-                process_to_vertical(
-                    micro_path,
-                    cropped_path,
-                    layout=payload.layout,
-                    video_codec=settings.video_codec,
-                    preset=settings.video_preset,
-                )
-                _job_queue.update_progress(job.id, 70)
-
-                logger.info("Burning subtitles + pacing...")
-                from shorts_clipper.captions.generator import burn_subtitles
-
-                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                current_output_path = settings.output_dir / f"custom_{ts}.mp4"
-                settings.output_dir.mkdir(parents=True, exist_ok=True)
-
-                burn_subtitles(
-                    cropped_path,
-                    precision_segments,
-                    start_offset=0.0,
-                    output_path=current_output_path,
-                    pacing=1.15,
-                    video_codec=settings.video_codec,
-                    preset=settings.video_preset,
-                    style_name=settings.subtitle_style,
-                )
-                _job_queue.update_progress(job.id, 90)
-
-                # Extract thumbnail
-                try:
-                    from shorts_clipper.render.thumbnailer import extract_thumbnail
-
-                    extract_thumbnail(current_output_path)
-                except Exception as thumb_err:
-                    logger.warning("Thumbnail extraction failed: %s", thumb_err)
-
-                # Generate viral metadata using Gemini and write sidecar .json file
-
-                meta = {
-                    "title": f"Custom Clip {ts} #shorts #viral",
-                    "description": "Automatically generated by Shorts Clipper. #shorts #viral",
-                    "tags": ["shorts", "viral", "trending"],
-                    "publish_status": "idle",
-                    "publish_error": None,
-                }
-                try:
-                    provider = GeminiProvider(api_key=settings.gemini_api_key)
-                    meta = provider.generate_clip_metadata(precision_segments)
-                except Exception as meta_err:
-                    logger.warning("Failed to generate clip metadata with Gemini: %s", meta_err)
-
-                # Ensure segments are preserved in the metadata sidecar
-                meta["segments"] = [
-                    {"start": s.start, "end": s.end, "text": s.text} for s in precision_segments
-                ]
-
-                if payload.upload:
-                    logger.info(
-                        "📤 Uploading manually selected clip to YouTube (%s)...", payload.privacy
-                    )
-                    try:
-                        from shorts_clipper.social.youtube import upload_short
-
-                        video_id = upload_short(
-                            current_output_path,
-                            title=meta["title"],
-                            description=meta["description"],
-                            tags=meta["tags"],
-                            privacy_status=payload.privacy,
-                        )
-                        meta["youtube_video_id"] = video_id
-                        meta["publish_status"] = "published"
-                        logger.info("🚀 Uploaded manual clip successfully! Video ID: %s", video_id)
-                    except Exception as upload_err:
-                        logger.error("Failed to upload manual clip: %s", upload_err)
-                        meta["publish_status"] = "failed"
-                        meta["publish_error"] = str(upload_err)
-
-                json_path = current_output_path.with_suffix(".json")
-                try:
-                    json_path.write_text(
-                        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
-                    )
-                    logger.info("💾 Generated sidecar metadata: %s", json_path)
-                except Exception as write_err:
-                    logger.warning("Failed to write sidecar metadata: %s", write_err)
-
-                _job_queue.update_status(
-                    job.id,
-                    JobStatus.DONE,
-                    progress=100,
-                    output_paths=[str(current_output_path)],
-                )
-                logger.info("✅ Custom rendered clip ready at: %s", current_output_path)
-        except Exception as err:
-            current_job = _job_queue.get(job.id)
-            if current_job and current_job.status == JobStatus.CANCELLED:
-                logger.info("Job %s was cancelled. Skipping failure status update.", job.id)
-            else:
-                logger.exception("❌ Precision render task failed")
-                _job_queue.update_status(job.id, JobStatus.FAILED, error=str(err))
-        finally:
-            with _proc_lock:
-                _active_processes.pop(job.id, None)
-
-    background_tasks.add_task(task_worker)
     return {"status": "started", "job_id": job.id, "message": "Precision render task triggered."}
+
+
+@app.post("/api/gemini/chat")
+def gemini_chat(payload: GeminiChatRequest) -> dict[str, Any]:
+    """Interact with Gemini as an AI metadata co-writer for titles, descriptions, hooks, and tags."""
+    try:
+        settings = Settings.from_env()
+        provider = GeminiProvider(api_key=settings.gemini_api_key)
+        
+        system_instruction = (
+            "You are an elite, highly experienced viral video editor and content strategist. "
+            "Help the user craft highly engaging, click-worthy titles, hooks, tags, and description copy "
+            "optimized for YouTube Shorts, TikTok, and Instagram Reels. Use the provided clip text context "
+            "to make your responses highly tailored."
+        )
+        
+        prompt_context = f"System Instruction: {system_instruction}\n\nClip Transcript Context:\n{payload.context}\n\nUser Request: {payload.prompt}"
+        response = provider._generate_content_with_retry(prompt_context)
+        return {"text": response.text.strip()}
+    except Exception as exc:
+        logger.error("Failed to chat with Gemini: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/watchdog")
+def get_watchdog_config() -> dict[str, Any]:
+    """Retrieve the Autopilot Watchdog configuration."""
+    watchdog_path = Path("outputs/watchdog.json")
+    if not watchdog_path.exists():
+        watchdog_path.parent.mkdir(parents=True, exist_ok=True)
+        default_data = {"enabled": False, "channels": [], "last_poll_time": 0.0}
+        watchdog_path.write_text(json.dumps(default_data, indent=2), encoding="utf-8")
+        return default_data
+    try:
+        return json.loads(watchdog_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.error("Failed to read watchdog config: %s", e)
+        return {"enabled": False, "channels": []}
+
+
+@app.post("/api/watchdog")
+def update_watchdog_config(payload: WatchdogConfigRequest) -> dict[str, Any]:
+    """Update the Autopilot Watchdog configuration."""
+    watchdog_path = Path("outputs/watchdog.json")
+    watchdog_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    current = {"enabled": False, "channels": [], "last_poll_time": 0.0}
+    if watchdog_path.exists():
+        try:
+            current = json.loads(watchdog_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+            
+    current["enabled"] = payload.enabled
+    current["channels"] = payload.channels
+    
+    try:
+        watchdog_path.write_text(json.dumps(current, indent=2), encoding="utf-8")
+        return {"status": "saved", "config": current}
+    except Exception as e:
+        logger.error("Failed to write watchdog config: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.delete("/api/watchdog/{channel_name}")
+def delete_watchdog_channel(channel_name: str) -> dict[str, Any]:
+    """Remove a channel from the Autopilot Watchdog list by its name."""
+    watchdog_path = Path("outputs/watchdog.json")
+    if not watchdog_path.exists():
+        return {"status": "success", "message": "Monitored list is empty."}
+        
+    try:
+        data = json.loads(watchdog_path.read_text(encoding="utf-8"))
+        channels = data.get("channels", [])
+        filtered = [ch for ch in channels if ch.get("name") != channel_name]
+        data["channels"] = filtered
+        watchdog_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return {"status": "deleted", "message": f"Monitored channel '{channel_name}' removed."}
+    except Exception as e:
+        logger.error("Failed to delete channel from watchdog: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -1154,18 +1023,28 @@ async def stream_logs() -> StreamingResponse:
     """Stream live logs generated by python clipper backend via SSE."""
 
     async def log_generator():
-        while True:
-            try:
-                # Flush the entire queue
-                lines = []
-                while not log_queue.empty():
-                    lines.append(log_queue.get_nowait())
-                if lines:
-                    joined = "\n".join(lines)
-                    yield f"data: {joined}\n\n"
-                await anyio.sleep(0.5)
-            except Exception:
-                break
+        log_file = Path("outputs/app.log")
+        if not log_file.exists():
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            log_file.touch()
+
+        with open(log_file, encoding="utf-8", errors="ignore") as f:
+            # Pre-populate UI with last 50 log lines for immediate context
+            lines = f.readlines()
+            tail_lines = lines[-50:]
+            if tail_lines:
+                yield f"data: {''.join(tail_lines)}\n\n"
+                
+            f.seek(0, 2)
+            while True:
+                try:
+                    line = f.readline()
+                    if not line:
+                        await anyio.sleep(0.25)
+                        continue
+                    yield f"data: {line.strip()}\n\n"
+                except Exception:
+                    break
 
     return StreamingResponse(log_generator(), media_type="text/event-stream")
 

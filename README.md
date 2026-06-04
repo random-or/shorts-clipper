@@ -79,6 +79,19 @@ flowchart TD
 
 ---
 
+## 🚀 Advanced Features & Integrations
+
+The current version of Shorts Clipper includes several newly integrated advanced features tailored for modern creators:
+
+1. **Decoupled Task Workers:** Offloads video rendering, highlights selection, and uploads to a dedicated database-backed background worker daemon (SQLite queue). This ensures active tasks are never lost if the web server restarts.
+2. **Stream-Piped Rendering:** Directs `yt-dlp` download output stream straight to FFmpeg crop and burn filter loops, eliminating intermediate disk clip writes and speeding up renders.
+3. **Smart Face Tracking & Offsets:** Interactive crop settings dropdown selector allowing Center/Left/Right crop layouts, Haar Cascade auto-face tracking, or custom horizontal offset sliders (represented visually with a real-time responsive 9:16 safe-zone overlay).
+4. **Custom Subtitle Theme Studio:** Preset typography styles including MrBeast Pop, Hormozi Glow, Minimal Clean, and Gold Premium, along with a custom theme editor to build personalized custom styles (Font, Size, Color, Outline, Shadow) serialized dynamically.
+5. **Gemini Metadata Co-Writer:** Integrated slide-out assistant panel powered by Gemini to brainstorm titles/hooks, write video descriptions with SEO keywords, and list hashtags based on clip transcripts, complete with automatic copy/paste insertion callbacks.
+6. **Autopilot Channel Watchdog:** Periodically polls monitored YouTube channels for new uploads. When a new video is detected, it auto-queues Autopilot clipping jobs automatically.
+
+---
+
 ## ⚡ Key Pipeline Steps
 
 ### 1. 🔍 Trending Scout

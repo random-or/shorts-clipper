@@ -26,6 +26,18 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def hex_to_ass_color(hex_str: str) -> str:
+    """Convert a standard hex color like #FF5500 to ASS &H00BBGGRR& format."""
+    clean_hex = hex_str.strip().lstrip("#")
+    if len(clean_hex) == 6:
+        r, g, b = clean_hex[0:2], clean_hex[2:4], clean_hex[4:6]
+        return f"&H00{b}{g}{r}&"
+    elif len(clean_hex) == 8:
+        a, r, g, b = clean_hex[0:2], clean_hex[2:4], clean_hex[4:6], clean_hex[6:8]
+        return f"&H{a}{b}{g}{r}&"
+    return "&H00FFFFFF&"
+
+
 def _ass_header(style_name: str = "default") -> str:
     """Build the ASS subtitle file header with custom style overrides."""
     style_format = (
@@ -35,15 +47,59 @@ def _ass_header(style_name: str = "default") -> str:
         " Alignment, MarginL, MarginR, MarginV, Encoding"
     )
 
-    style_name = str(style_name).lower()
-    if style_name == "mrbeast":
+    style_name = str(style_name)
+    style_name_lower = style_name.lower()
+    
+    if style_name_lower.startswith("custom_"):
+        # custom_FontName_FontSize_PrimaryHex_OutlineHex_OutlineVal_ShadowVal
+        try:
+            parts = style_name.split("_")
+            font_name = parts[1]
+            font_size = parts[2]
+            pri_color = hex_to_ass_color(parts[3])
+            out_color = hex_to_ass_color(parts[4])
+            out_val = parts[5]
+            shd_val = parts[6]
+            style_def = (
+                f"Default,{font_name},{font_size},"
+                f"{pri_color},&H0000FF00&,{out_color},&H00000000&,"
+                f"-1,0,0,0,100,100,0,0,1,{out_val},{shd_val},2,40,40,180,1"
+            )
+        except Exception:
+            style_def = (
+                "Default,Inter Bold,58,"
+                "&H00F2F2F2&,&H00FFFF00&,&H00000000&,&H80000000&,"
+                "-1,0,0,0,100,100,0,0,1,2.5,1,2,40,40,180,1"
+            )
+    elif style_name_lower == "mrbeast":
         # Montserrat Black, size 68, Yellow Primary, heavy Black border (4.0), no shadow
         style_def = (
             "Default,Montserrat Black,68,"
             "&H0000FFFF&,&H0000FF00&,&H00000000&,&H00000000&,"
             "-1,0,0,0,100,100,0,0,1,4.0,0,2,40,40,220,1"
         )
-    elif style_name == "minimal":
+    elif style_name_lower == "hormozi":
+        # Montserrat ExtraBold, size 65, White Primary, green border outline, large size
+        style_def = (
+            "Default,Montserrat ExtraBold,65,"
+            "&H00FFFFFF&,&H0000FF00&,&H0000B300&,&H00000000&,"
+            "-1,0,0,0,100,100,0,0,1,4.0,1.5,2,40,40,200,1"
+        )
+    elif style_name_lower == "clean":
+        # Arial Bold, size 60, clean layout, white primary, subtle gray outline, no shadow
+        style_def = (
+            "Default,Arial Bold,60,"
+            "&H00FFFFFF&,&H0000FF00&,&H004D4D4D&,&H00000000&,"
+            "-1,0,0,0,100,100,0,0,1,1.8,0,2,40,40,180,1"
+        )
+    elif style_name_lower == "gold":
+        # Outfit ExtraBold, size 64, Gold Primary, dark border
+        style_def = (
+            "Default,Outfit ExtraBold,64,"
+            "&H0000D7FF&,&H0000FF00&,&H00111111&,&H80000000&,"
+            "-1,0,0,0,100,100,0,0,1,3.0,1.0,2,40,40,180,1"
+        )
+    elif style_name_lower == "minimal":
         # Arial, size 50, solid white text, no outline, translucent black capsule background box (BorderStyle=3)
         style_def = (
             "Default,Arial,50,"

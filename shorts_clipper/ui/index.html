@@ -428,22 +428,22 @@
         .glass-panel {
             background: var(--ink3);
             border: 1px solid var(--wire);
-            border-radius: 12px;
-            padding: 1.5rem 1.8rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
             position: relative;
             overflow: hidden;
         }
 
         .panel-title {
             color: var(--smoke);
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            margin-bottom: 1.25rem;
+            font-size: 12.5px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            margin-bottom: 1rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            padding-bottom: 0.5rem;
+            padding-bottom: 0.4rem;
             display: flex;
             align-items: center;
             text-transform: uppercase;
@@ -547,9 +547,9 @@
             justify-content: space-between;
             background: var(--ink2);
             border: 1px solid var(--wire);
-            padding: 1.5rem 2.5rem;
-            margin-bottom: 2.5rem;
-            border-radius: 12px;
+            padding: 0.8rem 1.8rem;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
 
@@ -557,7 +557,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0.6rem;
+            gap: 0.4rem;
             color: var(--ghost);
             transition: all 0.4s ease;
         }
@@ -566,19 +566,19 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 48px;
-            height: 48px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             background: var(--ink);
             border: 2px solid var(--wire);
-            font-size: 1.15rem;
+            font-size: 0.9rem;
             color: var(--ghost);
             transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
         .stage-label {
             color: var(--ghost);
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -1033,6 +1033,14 @@
                     <i class="fa-solid fa-video"></i>
                     <span>Clips Library</span>
                 </div>
+                <div class="nav-item" onclick="switchView('view-watchdog')" id="nav-item-watchdog" title="Channel Watchdog">
+                    <i class="fa-solid fa-eye"></i>
+                    <span>Channel Watchdog</span>
+                </div>
+                <div class="nav-item" onclick="toggleAssistantDrawer(true)" id="nav-item-cowriter" title="Gemini Co-Writer">
+                    <i class="fa-solid fa-brain"></i>
+                    <span>Gemini Co-Writer</span>
+                </div>
             </div>
 
             <!-- Bottom Section of Sidebar -->
@@ -1322,12 +1330,52 @@
                             <input type="number" id="set-age-days" value="90">
                         </div>
                         <div class="form-group">
-                            <label for="set-subtitle-style">Burnt-In Subtitle Style</label>
-                            <select id="set-subtitle-style">
+                            <label for="set-subtitle-style">Burnt-In Subtitle Style Preset</label>
+                            <select id="set-subtitle-style" onchange="toggleCustomStylePanel(this.value)">
                                 <option value="default">Default (Clean Cyberpunk Neon)</option>
                                 <option value="mrbeast">MrBeast Pop (Bold Impact Yellow)</option>
+                                <option value="hormozi">Hormozi Glow (Montserrat Green Border)</option>
+                                <option value="clean">Minimal Clean (Arial Gray Outline)</option>
+                                <option value="gold">Gold Premium (Outfit ExtraBold Gold)</option>
                                 <option value="minimal">Minimalist Capsule (Solid White Boxed)</option>
+                                <option value="custom">Custom Theme Studio</option>
                             </select>
+                        </div>
+                        
+                        <div id="custom-style-panel" class="glass-panel" style="display: none; grid-column: span 2; gap: 1.25rem; padding: 1.25rem; margin-top: 0.5rem; border-color: rgba(0, 210, 255, 0.2); background: rgba(255, 255, 255, 0.005); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                            <h4 style="grid-column: span 100%; color: var(--gold); font-size: 0.95rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-palette"></i> Custom Typography Theme Studio
+                            </h4>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="cust-font-name" style="font-size: 0.78rem;">Font Name</label>
+                                <input type="text" id="cust-font-name" value="Inter Bold" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="cust-font-size" style="font-size: 0.78rem;">Font Size</label>
+                                <input type="number" id="cust-font-size" value="58" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="cust-pri-color" style="font-size: 0.78rem;">Primary Color</label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <input type="color" id="cust-pri-color-picker" value="#F2F2F2" style="width: 32px; height: 32px; border: none; border-radius: 4px; cursor: pointer; padding: 0; background: none;" oninput="document.getElementById('cust-pri-color').value = this.value">
+                                    <input type="text" id="cust-pri-color" value="#F2F2F2" style="flex: 1; padding: 0.4rem 0.75rem; font-size: 0.82rem;" oninput="document.getElementById('cust-pri-color-picker').value = this.value">
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="cust-out-color" style="font-size: 0.78rem;">Outline Color</label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <input type="color" id="cust-out-color-picker" value="#000000" style="width: 32px; height: 32px; border: none; border-radius: 4px; cursor: pointer; padding: 0; background: none;" oninput="document.getElementById('cust-out-color').value = this.value">
+                                    <input type="text" id="cust-out-color" value="#000000" style="flex: 1; padding: 0.4rem 0.75rem; font-size: 0.82rem;" oninput="document.getElementById('cust-out-color-picker').value = this.value">
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="cust-out-val" style="font-size: 0.78rem;">Outline Width</label>
+                                <input type="number" id="cust-out-val" value="2.5" step="0.5" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="cust-shd-val" style="font-size: 0.78rem;">Shadow Depth</label>
+                                <input type="number" id="cust-shd-val" value="1.0" step="0.5" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                            </div>
                         </div>
                         <div class="form-group" style="flex-direction:row; align-items:center; gap:1rem; padding-top:1.5rem;">
                             <input type="checkbox" id="set-enable-gpu" style="width:20px; height:20px;">
@@ -1363,6 +1411,65 @@
         </div>
     </div>
     
+    <!-- Custom Style Injection for new features -->
+    <style>
+        /* Assistant Slide-out Drawer */
+        .assistant-drawer {
+            position: fixed;
+            top: 0;
+            right: -420px;
+            width: 400px;
+            height: 100%;
+            background: #0d0e1b;
+            border-left: 1px solid var(--wire);
+            box-shadow: -10px 0 35px rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            transition: right 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            display: flex;
+            flex-direction: column;
+        }
+        .assistant-drawer.active {
+            right: 0;
+        }
+        .assistant-msg {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            max-width: 85%;
+            font-size: 0.82rem;
+            line-height: 1.4;
+            position: relative;
+        }
+        .assistant-msg.user {
+            align-self: flex-end;
+            background: var(--cyan-glow);
+            color: #fff;
+            border: 1px solid var(--cyan);
+            border-radius: 8px 8px 0 8px;
+        }
+        .assistant-msg.ai {
+            align-self: flex-start;
+            background: var(--wire);
+            color: var(--smoke);
+            border-radius: 8px 8px 8px 0;
+        }
+        .assistant-copy-btn {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: var(--ink);
+            border: 1px solid var(--wire);
+            color: var(--ghost);
+            padding: 2px 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.65rem;
+        }
+        .assistant-copy-btn:hover {
+            color: var(--gold);
+            border-color: var(--gold);
+        }
+    </style>
+
     <!-- Vertical Video Preview Player Modal -->
     <div class="modal" id="preview-modal">
         <div class="modal-content">
@@ -1370,13 +1477,112 @@
                 <span class="modal-title" id="modal-video-title">Preview Vertical Short</span>
                 <button class="modal-close" onclick="closeVideoModal()">&times;</button>
             </div>
-            <div class="modal-body">
-                <video id="modal-video-player" controls></video>
-                <iframe id="modal-youtube-player" style="display: none;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+            <div class="modal-body" style="position: relative; display: flex; justify-content: center; align-items: center; background: #030408; overflow: hidden; height: 450px;">
+                <div id="modal-player-wrapper" style="position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center;">
+                    <video id="modal-video-player" controls style="max-height: 100%; max-width: 100%; z-index: 1;"></video>
+                    <iframe id="modal-youtube-player" style="display: none; width: 100%; height: 100%; border: none; z-index: 1;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                    
+                    <!-- Crop Bounding Box Safe Zone Mask -->
+                    <div id="modal-crop-overlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; display: flex; justify-content: center; align-items: center;">
+                        <div id="crop-mask-left" style="flex: 1; height: 100%; background: rgba(0, 0, 0, 0.75); border-right: 1.5px dashed var(--wire); transition: all 0.2s ease;"></div>
+                        <div id="crop-safe-box" style="width: 253px; height: 100%; border: 2px dashed var(--cyan); box-shadow: 0 0 15px var(--cyan-glow); background: rgba(0, 210, 255, 0.04); position: relative; flex-shrink: 0; transition: all 0.2s ease;">
+                            <span style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: var(--cyan); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-family: monospace; font-weight: 700; border: 1px solid var(--cyan); white-space: nowrap;">9:16 SAFE ZONE</span>
+                        </div>
+                        <div id="crop-mask-right" style="flex: 1; height: 100%; background: rgba(0, 0, 0, 0.75); border-left: 1.5px dashed var(--wire); transition: all 0.2s ease;"></div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-mini" onclick="closeVideoModal()">Close</button>
                 <a id="modal-video-download" href="#" download class="btn btn-cyan btn-mini">Download</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW: WATCHDOG -->
+    <div id="view-watchdog" class="app-view" style="display: none;">
+        <div class="glass-panel" style="padding: 2rem;">
+            <h2 class="panel-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <span><i class="fa-solid fa-eye" style="color: var(--cyan);"></i> Autopilot Channel Watchdog</span>
+                <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; color: var(--smoke);">
+                    <input type="checkbox" id="watchdog-toggle" onchange="toggleWatchdog(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span>Watchdog Polling Active</span>
+                </label>
+            </h2>
+            <p style="color: var(--ghost); font-size: 0.85rem; margin-top: -0.5rem; margin-bottom: 1.5rem;">
+                Watchdog automatically scans the channels below for new uploads. When a new long-form video is detected, it triggers Autopilot to scout, crop, burn captions, and queue/publish drafts automatically.
+            </p>
+            
+            <!-- Add Channel Row -->
+            <div style="display: flex; gap: 1rem; margin-bottom: 2rem; background: rgba(255,255,255,0.01); border: 1px solid var(--wire); padding: 1rem; border-radius: 8px;">
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 0.4rem;">
+                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--smoke);">Add YouTube Channel URL or Handle</label>
+                    <input type="text" id="watchdog-url-input" placeholder="e.g. https://www.youtube.com/@LexFridman or @joerogan" style="flex: 1; padding: 0.6rem 1rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 6px; color: var(--smoke); font-size: 0.88rem;">
+                </div>
+                <div style="display: flex; align-items: flex-end;">
+                    <button class="btn btn-cyan" onclick="addWatchdogChannel()" style="padding: 0.6rem 1.5rem; font-weight: 600;">
+                        <i class="fa-solid fa-plus"></i> Add Channel
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Monitored Channels Table -->
+            <h3 style="font-size: 1rem; color: var(--smoke); margin-bottom: 1rem; font-family: var(--font-display);">📺 Monitored Channels</h3>
+            <div style="overflow-x: auto;">
+                <table class="highlights-table" style="width: 100%; text-align: left; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th>Channel Handle/Name</th>
+                            <th>YouTube URL</th>
+                            <th>Last Seen Video ID</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="watchdog-channels-list">
+                        <!-- Dynamically populated -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assistant Drawer -->
+    <div id="assistant-drawer" class="assistant-drawer">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--wire); background: rgba(0,0,0,0.15);">
+            <h3 style="font-size: 1rem; font-family: var(--font-display); color: var(--gold); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                <i class="fa-solid fa-brain"></i> Gemini Co-Writer
+            </h3>
+            <button onclick="toggleAssistantDrawer(false)" style="background: none; border: none; color: var(--smoke); font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+        </div>
+        
+        <!-- Chat Messages Scroll Area -->
+        <div id="assistant-chat-log" style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+            <div class="assistant-msg ai">
+                👋 Hi! I'm your Gemini AI Metadata Co-Writer. Click a quick prompt below or type your instruction to generate titles, viral hooks, tags, or description copy!
+            </div>
+        </div>
+        
+        <!-- Presets and Prompts -->
+        <div style="padding: 0.75rem 1rem; background: rgba(0,0,0,0.15); border-top: 1px solid var(--wire); display: flex; gap: 0.5rem; overflow-x: auto; white-space: nowrap; scrollbar-width: none;">
+            <button class="btn btn-mini btn-secondary" onclick="sendQuickAssistantPrompt('Generate 3 catchy viral titles/hooks for this clip.')">📝 Titles & Hooks</button>
+            <button class="btn btn-mini btn-secondary" onclick="sendQuickAssistantPrompt('Write an engaging video description with SEO keywords and relevant tags.')">✍️ Description</button>
+            <button class="btn btn-mini btn-secondary" onclick="sendQuickAssistantPrompt('List the top 15 trending hashtags for this video clip niche.')">🏷️ Hashtags</button>
+        </div>
+        
+        <!-- Chat Input Area -->
+        <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--wire); background: rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="assistant-copy-target" style="flex: 1; padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 4px; border: 1px solid var(--wire); background: var(--ink); color: var(--smoke);">
+                    <option value="none">Choose field to paste results...</option>
+                    <option value="title">Paste to Title field</option>
+                    <option value="description">Paste to Description field</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <input type="text" id="assistant-chat-input" placeholder="Ask Gemini..." onkeydown="if(event.key==='Enter') sendGeminiAssistantMsg()" style="flex: 1; padding: 0.5rem 0.75rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 6px; color: var(--smoke); font-size: 0.85rem;">
+                <button class="btn btn-cyan btn-mini" onclick="sendGeminiAssistantMsg()" style="padding: 0 0.85rem;">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -1497,6 +1703,9 @@
                 document.getElementById('nav-item-clipper').classList.add('active');
             } else if (viewId === 'view-library') {
                 document.getElementById('nav-item-library').classList.add('active');
+            } else if (viewId === 'view-watchdog') {
+                document.getElementById('nav-item-watchdog').classList.add('active');
+                fetchWatchdog();
             } else if (viewId === 'view-settings') {
                 document.getElementById('nav-item-settings').classList.add('active');
             }
@@ -1730,8 +1939,32 @@
                 document.getElementById('set-video-codec').value = data.video_codec;
                 document.getElementById('set-video-preset').value = data.video_preset;
                 document.getElementById('set-age-days').value = data.scout_max_age_days;
-                document.getElementById('set-subtitle-style').value = data.subtitle_style || "default";
                 document.getElementById('set-enable-gpu').checked = data.enable_gpu;
+                
+                let subStyle = data.subtitle_style || "default";
+                if (subStyle.startsWith("custom_")) {
+                    document.getElementById('set-subtitle-style').value = "custom";
+                    document.getElementById('custom-style-panel').style.display = 'grid';
+                    
+                    const parts = subStyle.split("_");
+                    if (parts.length >= 7) {
+                        document.getElementById('cust-font-name').value = parts[1] || "Inter Bold";
+                        document.getElementById('cust-font-size').value = parts[2] || "58";
+                        
+                        const pri = "#" + (parts[3] || "F2F2F2");
+                        const out = "#" + (parts[4] || "000000");
+                        document.getElementById('cust-pri-color').value = pri;
+                        document.getElementById('cust-pri-color-picker').value = pri;
+                        document.getElementById('cust-out-color').value = out;
+                        document.getElementById('cust-out-color-picker').value = out;
+                        
+                        document.getElementById('cust-out-val').value = parts[5] || "2.5";
+                        document.getElementById('cust-shd-val').value = parts[6] || "1.0";
+                    }
+                } else {
+                    document.getElementById('set-subtitle-style').value = subStyle;
+                    document.getElementById('custom-style-panel').style.display = 'none';
+                }
                 
                 // Update system statuses visually in navigation sidebar status box
                 const elWhisper = document.getElementById('status-whisper');
@@ -1745,6 +1978,17 @@
         }
 
         async function saveSettings() {
+            let subtitleStyle = document.getElementById('set-subtitle-style').value;
+            if (subtitleStyle === 'custom') {
+                const fontName = document.getElementById('cust-font-name').value.trim() || "Inter Bold";
+                const fontSize = document.getElementById('cust-font-size').value.trim() || "58";
+                const priHex = document.getElementById('cust-pri-color').value.trim().replace('#', '') || "F2F2F2";
+                const outHex = document.getElementById('cust-out-color').value.trim().replace('#', '') || "000000";
+                const outVal = document.getElementById('cust-out-val').value.trim() || "2.5";
+                const shdVal = document.getElementById('cust-shd-val').value.trim() || "1.0";
+                subtitleStyle = `custom_${fontName}_${fontSize}_${priHex}_${outHex}_${outVal}_${shdVal}`;
+            }
+
             const body = {
                 gemini_api_key: document.getElementById('set-gemini-key').value,
                 whisper_model: document.getElementById('set-whisper-model').value,
@@ -1754,7 +1998,7 @@
                 video_preset: document.getElementById('set-video-preset').value,
                 scout_max_age_days: parseInt(document.getElementById('set-age-days').value),
                 enable_gpu: document.getElementById('set-enable-gpu').checked,
-                subtitle_style: document.getElementById('set-subtitle-style').value
+                subtitle_style: subtitleStyle
             };
             
             try {
@@ -2130,7 +2374,7 @@
                                     <span style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.85); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-family: monospace; font-weight: 700; z-index: 5;">
                                         ${formatTime(hl.start)} - ${formatTime(hl.end)}
                                     </span>
-                                    <div onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${currentUrlTranscript}', ${hl.start}, ${hl.end})" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.55)'" onmouseout="this.style.background='rgba(0,0,0,0.25)'" title="Preview Segment Clip">
+                                    <div onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${currentUrlTranscript}', ${hl.start}, ${hl.end}, ${index})" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.55)'" onmouseout="this.style.background='rgba(0,0,0,0.25)'" title="Preview Segment Clip">
                                         <i class="fa-solid fa-circle-play" style="color: #fff; text-shadow: 0 0 8px rgba(0,0,0,0.9); font-size: 1.8rem; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'"></i>
                                     </div>
                                 </div>
@@ -2155,6 +2399,25 @@
                                     <div style="font-size:0.8rem; color: var(--ghost); line-height: 1.4;">
                                         <strong>Engagement Rationale:</strong> ${hl.reason}
                                     </div>
+
+                                    <!-- Dynamic Crop Customizer -->
+                                    <div style="display: flex; gap: 1rem; align-items: center; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--wire); border-radius: 6px; padding: 0.5rem 0.75rem; margin-top: 0.25rem; flex-wrap: wrap;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.78rem; color: var(--smoke); font-weight: 600; white-space: nowrap;"><i class="fa-solid fa-crop" style="color: var(--cyan);"></i> Layout:</label>
+                                            <select id="crop-layout-select-${index}" onchange="updateCropSelection(${index})" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border: 1px solid var(--wire); background: var(--ink); color: var(--smoke);">
+                                                <option value="crop_center" ${hl.layout === 'crop_center' ? 'selected' : ''}>Center Crop</option>
+                                                <option value="crop_left" ${hl.layout === 'crop_left' ? 'selected' : ''}>Left Crop</option>
+                                                <option value="crop_right" ${hl.layout === 'crop_right' ? 'selected' : ''}>Right Crop</option>
+                                                <option value="auto_track" ${hl.layout === 'auto_track' ? 'selected' : ''}>AI Face Track</option>
+                                                <option value="custom_offset" ${String(hl.layout).startsWith('custom_offset_') ? 'selected' : ''}>Custom Offset</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div id="crop-offset-wrapper-${index}" style="display: ${String(hl.layout).startsWith('custom_offset_') ? 'flex' : 'none'}; align-items: center; gap: 0.5rem; flex: 1; min-width: 180px;">
+                                            <input type="range" id="crop-offset-slider-${index}" min="-300" max="300" value="${String(hl.layout).startsWith('custom_offset_') ? hl.layout.split('_').pop() : '0'}" oninput="updateCropOffsetLabel(${index}, this.value)" style="flex: 1; accent-color: var(--cyan); cursor: pointer; height: 5px; border-radius: 3px;">
+                                            <span id="crop-offset-label-${index}" style="font-family: monospace; font-size: 0.75rem; color: var(--cyan); min-width: 45px; text-align: right;">${String(hl.layout).startsWith('custom_offset_') ? hl.layout.split('_').pop() : '0'}px</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2172,7 +2435,7 @@
                                 </div>
 
                                 <div style="display:flex; align-items:center; gap:0.5rem;">
-                                    <button class="btn btn-mini btn-secondary" onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${currentUrlTranscript}', ${hl.start}, ${hl.end})">
+                                    <button class="btn btn-mini btn-secondary" onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${currentUrlTranscript}', ${hl.start}, ${hl.end}, ${index})">
                                         <i class="fa-solid fa-circle-play"></i> Preview Clip
                                     </button>
                                     <button class="btn btn-mini btn-cyan" id="btn-render-hl-${index}" onclick="renderDetailedHighlight(${index}, ${hl.start}, ${hl.end}, '${hl.layout}')">
@@ -2290,7 +2553,7 @@
                                         <span style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.85); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-family: monospace; font-weight: 700; z-index: 5;">
                                             ${formatTime(hl.start)} - ${formatTime(hl.end)}
                                         </span>
-                                        <div onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${storedUrl}', ${hl.start}, ${hl.end})" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.55)'" onmouseout="this.style.background='rgba(0,0,0,0.25)'" title="Preview Segment Clip">
+                                        <div onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${storedUrl}', ${hl.start}, ${hl.end}, ${index})" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.55)'" onmouseout="this.style.background='rgba(0,0,0,0.25)'" title="Preview Segment Clip">
                                             <i class="fa-solid fa-circle-play" style="color: #fff; text-shadow: 0 0 8px rgba(0,0,0,0.9); font-size: 1.8rem; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'"></i>
                                         </div>
                                     </div>
@@ -2315,6 +2578,25 @@
                                         <div style="font-size:0.8rem; color: var(--ghost); line-height: 1.4;">
                                             <strong>Engagement Rationale:</strong> ${hl.reason}
                                         </div>
+
+                                        <!-- Dynamic Crop Customizer -->
+                                        <div style="display: flex; gap: 1rem; align-items: center; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--wire); border-radius: 6px; padding: 0.5rem 0.75rem; margin-top: 0.25rem; flex-wrap: wrap;">
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <label style="font-size: 0.78rem; color: var(--smoke); font-weight: 600; white-space: nowrap;"><i class="fa-solid fa-crop" style="color: var(--cyan);"></i> Layout:</label>
+                                                <select id="crop-layout-select-${index}" onchange="updateCropSelection(${index})" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border: 1px solid var(--wire); background: var(--ink); color: var(--smoke);">
+                                                    <option value="crop_center" ${hl.layout === 'crop_center' ? 'selected' : ''}>Center Crop</option>
+                                                    <option value="crop_left" ${hl.layout === 'crop_left' ? 'selected' : ''}>Left Crop</option>
+                                                    <option value="crop_right" ${hl.layout === 'crop_right' ? 'selected' : ''}>Right Crop</option>
+                                                    <option value="auto_track" ${hl.layout === 'auto_track' ? 'selected' : ''}>AI Face Track</option>
+                                                    <option value="custom_offset" ${String(hl.layout).startsWith('custom_offset_') ? 'selected' : ''}>Custom Offset</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div id="crop-offset-wrapper-${index}" style="display: ${String(hl.layout).startsWith('custom_offset_') ? 'flex' : 'none'}; align-items: center; gap: 0.5rem; flex: 1; min-width: 180px;">
+                                                <input type="range" id="crop-offset-slider-${index}" min="-300" max="300" value="${String(hl.layout).startsWith('custom_offset_') ? hl.layout.split('_').pop() : '0'}" oninput="updateCropOffsetLabel(${index}, this.value)" style="flex: 1; accent-color: var(--cyan); cursor: pointer; height: 5px; border-radius: 3px;">
+                                                <span id="crop-offset-label-${index}" style="font-family: monospace; font-size: 0.75rem; color: var(--cyan); min-width: 45px; text-align: right;">${String(hl.layout).startsWith('custom_offset_') ? hl.layout.split('_').pop() : '0'}px</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2332,7 +2614,7 @@
                                     </div>
 
                                     <div style="display:flex; align-items:center; gap:0.5rem;">
-                                        <button class="btn btn-mini btn-secondary" onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${storedUrl}', ${hl.start}, ${hl.end})">
+                                        <button class="btn btn-mini btn-secondary" onclick="openYoutubePreviewModal('${(hl.title || 'Clip Highlight').replace(/'/g, "\\'")}', '${storedUrl}', ${hl.start}, ${hl.end}, ${index})">
                                             <i class="fa-solid fa-circle-play"></i> Preview Clip
                                         </button>
                                         <button class="btn btn-mini btn-cyan" id="btn-render-hl-${index}" onclick="renderDetailedHighlight(${index}, ${hl.start}, ${hl.end}, '${hl.layout}')">
@@ -2685,7 +2967,7 @@
             return (match && match[2].length === 11) ? match[2] : null;
         }
 
-        function openYoutubePreviewModal(name, videoUrl, start, end) {
+        function openYoutubePreviewModal(name, videoUrl, start, end, index) {
             const videoId = getYoutubeId(videoUrl);
             if (!videoId) {
                 alert("Could not parse YouTube video ID.");
@@ -2708,6 +2990,22 @@
             
             download.style.display = 'none';
             
+            // Read layout dynamic configurations
+            let layout = 'crop_center';
+            if (index !== undefined) {
+                const selectEl = document.getElementById(`crop-layout-select-${index}`);
+                if (selectEl) {
+                    layout = selectEl.value;
+                    if (layout === 'custom_offset') {
+                        const sliderEl = document.getElementById(`crop-offset-slider-${index}`);
+                        if (sliderEl) {
+                            layout = `custom_offset_${sliderEl.value}`;
+                        }
+                    }
+                }
+            }
+            updateCropPreviewOverlay(layout);
+            
             modal.classList.add('active');
         }
 
@@ -2729,6 +3027,10 @@
             download.href = path;
             download.style.display = 'inline-flex';
             
+            // Hide crop overlay mask for finished crop previews
+            const overlay = document.getElementById('modal-crop-overlay');
+            if (overlay) overlay.style.display = 'none';
+            
             modal.classList.add('active');
             player.play();
         }
@@ -2747,7 +3049,351 @@
             ytPlayer.style.display = 'none';
             
             download.style.display = 'inline-flex';
+            
+            // Hide the crop overlay mask
+            const overlay = document.getElementById('modal-crop-overlay');
+            if (overlay) overlay.style.display = 'none';
+            
             modal.classList.remove('active');
+        }
+
+        // Subtitle & Style Panel helper
+        function toggleCustomStylePanel(val) {
+            const panel = document.getElementById('custom-style-panel');
+            if (val === 'custom') {
+                panel.style.display = 'grid';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        // Crop Selection Layout updates
+        function updateCropSelection(index) {
+            const selectEl = document.getElementById(`crop-layout-select-${index}`);
+            const wrapper = document.getElementById(`crop-offset-wrapper-${index}`);
+            if (selectEl && wrapper) {
+                if (selectEl.value === 'custom_offset') {
+                    wrapper.style.display = 'flex';
+                } else {
+                    wrapper.style.display = 'none';
+                }
+            }
+        }
+
+        function updateCropOffsetLabel(index, val) {
+            const label = document.getElementById(`crop-offset-label-${index}`);
+            if (label) {
+                label.textContent = val + "px";
+            }
+        }
+
+        function updateCropPreviewOverlay(layout) {
+            const overlay = document.getElementById('modal-crop-overlay');
+            const leftMask = document.getElementById('crop-mask-left');
+            const rightMask = document.getElementById('crop-mask-right');
+            const safeBox = document.getElementById('crop-safe-box');
+            
+            if (!overlay || !leftMask || !rightMask) return;
+            
+            overlay.style.display = 'flex';
+            
+            // Reset styles
+            leftMask.style.flex = '';
+            leftMask.style.width = '';
+            leftMask.style.display = 'block';
+            rightMask.style.flex = '';
+            rightMask.style.width = '';
+            rightMask.style.display = 'block';
+            
+            if (layout === 'crop_left') {
+                leftMask.style.display = 'none';
+                leftMask.style.width = '0px';
+                leftMask.style.flex = 'none';
+                rightMask.style.flex = '1';
+            } else if (layout === 'crop_right') {
+                rightMask.style.display = 'none';
+                rightMask.style.width = '0px';
+                rightMask.style.flex = 'none';
+                leftMask.style.flex = '1';
+            } else if (layout.startsWith('custom_offset_')) {
+                const offsetVal = parseInt(layout.split('_').pop()) || 0;
+                leftMask.style.flex = 'none';
+                rightMask.style.flex = 'none';
+                
+                // Set left and right mask widths relative to center crop (253px safe box width)
+                leftMask.style.width = `calc(50% - 126.5px + ${offsetVal}px)`;
+                rightMask.style.width = `calc(50% - 126.5px - ${offsetVal}px)`;
+            } else {
+                // crop_center or auto_track
+                leftMask.style.flex = '1';
+                rightMask.style.flex = '1';
+            }
+        }
+
+        // Global Focus listener to track targeted input fields
+        document.addEventListener('focusin', (e) => {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                window.lastFocusedInputId = e.target.id;
+            }
+        });
+
+        // Gemini Metadata Co-Writer Drawer Logic
+        function toggleAssistantDrawer(show) {
+            const drawer = document.getElementById('assistant-drawer');
+            if (!drawer) return;
+            if (show) {
+                drawer.classList.add('active');
+                // Highlight Co-Writer Nav Item
+                document.getElementById('nav-item-cowriter').classList.add('active');
+            } else {
+                drawer.classList.remove('active');
+                document.getElementById('nav-item-cowriter').classList.remove('active');
+            }
+        }
+
+        function addAssistantMessage(sender, text) {
+            const chatLog = document.getElementById('assistant-chat-log');
+            if (!chatLog) return;
+            const msg = document.createElement('div');
+            msg.className = `assistant-msg ${sender}`;
+            
+            if (sender === 'ai') {
+                const cleanText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                msg.innerHTML = `
+                    <div style="margin-bottom: 0.5rem; word-break: break-word;">${cleanText.replace(/\n/g, '<br>')}</div>
+                    <button class="assistant-copy-btn" onclick="insertAssistantText(this.parentNode.querySelector('div').innerText)" style="position: static; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--wire); background: var(--ink); border-radius: 4px; font-size: 0.65rem; color: var(--cyan); cursor: pointer;" title="Copy / Paste response">
+                        <i class="fa-solid fa-file-export"></i> Insert to Field
+                    </button>
+                `;
+            } else {
+                msg.textContent = text;
+            }
+            
+            chatLog.appendChild(msg);
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        async function sendQuickAssistantPrompt(msg) {
+            addAssistantMessage('user', msg);
+            await queryGeminiAssistant(msg);
+        }
+
+        async function sendGeminiAssistantMsg() {
+            const input = document.getElementById('assistant-chat-input');
+            const prompt = input.value.trim();
+            if (!prompt) return;
+            
+            addAssistantMessage('user', prompt);
+            input.value = '';
+            await queryGeminiAssistant(prompt);
+        }
+
+        async function queryGeminiAssistant(prompt) {
+            // Context from current transcript segments
+            let context = "(No transcript context loaded)";
+            if (window.currentSegments && window.currentSegments.length > 0) {
+                context = window.currentSegments.map(s => s.text).join(" ");
+            }
+            
+            // Show typing indicator
+            const chatLog = document.getElementById('assistant-chat-log');
+            const typing = document.createElement('div');
+            typing.className = "assistant-msg ai";
+            typing.id = "assistant-typing-indicator";
+            typing.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Gemini is thinking...`;
+            chatLog.appendChild(typing);
+            chatLog.scrollTop = chatLog.scrollHeight;
+            
+            try {
+                const res = await fetch('/api/gemini/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        context: context
+                    })
+                });
+                
+                // Remove typing indicator
+                const indicator = document.getElementById('assistant-typing-indicator');
+                if (indicator) indicator.remove();
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    addAssistantMessage('ai', data.text || "");
+                } else {
+                    const err = await res.json();
+                    addAssistantMessage('ai', "Error from Gemini: " + (err.detail || "Request failed. Check Gemini API key configuration."));
+                }
+            } catch (err) {
+                const indicator = document.getElementById('assistant-typing-indicator');
+                if (indicator) indicator.remove();
+                addAssistantMessage('ai', "Error connecting to AI: " + err.message);
+            }
+        }
+
+        async function insertAssistantText(text) {
+            const target = document.getElementById('assistant-copy-target').value;
+            let targetEl = null;
+            
+            if (target === 'title') {
+                if (window.lastFocusedInputId && window.lastFocusedInputId.startsWith('title-input-')) {
+                    targetEl = document.getElementById(window.lastFocusedInputId);
+                } else {
+                    targetEl = document.querySelector('[id^="title-input-"]');
+                }
+            }
+            
+            if (targetEl) {
+                targetEl.value = text.trim();
+                targetEl.dispatchEvent(new Event('change'));
+                targetEl.style.borderColor = 'var(--cyan)';
+                setTimeout(() => { targetEl.style.borderColor = 'var(--wire)'; }, 1000);
+            } else {
+                // Clipboard fallback
+                try {
+                    await navigator.clipboard.writeText(text);
+                    alert("Text copied to clipboard successfully!");
+                } catch (err) {
+                    console.error("Clipboard copy failed:", err);
+                    alert("Copy content directly:\n\n" + text);
+                }
+            }
+        }
+
+        // Channel Watchdog API Handlers
+        async function fetchWatchdog() {
+            try {
+                const res = await fetch('/api/watchdog');
+                const data = await res.json();
+                
+                document.getElementById('watchdog-toggle').checked = data.enabled || false;
+                
+                const tbody = document.getElementById('watchdog-channels-list');
+                tbody.innerHTML = '';
+                
+                const channels = data.channels || [];
+                if (channels.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--ghost); padding: 1.5rem;">No channels added yet. Watchdog is currently idle.</td></tr>';
+                } else {
+                    channels.forEach(ch => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td style="font-weight: 600; color: var(--gold);">${ch.name}</td>
+                            <td><a href="${ch.url}" target="_blank" style="color: var(--cyan); text-decoration: none;">${ch.url}</a></td>
+                            <td style="font-family: monospace; font-size: 0.8rem;">${ch.last_video_id || 'None'}</td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-mini btn-secondary" onclick="removeWatchdogChannel('${ch.name}')" style="color: #ef4444; border-color: #ef4444; margin: 0;">
+                                    <i class="fa-solid fa-trash"></i> Remove
+                                </button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to fetch watchdog configuration:", err);
+            }
+        }
+
+        async function toggleWatchdog(checked) {
+            try {
+                const resConfig = await fetch('/api/watchdog');
+                const config = await resConfig.json();
+                
+                config.enabled = checked;
+                
+                const res = await fetch('/api/watchdog', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: config.enabled,
+                        channels: config.channels
+                    })
+                });
+                
+                if (res.ok) {
+                    console.log("Watchdog polling status set to", checked);
+                } else {
+                    alert("Failed to update watchdog polling state.");
+                }
+            } catch (err) {
+                alert("Error toggling watchdog: " + err.message);
+            }
+        }
+
+        async function addWatchdogChannel() {
+            const inputEl = document.getElementById('watchdog-url-input');
+            const inputVal = inputEl.value.trim();
+            if (!inputVal) {
+                alert("Please enter a YouTube channel URL or handle.");
+                return;
+            }
+            
+            let name = inputVal;
+            let url = inputVal;
+            
+            if (inputVal.startsWith('@')) {
+                name = inputVal;
+                url = `https://www.youtube.com/${inputVal}`;
+            } else if (inputVal.includes('youtube.com/')) {
+                const match = inputVal.match(/youtube\.com\/(@[a-zA-Z0-9_\-\.]+)/);
+                if (match) {
+                    name = match[1];
+                } else {
+                    name = inputVal.split('/').filter(Boolean).pop();
+                }
+            }
+            
+            try {
+                const resConfig = await fetch('/api/watchdog');
+                const config = await resConfig.json();
+                
+                if (config.channels.some(ch => ch.name.toLowerCase() === name.toLowerCase())) {
+                    alert("This channel is already being monitored.");
+                    return;
+                }
+                
+                config.channels.push({
+                    name: name,
+                    url: url,
+                    last_video_id: ""
+                });
+                
+                const res = await fetch('/api/watchdog', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: config.enabled,
+                        channels: config.channels
+                    })
+                });
+                
+                if (res.ok) {
+                    inputEl.value = '';
+                    fetchWatchdog();
+                } else {
+                    alert("Failed to add channel to Watchdog.");
+                }
+            } catch (err) {
+                alert("Error adding channel: " + err.message);
+            }
+        }
+
+        async function removeWatchdogChannel(channelName) {
+            if (!confirm(`Are you sure you want to remove channel '${channelName}' from the watchdog list?`)) return;
+            try {
+                const res = await fetch(`/api/watchdog/${encodeURIComponent(channelName)}`, {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    fetchWatchdog();
+                } else {
+                    alert("Failed to remove channel from watchdog.");
+                }
+            } catch (err) {
+                alert("Error removing channel: " + err.message);
+            }
         }
 
         // App Bootloader
@@ -2761,6 +3407,7 @@
             
             initLogStream();
             fetchSettings();
+            fetchWatchdog();
             checkYouTubeStatus();
             refreshLibrary();
             restoreInteractiveClipperState();
