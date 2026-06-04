@@ -589,10 +589,14 @@ def get_youtube_status() -> dict[str, Any]:
 @app.get("/api/youtube/connect")
 def connect_youtube(request: Request) -> dict[str, str]:
     """Generate dynamic Google OAuth URL for the user's browser."""
-    if not Path("client_secret.json").exists():
+    import os
+    env_secret = os.environ.get("YOUTUBE_CLIENT_SECRET_JSON")
+    file_exists = Path("client_secret.json").exists()
+
+    if not env_secret and not file_exists:
         raise HTTPException(
             status_code=400,
-            detail="Missing client_secret.json file in project root. Please follow the YouTube API Setup guide in the README.",
+            detail="Missing client_secret.json file in project root or YOUTUBE_CLIENT_SECRET_JSON env secret. Please follow the YouTube API Setup guide in the README.",
         )
 
     from google_auth_oauthlib.flow import Flow
@@ -606,12 +610,24 @@ def connect_youtube(request: Request) -> dict[str, str]:
         "https://www.googleapis.com/auth/youtube.readonly",
     ]
     try:
-        flow = Flow.from_client_secrets_file(
-            "client_secret.json",
-            scopes=SCOPES,
-            redirect_uri=redirect_uri,
-            autogenerate_code_verifier=False,
-        )
+        if env_secret:
+            try:
+                client_config = json.loads(env_secret)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to parse YOUTUBE_CLIENT_SECRET_JSON env: {e}")
+            flow = Flow.from_client_config(
+                client_config,
+                scopes=SCOPES,
+                redirect_uri=redirect_uri,
+                autogenerate_code_verifier=False,
+            )
+        else:
+            flow = Flow.from_client_secrets_file(
+                "client_secret.json",
+                scopes=SCOPES,
+                redirect_uri=redirect_uri,
+                autogenerate_code_verifier=False,
+            )
         auth_url, _ = flow.authorization_url(
             prompt="consent", access_type="offline", include_granted_scopes="true"
         )
@@ -623,14 +639,17 @@ def connect_youtube(request: Request) -> dict[str, str]:
 @app.get("/api/youtube/callback", response_class=HTMLResponse)
 def youtube_callback(request: Request, code: str, state: str | None = None) -> HTMLResponse:
     """Exchange OAuth code for credentials token and save it to pickle."""
+    import os
     import pickle
 
     from google_auth_oauthlib.flow import Flow
 
-    client_secret_file = "client_secret.json"
-    if not Path(client_secret_file).exists():
+    env_secret = os.environ.get("YOUTUBE_CLIENT_SECRET_JSON")
+    file_exists = Path("client_secret.json").exists()
+
+    if not env_secret and not file_exists:
         return HTMLResponse(
-            content="<h3>Error: Missing client_secret.json in project root.</h3>", status_code=400
+            content="<h3>Error: Missing client_secret.json or YOUTUBE_CLIENT_SECRET_JSON env secret.</h3>", status_code=400
         )
 
     SCOPES = [
@@ -640,12 +659,26 @@ def youtube_callback(request: Request, code: str, state: str | None = None) -> H
     redirect_uri = str(request.url).split("?")[0]
 
     try:
-        flow = Flow.from_client_secrets_file(
-            client_secret_file,
-            scopes=SCOPES,
-            redirect_uri=redirect_uri,
-            autogenerate_code_verifier=False,
-        )
+        if env_secret:
+            try:
+                client_config = json.loads(env_secret)
+            except Exception as e:
+                return HTMLResponse(
+                    content=f"<h3>Error: Failed to parse YOUTUBE_CLIENT_SECRET_JSON env: {e}</h3>", status_code=400
+                )
+            flow = Flow.from_client_config(
+                client_config,
+                scopes=SCOPES,
+                redirect_uri=redirect_uri,
+                autogenerate_code_verifier=False,
+            )
+        else:
+            flow = Flow.from_client_secrets_file(
+                "client_secret.json",
+                scopes=SCOPES,
+                redirect_uri=redirect_uri,
+                autogenerate_code_verifier=False,
+            )
         flow.fetch_token(code=code)
         creds = flow.credentials
 
