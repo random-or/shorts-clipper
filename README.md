@@ -89,6 +89,7 @@ The current version of Shorts Clipper includes several newly integrated advanced
 4. **Custom Subtitle Theme Studio:** Preset typography styles including MrBeast Pop, Hormozi Glow, Minimal Clean, and Gold Premium, along with a custom theme editor to build personalized custom styles (Font, Size, Color, Outline, Shadow) serialized dynamically.
 5. **Gemini Metadata Co-Writer:** Integrated slide-out assistant panel powered by Gemini to brainstorm titles/hooks, write video descriptions with SEO keywords, and list hashtags based on clip transcripts, complete with automatic copy/paste insertion callbacks.
 6. **Autopilot Channel Watchdog:** Periodically polls monitored YouTube channels for new uploads. When a new video is detected, it auto-queues Autopilot clipping jobs automatically.
+7. **Auto-Upload Privacy Selection:** Configure whether automated or manual clips are uploaded as **Private**, **Unlisted**, or **Public** directly from the Web UI, providing safe drafts before making clips public.
 
 ---
 
@@ -201,8 +202,9 @@ To authorize direct-to-YouTube publishing:
 
 ---
 
-## 🐳 Docker Deployment
+## 🐳 Docker & Cloud Deployment
 
+### 1. Local Container Deployment
 Run the entire application containerized (fully pre-configured with Python, FFmpeg, and `libass` libraries):
 
 ```bash
@@ -210,8 +212,15 @@ Run the entire application containerized (fully pre-configured with Python, FFmp
 docker build -t shorts-clipper .
 
 # Run
-docker run -p 8000:8000 --env-file .env shorts-clipper
+docker run -p 8000:7860 --env-file .env shorts-clipper
 ```
+
+### 2. Hugging Face Spaces Deployment (Free Cloud Hosting)
+Shorts Clipper is fully optimized for Hugging Face Spaces out of the box:
+1. Create a **New Space** on [Hugging Face](https://huggingface.co/new-space).
+2. Select **Docker** as the SDK (use the **Blank** template).
+3. In your Space's **Settings**, add your `GEMINI_API_KEY` under the **Variables and secrets** section.
+4. Push the codebase (or upload the files) to the Hugging Face Space repository. It will automatically build and launch on port `7860`.
 
 ---
 

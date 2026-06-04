@@ -1183,9 +1183,19 @@
                                 <option value="month">This Month (Last 30 days)</option>
                             </select>
                         </div>
-                        <div class="form-group-full" style="flex-direction: row; align-items: center; gap: 1rem; margin-top: 0.5rem; background: var(--ink); padding: 1rem; border: 1px solid var(--wire);">
-                            <input type="checkbox" id="auto-upload" style="width: 18px; height: 18px; cursor: pointer;">
-                            <label for="auto-upload" style="cursor: pointer; color: var(--smoke); font-weight: 500;">Enable Auto-Upload to YouTube Shorts (Private)</label>
+                        <div class="form-group-full" style="flex-direction: row; align-items: center; gap: 1rem; margin-top: 0.5rem; background: var(--ink); padding: 1rem; border: 1px solid var(--wire); flex-wrap: wrap; display: flex;">
+                            <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--smoke); font-weight: 500; margin: 0; user-select: none;">
+                                <input type="checkbox" id="auto-upload" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span>Enable Auto-Upload to YouTube Shorts</span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+                                <label for="auto-privacy" style="font-size: 0.8rem; color: var(--ghost); font-weight: 600;">Privacy:</label>
+                                <select id="auto-privacy" style="padding: 0.35rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border: 1px solid var(--wire); background: var(--ink); color: var(--smoke); cursor: pointer;">
+                                    <option value="private" selected>🔒 Private</option>
+                                    <option value="unlisted">🔗 Unlisted</option>
+                                    <option value="public">🌍 Public</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     
@@ -2078,6 +2088,7 @@
                 channel: document.getElementById('auto-channel').value || null,
                 count: parseInt(document.getElementById('auto-count').value),
                 upload: document.getElementById('auto-upload').checked,
+                privacy: document.getElementById('auto-privacy').value,
                 scout_duration: document.getElementById('auto-duration').value
             };
             
@@ -2428,9 +2439,10 @@
                                         <input type="checkbox" id="post-check-${index}" checked style="width: 15px; height: 15px; cursor:pointer;">
                                         <span>Post directly to YouTube</span>
                                     </label>
-                                    <select id="post-privacy-${index}" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border:1px solid var(--wire); background: var(--ink); color: var(--smoke);">
-                                        <option value="private" selected>Private</option>
-                                        <option value="public">Public</option>
+                                    <select id="post-privacy-${index}" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border:1px solid var(--wire); background: var(--ink); color: var(--smoke); cursor: pointer;">
+                                        <option value="private" selected>🔒 Private</option>
+                                        <option value="unlisted">🔗 Unlisted</option>
+                                        <option value="public">🌍 Public</option>
                                     </select>
                                 </div>
 
@@ -2607,9 +2619,10 @@
                                             <input type="checkbox" id="post-check-${index}" checked style="width: 15px; height: 15px; cursor:pointer;">
                                             <span>Post directly to YouTube</span>
                                         </label>
-                                        <select id="post-privacy-${index}" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border:1px solid var(--wire); background: var(--ink); color: var(--smoke);">
-                                            <option value="private" selected>Private</option>
-                                            <option value="public">Public</option>
+                                        <select id="post-privacy-${index}" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border:1px solid var(--wire); background: var(--ink); color: var(--smoke); cursor: pointer;">
+                                            <option value="private" selected>🔒 Private</option>
+                                            <option value="unlisted">🔗 Unlisted</option>
+                                            <option value="public">🌍 Public</option>
                                         </select>
                                     </div>
 

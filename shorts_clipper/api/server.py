@@ -179,6 +179,7 @@ class AutopilotRequest(BaseModel):
     channel: str | None = None
     count: int = Field(default=3, ge=1, le=10)
     upload: bool = False
+    privacy: str = "private"  # "private" | "public" | "unlisted"
     scout_duration: str | None = "all"  # "all" | "today" | "week" | "month"
 
 
@@ -186,6 +187,7 @@ class CustomClipRequest(BaseModel):
     url: str
     count: int = Field(default=1, ge=1, le=10)
     upload: bool = False
+    privacy: str = "private"  # "private" | "public" | "unlisted"
 
 
 class TranscriptRequest(BaseModel):
@@ -209,7 +211,7 @@ class CustomClipRenderRequest(BaseModel):
     end: float
     layout: str = "crop_center"
     upload: bool = False
-    privacy: str = "private"  # "private" | "public"
+    privacy: str = "private"  # "private" | "public" | "unlisted"
 
 
 class ClipMetadataUpdate(BaseModel):

@@ -220,6 +220,7 @@ def run_worker() -> None:
                     keyword=payload.get("keyword"),
                     count=payload.get("count", 1),
                     upload=payload.get("upload", False),
+                    privacy=payload.get("privacy", "private"),
                     progress_callback=worker_progress,
                     max_age_days=max_age_days,
                 )
@@ -246,6 +247,7 @@ def run_worker() -> None:
                     settings=settings,
                     count=payload.get("count", 1),
                     upload=payload.get("upload", False),
+                    privacy=payload.get("privacy", "private"),
                     progress_callback=worker_progress,
                 )
                 output_paths = []
