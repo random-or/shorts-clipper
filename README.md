@@ -2,9 +2,9 @@
 
 # 🎬 Shorts Clipper
 
-### AI-Powered Viral Shorts Factory
+### **The Enterprise-Grade AI Shorts Factory**
 
-*Scout trending videos → Extract the best moments → Render vertical clips → Publish to YouTube — fully automated.*
+*Scout trending videos → Extract viral highlights → Render vertical crops → Burn animated captions → Auto-publish to YouTube.*
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
@@ -15,158 +15,189 @@
 
 ---
 
-## What It Does
+## 📖 System Overview & Architecture
 
-Shorts Clipper takes any long-form YouTube video and turns it into publish-ready 9:16 vertical shorts with word-level animated captions — in one command or from a sleek web dashboard.
+Shorts Clipper is a production-ready, AI-driven automation pipeline that scans long-form content (podcasts, streams, talks), isolates the most engaging segments using Gemini, formats them into a vertical `9:16` ratio, burns word-level animated subtitles, and posts them to YouTube Shorts.
 
-**The full pipeline:**
+Here is the complete picture of how the data flows through the application:
 
+```mermaid
+flowchart TD
+    %% Styling
+    classDef main fill:#0d0e1b,stroke:#00d2ff,stroke-width:2px,color:#fff;
+    classDef engine fill:#131427,stroke:#dfb23f,stroke-width:1px,color:#fff;
+    classDef external fill:#030408,stroke:#6b7280,stroke-width:1px,stroke-dasharray: 5 5,color:#aaa;
+    
+    %% Elements
+    A[Web Console / CLI Client]:::main
+    B[FastAPI Server <br> api/server.py]:::main
+    C[(SQLite Job Database <br> core/queue.py)]:::engine
+    D[Pipeline Orchestrator <br> pipeline/runner.py]:::main
+
+    %% Pipeline Processes
+    subgraph Pipeline [Automated Clipping Pipeline]
+        E[1. Trending Scout <br> scout/trending.py]:::engine
+        F[2. Smart Downloader <br> downloader/yt_dlp.py]:::engine
+        G[3. Audio Transcriber <br> transcription/whisper.py]:::engine
+        H[4. Highlight AI Agent <br> providers/gemini.py]:::engine
+        I[5. Render Engine <br> rendering/crop.py]:::engine
+        J[6. Subtitle Burner <br> captions/generator.py]:::engine
+        K[7. YouTube Publisher <br> social/youtube.py]:::engine
+    end
+
+    %% External APIs
+    YT_API[YouTube Data API]:::external
+    GEMINI_API[Google Gemini API]:::external
+    WHISPER_LIB[faster-whisper Engine]:::external
+    FFMPEG_SYS[FFmpeg & libass]:::external
+
+    %% Connections
+    A -->|1. Triggers Job| B
+    B -->|2. Writes Status| C
+    B -->|3. Launches Task| D
+    
+    D --> E
+    D --> F
+    D --> G
+    D --> H
+    D --> I
+    D --> J
+    D --> K
+
+    E -->|Scouts Metadata| YT_API
+    F -->|Downloads Sections| YT_API
+    G -->|Tries Cloud Transcribe| GEMINI_API
+    G -.->|Local Fallback| WHISPER_LIB
+    H -->|Scores Highlights & Title| GEMINI_API
+    I -->|Scale & Center Crop| FFMPEG_SYS
+    J -->|Burn ASS Subtitles <br> & Apply 1.15x Speed| FFMPEG_SYS
+    K -->|Uploads Short| YT_API
+
+    D -.->|4. Updates Progress| C
+    B -.->|5. SSE Live logs & Updates| A
 ```
-Scout Trending Video → Download → Transcribe (Whisper) → AI Clip Selection (Gemini) → Vertical Crop → Burn Captions → Publish to YouTube
-```
-
-**Core capabilities:**
-- 🔍 **Trending Scout** — Finds viral-potential videos using view-velocity scoring
-- 🧠 **Gemini AI Director** — Picks the most engaging 30-60s windows with virality scoring
-- 🎙️ **Whisper Transcription** — Word-level timestamps for animated captions
-- 🎬 **FFmpeg Rendering** — Vertical crop + subtitle burn in a single optimized pass
-- 📤 **YouTube Auto-Publish** — Upload directly to YouTube Shorts via OAuth2
-- 🖥️ **Web Dashboard** — Dark-mode console with real-time pipeline tracking
 
 ---
 
-## Quick Start
+## ⚡ Key Pipeline Steps
 
-### Prerequisites
+### 1. 🔍 Trending Scout
+The system uses the `trending.py` module to discover high-potential content. It automatically queries YouTube search pools, rotates topic niches (e.g., podcast, AI, tech debates), and scores candidates based on view velocity while filtering out already-processed video IDs.
 
-| Tool | Why |
-|------|-----|
-| **Python 3.11+** | Runtime |
-| **FFmpeg** | Video processing |
-| **Gemini API Key** | AI clip selection — [get one free](https://aistudio.google.com/) |
+### 2. 📥 Smart Downloader
+Instead of downloading a massive multihour video, `yt_dlp.py` requests **only** the exact timestamp window (e.g., 30s) selected by the AI, saving heavy network bandwidth and disk space.
 
-### Install
+### 3. 🎙️ Dual-Engine Transcription
+First attempts to transcribe via Gemini 2.5 Flash for rapid, cloud-based word-level timestamps. If offline or rate-limited, it falls back to a local `faster-whisper` CTranslate2 engine running on CPU or GPU.
+
+### 4. 🧠 Gemini Highlight Selection
+Gemini 2.5 Pro acts as an automated director. It reads the transcription, scores candidate clips based on hook strength, emotional peaks, flow, and self-containment, and outputs titles, tags, and cropping crop layouts (`crop_center`, `crop_left`, or `crop_right`).
+
+### 5. 🎬 Dual-Pass Rendering
+* **Pass 1:** Crops the landscape `16:9` video into a clean `1080x1920` vertical canvas.
+* **Pass 2:** Transforms word-level transcription into an Advanced SubStation Alpha (`.ass`) subtitle script and burns them into the video using CPU/GPU-accelerated `libass` along with an integrated `1.15x` speed multiplier.
+
+---
+
+## 🖥️ Web Console Features
+
+Launch the dashboard to access three highly polished, dark-mode panels:
+
+| Component | Purpose | Details |
+|-----------|---------|---------|
+| **Autopilot Launchpad** | Fully Automated Production | Select a niche or channel, choose a schedule, and let the pipeline scout, render, and upload on its own. |
+| **Interactive Manual Studio** | Granular Clip Control | Paste any URL, watch the AI detect up to 5 viral highlights, preview segments in-browser, custom crop, and render manually. |
+| **Rendered Clip Library** | Asset Management | Browse rendered MP4 files, preview mobile safe-zones, adjust titles, and post to YouTube via OAuth2 with one click. |
+
+---
+
+## 🛠️ Quick Start
+
+### 📋 Prerequisites
+* **Python 3.11+**
+* **FFmpeg** (configured with `--enable-libass`)
+* **Gemini API Key** (Get one from [Google AI Studio](https://aistudio.google.com/))
+
+### ⬇️ Installation
 
 ```bash
-# Clone
+# 1. Clone the repository
 git clone https://github.com/random-or/shorts-clipper.git
 cd shorts-clipper
 
-# Virtual environment
+# 2. Set up virtual environment
 python -m venv env
-source env/bin/activate   # Windows: env\Scripts\activate
+source env/bin/activate  # Windows: env\Scripts\activate
 
-# Dependencies
+# 3. Install packages in editable mode
 pip install -e .
 
-# Configure
+# 4. Configure environment settings
 cp .env.example .env
-# Edit .env and paste your GEMINI_API_KEY
 ```
 
-### Run
+Open `.env` and fill in your variables (at minimum `GEMINI_API_KEY`).
 
-**Web Dashboard** (recommended):
+### 🚀 Running the App
+
+#### **Start the Web Console (FastAPI + Server-Sent Events)**
 ```bash
 python -m shorts_clipper web --port 8000
-# Open http://localhost:8000
+# Open http://localhost:8000 in your browser
 ```
 
-**CLI — Clip a specific video:**
-```bash
-python -m shorts_clipper clip "https://youtube.com/watch?v=VIDEO_ID" --count 3
-```
-
-**CLI — Full autopilot** (scout + clip automatically):
-```bash
-python -m shorts_clipper autopilot --niche "podcast debates" --count 2 --upload
-```
-
-**CLI — Scout only** (print trending URLs):
-```bash
-python -m shorts_clipper scout --niche "tech news" --count 5
-```
+#### **Run Pipeline via CLI**
+* **Standard Clip Run:**
+  ```bash
+  python -m shorts_clipper clip "https://youtube.com/watch?v=VIDEO_ID" --count 3
+  ```
+* **Autopilot Run:**
+  ```bash
+  python -m shorts_clipper autopilot --niche "tech podcasts" --count 1 --upload
+  ```
+* **Print Trending Scout Candidates:**
+  ```bash
+  python -m shorts_clipper scout --niche "finance" --count 5
+  ```
 
 ---
 
-## Web Dashboard
+## 🔑 YouTube Upload Configuration
 
-The built-in web console gives you three modes:
-
-| Mode | Description |
-|------|-------------|
-| **Autopilot Launchpad** | Set a niche, hit launch — it scouts, clips, and publishes on its own |
-| **Interactive Clipper** | Paste a URL, review AI-scored highlights, preview clips, then render |
-| **Clip Library** | Browse rendered clips, preview them, publish to YouTube with one click |
-
-The dashboard includes a real-time pipeline tracker, live log stream, upload progress with speed/ETA, and YouTube channel integration.
+To authorize direct-to-YouTube publishing:
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Enable the **YouTube Data API v3**.
+3. Create OAuth 2.0 Credentials (select "Desktop app" application type).
+4. Download the credentials JSON, rename it to `client_secret.json`, and place it in the root directory of this project.
+5. Launch the Web UI, click the sidebar avatar, and connect your channel.
 
 ---
 
-## YouTube Upload Setup
+## 🐳 Docker Deployment
 
-To enable direct publishing to YouTube Shorts:
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) → Create a project
-2. Enable **YouTube Data API v3**
-3. Create **OAuth 2.0 credentials** (Desktop app)
-4. Download `client_secret.json` → place it in the project root
-5. Connect your channel from the web dashboard sidebar
-
----
-
-## Docker
+Run the entire application in a container (includes automated FFmpeg setup):
 
 ```bash
+# Build
 docker build -t shorts-clipper .
+
+# Run
 docker run -p 8000:8000 --env-file .env shorts-clipper
 ```
 
 ---
 
-## Project Structure
+## 🧪 Testing and Linting
 
-```
-shorts_clipper/
-├── api/          # FastAPI server + SSE log streaming
-├── scout/        # Trending video discovery engine
-├── providers/    # Gemini AI highlight detection
-├── downloader/   # yt-dlp integration
-├── transcription/# Whisper speech-to-text
-├── rendering/    # Vertical crop + FFmpeg processing
-├── captions/     # Word-level subtitle generation + burning
-├── social/       # YouTube upload adapter
-├── pipeline/     # Orchestration runner
-├── ui/           # Web dashboard (single-page dark-mode console)
-└── core/         # Settings, logging, models, job queue
-```
-
----
-
-## Configuration
-
-All settings live in `.env` (see [`.env.example`](.env.example)):
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GEMINI_API_KEY` | — | **Required.** Your Google Gemini API key |
-| `SHORTS_WHISPER_MODEL` | `tiny.en` | Whisper model (`tiny.en` → `large-v3`) |
-| `SHORTS_WHISPER_DEVICE` | `cpu` | `cpu` or `cuda` |
-| `SHORTS_VIDEO_CODEC` | `libx264` | FFmpeg codec (`libx264` or `h264_nvenc`) |
-| `SHORTS_ENABLE_GPU` | `false` | Enable NVENC + CUDA acceleration |
-
----
-
-## Testing
+Verify and test changes before pushing to git:
 
 ```bash
+# Install development dependencies
 pip install -e ".[dev]"
+
+# Run tests
 pytest
+
+# Code style and checks
 ruff check shorts_clipper
 ```
-
----
-
-## License
-
-[MIT](LICENSE) — use it, fork it, ship it.
