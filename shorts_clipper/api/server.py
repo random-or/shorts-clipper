@@ -590,6 +590,7 @@ def get_youtube_status() -> dict[str, Any]:
 def connect_youtube(request: Request) -> dict[str, str]:
     """Generate dynamic Google OAuth URL for the user's browser."""
     import os
+
     env_secret = os.environ.get("YOUTUBE_CLIENT_SECRET_JSON")
     file_exists = Path("client_secret.json").exists()
 
@@ -614,7 +615,9 @@ def connect_youtube(request: Request) -> dict[str, str]:
             try:
                 client_config = json.loads(env_secret)
             except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Failed to parse YOUTUBE_CLIENT_SECRET_JSON env: {e}")
+                raise HTTPException(
+                    status_code=400, detail=f"Failed to parse YOUTUBE_CLIENT_SECRET_JSON env: {e}"
+                ) from e
             flow = Flow.from_client_config(
                 client_config,
                 scopes=SCOPES,
@@ -649,7 +652,8 @@ def youtube_callback(request: Request, code: str, state: str | None = None) -> H
 
     if not env_secret and not file_exists:
         return HTMLResponse(
-            content="<h3>Error: Missing client_secret.json or YOUTUBE_CLIENT_SECRET_JSON env secret.</h3>", status_code=400
+            content="<h3>Error: Missing client_secret.json or YOUTUBE_CLIENT_SECRET_JSON env secret.</h3>",
+            status_code=400,
         )
 
     SCOPES = [
@@ -664,7 +668,8 @@ def youtube_callback(request: Request, code: str, state: str | None = None) -> H
                 client_config = json.loads(env_secret)
             except Exception as e:
                 return HTMLResponse(
-                    content=f"<h3>Error: Failed to parse YOUTUBE_CLIENT_SECRET_JSON env: {e}</h3>", status_code=400
+                    content=f"<h3>Error: Failed to parse YOUTUBE_CLIENT_SECRET_JSON env: {e}</h3>",
+                    status_code=400,
                 )
             flow = Flow.from_client_config(
                 client_config,
