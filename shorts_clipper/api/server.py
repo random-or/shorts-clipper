@@ -98,6 +98,7 @@ subprocess.Popen.__init__ = _tracked_popen_init
 def ensure_worker_running() -> None:
     import sys
     import time
+
     heartbeat_path = Path("outputs/worker_heartbeat.txt")
     worker_running = False
     if heartbeat_path.exists():
@@ -107,7 +108,7 @@ def ensure_worker_running() -> None:
                 worker_running = True
         except Exception:
             pass
-            
+
     if not worker_running:
         logger.info("⚠️  Background worker not running. Spawning new worker process...")
         try:
@@ -115,7 +116,7 @@ def ensure_worker_running() -> None:
                 [sys.executable, "-m", "shorts_clipper.core.worker"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                close_fds=True
+                close_fds=True,
             )
             logger.info("✅ Worker process spawned successfully.")
         except Exception as e:
@@ -125,6 +126,7 @@ def ensure_worker_running() -> None:
 @app.on_event("startup")
 def startup_event():
     from shorts_clipper.core.logging import configure_logging
+
     settings = Settings.from_env()
     configure_logging(settings.log_level)
     ensure_worker_running()
@@ -891,14 +893,14 @@ def gemini_chat(payload: GeminiChatRequest) -> dict[str, Any]:
     try:
         settings = Settings.from_env()
         provider = GeminiProvider(api_key=settings.gemini_api_key)
-        
+
         system_instruction = (
             "You are an elite, highly experienced viral video editor and content strategist. "
             "Help the user craft highly engaging, click-worthy titles, hooks, tags, and description copy "
             "optimized for YouTube Shorts, TikTok, and Instagram Reels. Use the provided clip text context "
             "to make your responses highly tailored."
         )
-        
+
         prompt_context = f"System Instruction: {system_instruction}\n\nClip Transcript Context:\n{payload.context}\n\nUser Request: {payload.prompt}"
         response = provider._generate_content_with_retry(prompt_context)
         return {"text": response.text.strip()}
@@ -928,17 +930,17 @@ def update_watchdog_config(payload: WatchdogConfigRequest) -> dict[str, Any]:
     """Update the Autopilot Watchdog configuration."""
     watchdog_path = Path("outputs/watchdog.json")
     watchdog_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     current = {"enabled": False, "channels": [], "last_poll_time": 0.0}
     if watchdog_path.exists():
         try:
             current = json.loads(watchdog_path.read_text(encoding="utf-8"))
         except Exception:
             pass
-            
+
     current["enabled"] = payload.enabled
     current["channels"] = payload.channels
-    
+
     try:
         watchdog_path.write_text(json.dumps(current, indent=2), encoding="utf-8")
         return {"status": "saved", "config": current}
@@ -953,7 +955,7 @@ def delete_watchdog_channel(channel_name: str) -> dict[str, Any]:
     watchdog_path = Path("outputs/watchdog.json")
     if not watchdog_path.exists():
         return {"status": "success", "message": "Monitored list is empty."}
-        
+
     try:
         data = json.loads(watchdog_path.read_text(encoding="utf-8"))
         channels = data.get("channels", [])
@@ -1036,7 +1038,7 @@ async def stream_logs() -> StreamingResponse:
             tail_lines = lines[-50:]
             if tail_lines:
                 yield f"data: {''.join(tail_lines)}\n\n"
-                
+
             f.seek(0, 2)
             while True:
                 try:

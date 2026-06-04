@@ -49,7 +49,7 @@ def _ass_header(style_name: str = "default") -> str:
 
     style_name = str(style_name)
     style_name_lower = style_name.lower()
-    
+
     if style_name_lower.startswith("custom_"):
         # custom_FontName_FontSize_PrimaryHex_OutlineHex_OutlineVal_ShadowVal
         try:

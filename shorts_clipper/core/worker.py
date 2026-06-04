@@ -76,6 +76,7 @@ def update_heartbeat() -> None:
 
 class JobCancelledError(Exception):
     """Exception raised when a job is cancelled by the user mid-execution."""
+
     pass
 
 
@@ -115,10 +116,12 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
             # Fetch latest video id via yt-dlp
             cmd = [
                 "yt-dlp",
-                "--playlist-end", "1",
+                "--playlist-end",
+                "1",
                 "--dump-json",
-                "--socket-timeout", "10",
-                f"{url}/videos"
+                "--socket-timeout",
+                "10",
+                f"{url}/videos",
             ]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
             if res.returncode == 0 and res.stdout.strip():
@@ -128,17 +131,24 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
                     video_url = f"https://www.youtube.com/watch?v={video_id}"
 
                     if video_id and video_id != last_seen:
-                        logger.info("🔔 Watchdog: New video detected on channel %s: %s", ch.get("name"), video_url)
-                        
+                        logger.info(
+                            "🔔 Watchdog: New video detected on channel %s: %s",
+                            ch.get("name"),
+                            video_url,
+                        )
+
                         # Create autopilot job
-                        job_queue.create("autopilot", {
-                            "niche": "auto_watchdog",
-                            "url": video_url,
-                            "count": 1,
-                            "upload": True,
-                            "scout_duration": "today"
-                        })
-                        
+                        job_queue.create(
+                            "autopilot",
+                            {
+                                "niche": "auto_watchdog",
+                                "url": video_url,
+                                "count": 1,
+                                "upload": True,
+                                "scout_duration": "today",
+                            },
+                        )
+
                         ch["last_seen_video"] = video_id
                         changed = True
                 except Exception as inner:
@@ -277,7 +287,7 @@ def run_worker() -> None:
                 with tempfile.TemporaryDirectory(prefix="worker_render_") as work_dir:
                     work_path = Path(work_dir)
                     audio_path = work_path / "audio.m4a"
-                    
+
                     logger.info("⬇ Downloading lightweight audio section for Whisper...")
                     from shorts_clipper.downloader.yt_dlp import download_audio
                     from shorts_clipper.transcription.whisper import transcribe_clip
@@ -286,7 +296,7 @@ def run_worker() -> None:
                         payload["url"],
                         audio_path,
                         start_time=payload["start"],
-                        end_time=payload["end"]
+                        end_time=payload["end"],
                     )
                     worker_progress(30)
 
@@ -299,7 +309,9 @@ def run_worker() -> None:
                     )
                     worker_progress(50)
 
-                    logger.info("🚀 Launching Stream-Piped Rendering (Bypassing intermediate disk writes)...")
+                    logger.info(
+                        "🚀 Launching Stream-Piped Rendering (Bypassing intermediate disk writes)..."
+                    )
                     stream_render_pipeline(
                         url=payload["url"],
                         start_time=payload["start"],
@@ -317,6 +329,7 @@ def run_worker() -> None:
 
                 try:
                     from shorts_clipper.render.thumbnailer import extract_thumbnail
+
                     extract_thumbnail(current_output_path)
                 except Exception as thumb_err:
                     logger.warning("Thumbnail extraction failed: %s", thumb_err)

@@ -26,13 +26,7 @@ _TARGET_H = 1920
 def get_url_dimensions(url: str) -> tuple[int, int]:
     """Fetch video width and height from YouTube URL using yt-dlp without downloading."""
     log.info("🔍 Probing video dimensions for %s...", url)
-    cmd = [
-        "yt-dlp",
-        "--skip-download",
-        "--dump-json",
-        "--socket-timeout", "10",
-        url
-    ]
+    cmd = ["yt-dlp", "--skip-download", "--dump-json", "--socket-timeout", "10", url]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
         if res.returncode == 0:
@@ -59,14 +53,17 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
     with tempfile.TemporaryDirectory(prefix="face_detect_") as tmp_dir:
         tmp_path = Path(tmp_dir)
         sample_path = tmp_path / "sample.mp4"
-        
+
         # Download 3s low-res clip
         cmd = [
             "yt-dlp",
-            "-f", "worstvideo[ext=mp4][height<=360]/worst",
-            "--download-sections", f"*{start_time}-{start_time+3.0}",
-            "-o", str(sample_path),
-            url
+            "-f",
+            "worstvideo[ext=mp4][height<=360]/worst",
+            "--download-sections",
+            f"*{start_time}-{start_time + 3.0}",
+            "-o",
+            str(sample_path),
+            url,
         ]
         try:
             subprocess.run(cmd, check=True, capture_output=True, timeout=25)
@@ -80,10 +77,12 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             if frame_count <= 0:
                 return None
-            
-            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+            face_cascade = cv2.CascadeClassifier(
+                cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            )
             x_centers = []
-            
+
             for index in [10, frame_count // 2, frame_count - 10]:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, min(index, frame_count - 1)))
                 ret, frame = cap.read()
@@ -91,9 +90,9 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
                     continue
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = face_cascade.detectMultiScale(gray, 1.2, 4)
-                for (x, _y, w, _h) in faces:
+                for x, _y, w, _h in faces:
                     x_centers.append(x + w // 2)
-                    
+
             cap.release()
             if x_centers:
                 # Map sample pixel coordinate back to relative ratio
@@ -110,27 +109,22 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
 
 
 def compute_custom_crop(
-    width: int,
-    height: int,
-    layout: str,
-    url: str,
-    start_time: float,
-    end_time: float
+    width: int, height: int, layout: str, url: str, start_time: float, end_time: float
 ) -> CropBox:
     """Compute crop coordinates supporting custom layout offsets and face tracking."""
     target_ratio = _TARGET_W / _TARGET_H
-    
+
     # Calculate initial crop box fill sizing
     source_ratio = width / height
     if source_ratio > target_ratio:
         crop_height = height
         crop_width = max(1, round(height * target_ratio))
         y = 0
-        
+
         # Center x offset
         center_x = (width - crop_width) // 2
         x = center_x
-        
+
         # Parse layout offset settings
         if layout.startswith("custom_offset_"):
             try:
@@ -164,7 +158,7 @@ def compute_custom_crop(
     # Clamp bounds to verify it is within video dimensions
     x = max(0, min(x, width - crop_width))
     y = max(0, min(y, height - crop_height))
-    
+
     return CropBox(x=x, y=y, width=crop_width, height=crop_height)
 
 
@@ -183,96 +177,102 @@ def stream_render_pipeline(
 ) -> Path:
     """Run pipelined stream transcode: yt-dlp -> ffmpeg (crop, speed, ASS subtitles) -> file."""
     output_path = Path(output_path)
-    
+
     # 1. Fetch dimensions
     src_w, src_h = get_url_dimensions(url)
-    
+
     # 2. Compute custom crop box
     crop = compute_custom_crop(src_w, src_h, layout, url, start_time, end_time)
-    
+
     # 3. Create temporary ASS subtitles file
     with tempfile.TemporaryDirectory(prefix="pipe_ass_") as tmp_dir:
         ass_path = Path(tmp_dir) / "subs.ass"
         generate_ass_file(segments, 0.0, ass_path, pacing=pacing, style_name=subtitle_style)
-        
+
         # Escape paths
         escaped_ass = str(ass_path).replace("\\", "/").replace(":", "\\:")
-        
+
         # Build complex filters
         vf_parts = [
             f"crop={crop.width}:{crop.height}:{crop.x}:{crop.y}",
             f"scale={_TARGET_W}:{_TARGET_H}",
         ]
-        
+
         af_parts = [
             "acompressor=threshold=-20dB:ratio=4:makeup=4",
-            "aformat=channel_layouts=stereo"
+            "aformat=channel_layouts=stereo",
         ]
-        
+
         if pacing != 1.0:
             pts_factor = round(1.0 / pacing, 6)
             vf_parts.append(f"setpts={pts_factor}*PTS")
             af_parts.insert(0, f"atempo={pacing}")
-            
+
         vf_parts.append(f"ass='{escaped_ass}'")
-        
+
         # Construct yt-dlp stream command
-        fmt = (
-            "bestvideo[ext=mp4][height<=1080][vcodec^=avc1]"
-            "+bestaudio[ext=m4a]/best[ext=mp4]/best"
-        )
+        fmt = "bestvideo[ext=mp4][height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best"
         yt_cmd = [
             "yt-dlp",
-            "--retries", "5",
-            "--socket-timeout", "15",
+            "--retries",
+            "5",
+            "--socket-timeout",
+            "15",
             "--no-part",
-            "-f", fmt,
-            "--merge-output-format", "mkv",
-            "--download-sections", f"*{start_time}-{end_time}",
-            "-o", "-",
-            url
+            "-f",
+            fmt,
+            "--merge-output-format",
+            "mkv",
+            "--download-sections",
+            f"*{start_time}-{end_time}",
+            "-o",
+            "-",
+            url,
         ]
-        
+
         # Construct ffmpeg render command
         ffmpeg_cmd = [
             "ffmpeg",
             "-y",
-            "-i", "pipe:0",
-            "-vf", ",".join(vf_parts),
-            "-af", ",".join(af_parts),
-            "-c:v", video_codec,
+            "-i",
+            "pipe:0",
+            "-vf",
+            ",".join(vf_parts),
+            "-af",
+            ",".join(af_parts),
+            "-c:v",
+            video_codec,
         ]
-        
+
         if video_codec == "libx264":
             ffmpeg_cmd.extend(["-crf", "18", "-preset", preset])
         elif video_codec == "h264_nvenc":
             ffmpeg_cmd.extend(["-rc:v", "vbr", "-cq", "18", "-preset", preset])
         else:
             ffmpeg_cmd.extend(["-preset", preset])
-            
-        ffmpeg_cmd.extend([
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-movflags", "+faststart",
-            str(output_path)
-        ])
-        
+
+        ffmpeg_cmd.extend(
+            ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output_path)]
+        )
+
         log.info("Launching Stream-Piped subprocesses:")
         log.info("yt-dlp: %s", " ".join(yt_cmd))
         log.info("ffmpeg: %s", " ".join(ffmpeg_cmd))
-        
+
         yt_proc = subprocess.Popen(yt_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        ffmpeg_proc = subprocess.Popen(ffmpeg_cmd, stdin=yt_proc.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
+        ffmpeg_proc = subprocess.Popen(
+            ffmpeg_cmd, stdin=yt_proc.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
         if yt_proc.stdout:
             yt_proc.stdout.close()
-            
+
         _, errs = ffmpeg_proc.communicate()
         yt_proc.wait()
-        
+
         if ffmpeg_proc.returncode != 0:
             log.error("FFmpeg stream rendering failed: %s", errs.decode(errors="ignore")[-2000:])
             raise RuntimeError(f"FFmpeg stream render failed (exit {ffmpeg_proc.returncode})")
-            
+
     log.info("✅ Pipelined stream render successfully output to %s", output_path)
     return output_path
