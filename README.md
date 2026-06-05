@@ -19,15 +19,7 @@ pinned: false
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-40%20passed-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](#-testing-and-linting)
-[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#-docker--cloud-deployment)
-
----
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/random-or/shorts-clipper/assets/docs/images/dashboard_preview.png" alt="Shorts Clipper Dashboard Preview" width="800px" style="border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);"/>
-</p>
-
-</div>
+[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#-docker--cloud-deployment)</div>
 
 ---
 
