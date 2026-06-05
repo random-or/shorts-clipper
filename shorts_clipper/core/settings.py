@@ -47,6 +47,7 @@ class Settings:
     video_preset: str = "ultrafast"
     scout_max_age_days: int = 90
     subtitle_style: str = "default"
+    proxy: str | None = None
 
     @classmethod
     def from_env(cls, env_path: str | Path = ".env") -> Settings:
@@ -80,6 +81,10 @@ class Settings:
 
         scout_max_age_days = int(_env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90")
         subtitle_style = _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
+        proxy = _env("SHORTS_PROXY", file_values)
+
+        if proxy:
+            os.environ["SHORTS_PROXY"] = proxy
 
         return cls(
             gemini_api_key=_env("GEMINI_API_KEY", file_values),
@@ -103,4 +108,5 @@ class Settings:
             video_preset=video_preset,
             scout_max_age_days=scout_max_age_days,
             subtitle_style=subtitle_style,
+            proxy=proxy,
         )

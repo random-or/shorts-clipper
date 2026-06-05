@@ -907,10 +907,22 @@ def get_video_details(payload: TranscriptRequest) -> dict[str, str]:
     """Get video title and thumbnail URL via yt-dlp."""
     logger.info("📺 Fetching video details for: %s", payload.url)
     try:
-        import subprocess
+        import os
+        cmd = [
+            "yt-dlp",
+            "--extractor-args",
+            "youtube:player_client=default,-android_sdkless",
+        ]
+        try:
+            import curl_cffi  # noqa: F401
+            cmd.extend(["--impersonate", "Chrome"])
+        except ImportError:
+            pass
+        proxy = os.environ.get("SHORTS_PROXY")
+        if proxy:
+            cmd.extend(["--proxy", proxy])
 
-        # Get title and thumbnail URL in one fast check
-        cmd = ["yt-dlp", "--skip-download", "--print", "%(title)s\n%(thumbnail)s", payload.url]
+        cmd.extend(["--skip-download", "--print", "%(title)s\n%(thumbnail)s", payload.url])
         res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=15)
         lines = res.stdout.strip().split("\n")
         title = lines[0] if len(lines) > 0 else "YouTube Video"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -10,6 +11,26 @@ from pathlib import Path
 from shorts_clipper.core.models import TranscriptSegment
 
 log = logging.getLogger(__name__)
+
+
+def _get_base_yt_dlp_cmd() -> list[str]:
+    cmd = [
+        "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
+    ]
+    # Check if curl-cffi is available for impersonation
+    try:
+        import curl_cffi  # noqa: F401
+        cmd.extend(["--impersonate", "Chrome"])
+    except ImportError:
+        pass
+
+    proxy = os.environ.get("SHORTS_PROXY")
+    if proxy:
+        cmd.extend(["--proxy", proxy])
+    return cmd
+
 
 # ---------------------------------------------------------------------------
 # Subtitle fetching + SRT parsing
@@ -30,10 +51,8 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
     """
     log.info("\n--- FETCHING NATIVE ENGLISH SUBTITLES ---")
     output_base = work_dir / "subs"
-    cmd = [
-        "yt-dlp",
-        "--extractor-args",
-        "youtube:player_client=default,-android_sdkless",
+    cmd = _get_base_yt_dlp_cmd()
+    cmd.extend([
         "--write-auto-subs",
         "--write-subs",
         "--sub-lang",
@@ -48,7 +67,7 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
         "-o",
         str(output_base),
         url,
-    ]
+    ])
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=120)
     except subprocess.TimeoutExpired:
@@ -102,10 +121,8 @@ def download_audio(
     else:
         log.info("⬇ Downloading full audio from %s", url)
 
-    cmd = [
-        "yt-dlp",
-        "--extractor-args",
-        "youtube:player_client=default,-android_sdkless",
+    cmd = _get_base_yt_dlp_cmd()
+    cmd.extend([
         "--retries",
         "5",
         "--socket-timeout",
@@ -115,7 +132,7 @@ def download_audio(
         "m4a",
         "-o",
         str(output_path),
-    ]
+    ])
 
     if start_time is not None and end_time is not None:
         cmd.extend(["--download-sections", f"*{start_time}-{end_time}"])
@@ -172,10 +189,8 @@ def download_clip(
         f"bestvideo[ext=mp4][height<={max_height}][vcodec^=avc1]"
         f"+bestaudio[ext=m4a]/best[ext=mp4]/best"
     )
-    cmd = [
-        "yt-dlp",
-        "--extractor-args",
-        "youtube:player_client=default,-android_sdkless",
+    cmd = _get_base_yt_dlp_cmd()
+    cmd.extend([
         "--retries",
         "5",
         "--fragment-retries",
@@ -189,7 +204,7 @@ def download_clip(
         "mp4",
         "-o",
         str(output_path),
-    ]
+    ])
 
     if start_time is not None and end_time is not None:
         cmd.extend(["--download-sections", f"*{start_time}-{end_time}"])

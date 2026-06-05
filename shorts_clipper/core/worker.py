@@ -114,17 +114,29 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
                 continue
 
             # Fetch latest video id via yt-dlp
+            import os
             cmd = [
                 "yt-dlp",
                 "--extractor-args",
                 "youtube:player_client=default,-android_sdkless",
+            ]
+            try:
+                import curl_cffi  # noqa: F401
+                cmd.extend(["--impersonate", "Chrome"])
+            except ImportError:
+                pass
+            proxy = os.environ.get("SHORTS_PROXY")
+            if proxy:
+                cmd.extend(["--proxy", proxy])
+
+            cmd.extend([
                 "--playlist-end",
                 "1",
                 "--dump-json",
                 "--socket-timeout",
                 "10",
                 f"{url}/videos",
-            ]
+            ])
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
             if res.returncode == 0 and res.stdout.strip():
                 try:

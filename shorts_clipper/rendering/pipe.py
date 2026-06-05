@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -19,6 +20,26 @@ from shorts_clipper.cropping.geometry import CropBox
 
 log = logging.getLogger(__name__)
 
+
+def _get_base_yt_dlp_cmd() -> list[str]:
+    cmd = [
+        "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
+    ]
+    # Check if curl-cffi is available for impersonation
+    try:
+        import curl_cffi  # noqa: F401
+        cmd.extend(["--impersonate", "Chrome"])
+    except ImportError:
+        pass
+
+    proxy = os.environ.get("SHORTS_PROXY")
+    if proxy:
+        cmd.extend(["--proxy", proxy])
+    return cmd
+
+
 _TARGET_W = 1080
 _TARGET_H = 1920
 
@@ -26,16 +47,14 @@ _TARGET_H = 1920
 def get_url_dimensions(url: str) -> tuple[int, int]:
     """Fetch video width and height from YouTube URL using yt-dlp without downloading."""
     log.info("🔍 Probing video dimensions for %s...", url)
-    cmd = [
-        "yt-dlp",
-        "--extractor-args",
-        "youtube:player_client=default,-android_sdkless",
+    cmd = _get_base_yt_dlp_cmd()
+    cmd.extend([
         "--skip-download",
         "--dump-json",
         "--socket-timeout",
         "10",
         url,
-    ]
+    ])
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
         if res.returncode == 0:
@@ -64,10 +83,8 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
         sample_path = tmp_path / "sample.mp4"
 
         # Download 3s low-res clip
-        cmd = [
-            "yt-dlp",
-            "--extractor-args",
-            "youtube:player_client=default,-android_sdkless",
+        cmd = _get_base_yt_dlp_cmd()
+        cmd.extend([
             "-f",
             "worstvideo[ext=mp4][height<=360]/worst",
             "--download-sections",
@@ -75,7 +92,7 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
             "-o",
             str(sample_path),
             url,
-        ]
+        ])
         try:
             subprocess.run(cmd, check=True, capture_output=True, timeout=25)
         except Exception as err:
@@ -223,10 +240,8 @@ def stream_render_pipeline(
 
         # Construct yt-dlp stream command
         fmt = "bestvideo[ext=mp4][height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-        yt_cmd = [
-            "yt-dlp",
-            "--extractor-args",
-            "youtube:player_client=default,-android_sdkless",
+        yt_cmd = _get_base_yt_dlp_cmd()
+        yt_cmd.extend([
             "--retries",
             "5",
             "--socket-timeout",
@@ -241,7 +256,7 @@ def stream_render_pipeline(
             "-o",
             "-",
             url,
-        ]
+        ])
 
         # Construct ffmpeg render command
         ffmpeg_cmd = [

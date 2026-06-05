@@ -33,6 +33,26 @@ _consecutive_failures = 0
 _rate_limited = False
 _MAX_CONSECUTIVE_FAILURES = 3
 
+
+def _get_base_yt_dlp_cmd() -> list[str]:
+    import os
+    cmd = [
+        "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
+    ]
+    # Check if curl-cffi is available for impersonation
+    try:
+        import curl_cffi  # noqa: F401
+        cmd.extend(["--impersonate", "Chrome"])
+    except ImportError:
+        pass
+
+    proxy = os.environ.get("SHORTS_PROXY")
+    if proxy:
+        cmd.extend(["--proxy", proxy])
+    return cmd
+
 TRENDING_TOPICS_FALLBACK = [
     "podcast",
     "drama",
@@ -272,10 +292,8 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
         if _rate_limited:
             return []
 
-    cmd = [
-        "yt-dlp",
-        "--extractor-args",
-        "youtube:player_client=default,-android_sdkless",
+    cmd = _get_base_yt_dlp_cmd()
+    cmd.extend([
         query,
         "--dump-json",
         "--skip-download",
@@ -285,7 +303,7 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
         "--socket-timeout",
         "5",
         "--quiet",
-    ]
+    ])
     if "youtube.com/" in query or query.startswith("http"):
         cmd.extend(["--playlist-end", "15"])
 
@@ -322,10 +340,8 @@ def _fetch_video_metadata(vid_id: str) -> dict | None:
         if _rate_limited:
             return None
 
-    cmd = [
-        "yt-dlp",
-        "--extractor-args",
-        "youtube:player_client=default,-android_sdkless",
+    cmd = _get_base_yt_dlp_cmd()
+    cmd.extend([
         f"https://www.youtube.com/watch?v={vid_id}",
         "--dump-json",
         "--skip-download",
@@ -334,7 +350,7 @@ def _fetch_video_metadata(vid_id: str) -> dict | None:
         "--socket-timeout",
         "5",
         "--quiet",
-    ]
+    ])
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=12)
         with _scout_lock:
