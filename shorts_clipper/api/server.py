@@ -602,10 +602,15 @@ def connect_youtube(request: Request) -> dict[str, str]:
 
     from google_auth_oauthlib.flow import Flow
 
-    # Construct the redirect URI based on the request's origin
-    origin = request.headers.get("origin") or f"{request.url.scheme}://{request.url.netloc}"
-    if "localhost" not in origin and "127.0.0.1" not in origin:
-        origin = origin.replace("http://", "https://")
+    # Construct the redirect URI based on the request's origin and proxy headers
+    x_forwarded_host = request.headers.get("x-forwarded-host")
+    x_forwarded_proto = request.headers.get("x-forwarded-proto", "https")
+    if x_forwarded_host:
+        origin = f"{x_forwarded_proto}://{x_forwarded_host}"
+    else:
+        origin = request.headers.get("origin") or f"{request.url.scheme}://{request.url.netloc}"
+        if "localhost" not in origin and "127.0.0.1" not in origin:
+            origin = origin.replace("http://", "https://")
     redirect_uri = f"{origin}/api/youtube/callback"
 
     SCOPES = [
@@ -662,9 +667,14 @@ def youtube_callback(request: Request, code: str, state: str | None = None) -> H
         "https://www.googleapis.com/auth/youtube.upload",
         "https://www.googleapis.com/auth/youtube.readonly",
     ]
-    redirect_uri = str(request.url).split("?")[0]
-    if "localhost" not in redirect_uri and "127.0.0.1" not in redirect_uri:
-        redirect_uri = redirect_uri.replace("http://", "https://")
+    x_forwarded_host = request.headers.get("x-forwarded-host")
+    x_forwarded_proto = request.headers.get("x-forwarded-proto", "https")
+    if x_forwarded_host:
+        redirect_uri = f"{x_forwarded_proto}://{x_forwarded_host}/api/youtube/callback"
+    else:
+        redirect_uri = str(request.url).split("?")[0]
+        if "localhost" not in redirect_uri and "127.0.0.1" not in redirect_uri:
+            redirect_uri = redirect_uri.replace("http://", "https://")
 
     try:
         if env_secret:
