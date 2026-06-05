@@ -37,6 +37,7 @@ _MAX_CONSECUTIVE_FAILURES = 15
 def _get_base_yt_dlp_cmd() -> list[str]:
     import os
     import random
+
     cmd = [
         "yt-dlp",
         "--extractor-args",
@@ -45,6 +46,7 @@ def _get_base_yt_dlp_cmd() -> list[str]:
     # Check if curl-cffi is available for impersonation
     try:
         import curl_cffi  # noqa: F401
+
         cmd.extend(["--impersonate", "Chrome"])
     except ImportError:
         pass
@@ -55,6 +57,7 @@ def _get_base_yt_dlp_cmd() -> list[str]:
         if proxies:
             cmd.extend(["--proxy", random.choice(proxies)])
     return cmd
+
 
 TRENDING_TOPICS_FALLBACK = [
     "podcast",
@@ -224,6 +227,11 @@ FALLBACK_VIDEOS: list[str] = [
     "https://www.youtube.com/watch?v=2ibDeUgZoqQ",  # Podcast english
     "https://www.youtube.com/watch?v=jNQXAC9IVRw",  # Me at the zoo (classic)
     "https://www.youtube.com/watch?v=dQw4w9WgXcQ",  # Never gonna give you up
+    "https://www.youtube.com/watch?v=wXhTHyIgQ_U",  # Lex Fridman Podcast
+    "https://www.youtube.com/watch?v=f31U7Kz_1lA",  # Diary of a CEO Simon Sinek
+    "https://www.youtube.com/watch?v=8mG53T1q63A",  # JRE Elon Musk
+    "https://www.youtube.com/watch?v=z3z5bC-S1cM",  # Colin and Samir Creator Economics
+    "https://www.youtube.com/watch?v=M2_M0rP58L4",  # Huberman Lab Focus Protocol
 ]
 
 
@@ -296,17 +304,19 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
             return []
 
     cmd = _get_base_yt_dlp_cmd()
-    cmd.extend([
-        query,
-        "--dump-json",
-        "--skip-download",
-        "--flat-playlist",
-        "--retries",
-        "1",
-        "--socket-timeout",
-        "15",
-        "--quiet",
-    ])
+    cmd.extend(
+        [
+            query,
+            "--dump-json",
+            "--skip-download",
+            "--flat-playlist",
+            "--retries",
+            "1",
+            "--socket-timeout",
+            "15",
+            "--quiet",
+        ]
+    )
     if "youtube.com/" in query or query.startswith("http"):
         cmd.extend(["--playlist-end", "15"])
 
@@ -344,16 +354,18 @@ def _fetch_video_metadata(vid_id: str) -> dict | None:
             return None
 
     cmd = _get_base_yt_dlp_cmd()
-    cmd.extend([
-        f"https://www.youtube.com/watch?v={vid_id}",
-        "--dump-json",
-        "--skip-download",
-        "--retries",
-        "1",
-        "--socket-timeout",
-        "15",
-        "--quiet",
-    ])
+    cmd.extend(
+        [
+            f"https://www.youtube.com/watch?v={vid_id}",
+            "--dump-json",
+            "--skip-download",
+            "--retries",
+            "1",
+            "--socket-timeout",
+            "15",
+            "--quiet",
+        ]
+    )
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
         with _scout_lock:
@@ -779,5 +791,8 @@ def get_trending_link(
             _save_cache(seen)
         return fallback_url
 
-    log.error("All fallback videos already seen. Giving up.")
-    return None
+    log.warning(
+        "⚠️  All fallback videos already seen. Reusing a random fallback video to keep pipeline alive."
+    )
+    fallback_url = random.choice(FALLBACK_VIDEOS)
+    return fallback_url

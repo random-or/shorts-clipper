@@ -909,6 +909,7 @@ def get_video_details(payload: TranscriptRequest) -> dict[str, str]:
     try:
         import os
         import random
+
         cmd = [
             "yt-dlp",
             "--extractor-args",
@@ -916,6 +917,7 @@ def get_video_details(payload: TranscriptRequest) -> dict[str, str]:
         ]
         try:
             import curl_cffi  # noqa: F401
+
             cmd.extend(["--impersonate", "Chrome"])
         except ImportError:
             pass

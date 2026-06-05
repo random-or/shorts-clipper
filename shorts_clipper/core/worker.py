@@ -116,6 +116,7 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
             # Fetch latest video id via yt-dlp
             import os
             import random
+
             cmd = [
                 "yt-dlp",
                 "--extractor-args",
@@ -123,6 +124,7 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
             ]
             try:
                 import curl_cffi  # noqa: F401
+
                 cmd.extend(["--impersonate", "Chrome"])
             except ImportError:
                 pass
@@ -132,14 +134,16 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
                 if proxies:
                     cmd.extend(["--proxy", random.choice(proxies)])
 
-            cmd.extend([
-                "--playlist-end",
-                "1",
-                "--dump-json",
-                "--socket-timeout",
-                "10",
-                f"{url}/videos",
-            ])
+            cmd.extend(
+                [
+                    "--playlist-end",
+                    "1",
+                    "--dump-json",
+                    "--socket-timeout",
+                    "10",
+                    f"{url}/videos",
+                ]
+            )
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
             if res.returncode == 0 and res.stdout.strip():
                 try:

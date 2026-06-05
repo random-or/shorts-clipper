@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 def _get_base_yt_dlp_cmd() -> list[str]:
     import random
+
     cmd = [
         "yt-dlp",
         "--extractor-args",
@@ -31,6 +32,7 @@ def _get_base_yt_dlp_cmd() -> list[str]:
     # Check if curl-cffi is available for impersonation
     try:
         import curl_cffi  # noqa: F401
+
         cmd.extend(["--impersonate", "Chrome"])
     except ImportError:
         pass
@@ -51,13 +53,15 @@ def get_url_dimensions(url: str) -> tuple[int, int]:
     """Fetch video width and height from YouTube URL using yt-dlp without downloading."""
     log.info("🔍 Probing video dimensions for %s...", url)
     cmd = _get_base_yt_dlp_cmd()
-    cmd.extend([
-        "--skip-download",
-        "--dump-json",
-        "--socket-timeout",
-        "10",
-        url,
-    ])
+    cmd.extend(
+        [
+            "--skip-download",
+            "--dump-json",
+            "--socket-timeout",
+            "10",
+            url,
+        ]
+    )
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
         if res.returncode == 0:
@@ -87,15 +91,17 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
 
         # Download 3s low-res clip
         cmd = _get_base_yt_dlp_cmd()
-        cmd.extend([
-            "-f",
-            "worstvideo[ext=mp4][height<=360]/worst",
-            "--download-sections",
-            f"*{start_time}-{start_time + 3.0}",
-            "-o",
-            str(sample_path),
-            url,
-        ])
+        cmd.extend(
+            [
+                "-f",
+                "worstvideo[ext=mp4][height<=360]/worst",
+                "--download-sections",
+                f"*{start_time}-{start_time + 3.0}",
+                "-o",
+                str(sample_path),
+                url,
+            ]
+        )
         try:
             subprocess.run(cmd, check=True, capture_output=True, timeout=25)
         except Exception as err:
@@ -244,22 +250,24 @@ def stream_render_pipeline(
         # Construct yt-dlp stream command
         fmt = "bestvideo[ext=mp4][height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best"
         yt_cmd = _get_base_yt_dlp_cmd()
-        yt_cmd.extend([
-            "--retries",
-            "5",
-            "--socket-timeout",
-            "15",
-            "--no-part",
-            "-f",
-            fmt,
-            "--merge-output-format",
-            "mkv",
-            "--download-sections",
-            f"*{start_time}-{end_time}",
-            "-o",
-            "-",
-            url,
-        ])
+        yt_cmd.extend(
+            [
+                "--retries",
+                "5",
+                "--socket-timeout",
+                "15",
+                "--no-part",
+                "-f",
+                fmt,
+                "--merge-output-format",
+                "mkv",
+                "--download-sections",
+                f"*{start_time}-{end_time}",
+                "-o",
+                "-",
+                url,
+            ]
+        )
 
         # Construct ffmpeg render command
         ffmpeg_cmd = [

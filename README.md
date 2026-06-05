@@ -18,8 +18,14 @@ pinned: false
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-40%20passed-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](#testing)
-[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#docker)
+[![Tests](https://img.shields.io/badge/tests-40%20passed-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](#-testing-and-linting)
+[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#-docker--cloud-deployment)
+
+---
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/random-or/shorts-clipper/assets/docs/images/dashboard_preview.png" alt="Shorts Clipper Dashboard Preview" width="800px" style="border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);"/>
+</p>
 
 </div>
 
@@ -27,9 +33,9 @@ pinned: false
 
 ## 📖 System Overview & Architecture
 
-Shorts Clipper is a production-grade, AI-driven automation pipeline that transforms standard 16:9 landscape videos (podcasts, webinars, gaming streams) into high-retention 9:16 vertical shorts with word-level animated subtitles, ready for multi-platform distribution.
+**Shorts Clipper** is a production-grade, AI-driven automation pipeline that transforms standard 16:9 landscape videos (podcasts, webinars, gaming streams) into high-retention 9:16 vertical shorts. It automatically transcribes audio, selects viral hooks using AI, renders vertical crops, generates customized animated word-level subtitles, and publishes the final cuts.
 
-Here is the system architecture showing how components interact:
+### 📐 Component Flow & Architecture
 
 ```mermaid
 flowchart TD
@@ -89,113 +95,109 @@ flowchart TD
 
 ---
 
-## 🚀 Advanced Features & Integrations
+## 🚀 Key Features
 
-The current version of Shorts Clipper includes several newly integrated advanced features tailored for modern creators:
-
-1. **Decoupled Task Workers:** Offloads video rendering, highlights selection, and uploads to a dedicated database-backed background worker daemon (SQLite queue). This ensures active tasks are never lost if the web server restarts.
-2. **Stream-Piped Rendering:** Directs `yt-dlp` download output stream straight to FFmpeg crop and burn filter loops, eliminating intermediate disk clip writes and speeding up renders.
-3. **Smart Face Tracking & Offsets:** Interactive crop settings dropdown selector allowing Center/Left/Right crop layouts, Haar Cascade auto-face tracking, or custom horizontal offset sliders (represented visually with a real-time responsive 9:16 safe-zone overlay).
-4. **Custom Subtitle Theme Studio:** Preset typography styles including MrBeast Pop, Hormozi Glow, Minimal Clean, and Gold Premium, along with a custom theme editor to build personalized custom styles (Font, Size, Color, Outline, Shadow) serialized dynamically.
-5. **Gemini Metadata Co-Writer:** Integrated slide-out assistant panel powered by Gemini to brainstorm titles/hooks, write video descriptions with SEO keywords, and list hashtags based on clip transcripts, complete with automatic copy/paste insertion callbacks.
-6. **Autopilot Channel Watchdog:** Periodically polls monitored YouTube channels for new uploads. When a new video is detected, it auto-queues Autopilot clipping jobs automatically.
-7. **Auto-Upload Privacy Selection:** Configure whether automated or manual clips are uploaded as **Private**, **Unlisted**, or **Public** directly from the Web UI, providing safe drafts before making clips public.
+*   **🛡️ Anti-Blocking Web Scraper (New):** Integrated `curl-cffi` browser impersonation (`--impersonate Chrome`) and automated **client-side proxy rotation** supporting multi-proxy pools via `SHORTS_PROXY` environment variables to successfully bypass YouTube cloud IP bans.
+*   **🔄 Self-Healing Autopilot Daemon:** Smart scouting queue handles consecutive failures gracefully, implements exponential retry backoff, and automatically falls back to curated viral videos, reusing them when the cache is saturated to guarantee 100% server uptime.
+*   **⚙️ Decoupled Job queue:** Database-backed background worker queue powered by SQLite ensures long-running rendering, transcription, and uploads are resilient to web server restarts.
+*   **⚡ Piped Encoding & Speedup:** Directs `yt-dlp` output to FFmpeg crops in single-pass runs, applying a **1.15× speedup** during subtitle burn-ins to eliminate double-transcoding overhead and reduce disk writes.
+*   **👤 Smart safe-Zone & Face Cropping:** Adjustable horizontal offsets with interactive 9:16 safe-zone indicators. Choose between `Center`, `Left`, or `Right` crops.
+*   **🎨 Custom Caption Studio:** Burn stylized word-level animated subtitles. Choose preset themes (e.g., *MrBeast Pop*, *Hormozi Glow*, *Minimal Clean*, *Gold Premium*) or design your own fonts, outline colors, and glow offsets.
+*   **🧠 Gemini AI Video Editor:** Google Gemini 2.5 Pro selects high-retention highlights based on **Hook Strength**, **Emotional Peak**, and **Dialogue Flow**, co-writing engaging hooks, titles, and tags.
 
 ---
 
-## ⚡ Key Pipeline Steps
+## ⚡ Pipeline Mechanics
 
 ### 1. 🔍 Trending Scout
-Scans selected channels, search terms, or broader topic niches (e.g., podcast, AI debates). Candidates are scored using engagement metrics (view velocity) while maintaining a local SQLite-backed cache to prevent duplicate processing of the same content within 7 days.
+Scans channels, topics, or niches (e.g., *debates*, *tech reviews*). Calculates view velocity scores while maintaining a local cache of already-processed video IDs with a 7-day TTL to avoid duplicates.
 
 ### 2. 📥 Smart Downloader
-Uses `yt-dlp`'s `--download-sections` flag to download **only** the designated segment. This isolates audio and video streams without downloading full multi-hour episodes, saving bandwidth and disk write operations.
+Uses `yt-dlp`'s `--download-sections` flag to download only the designated clip window. Avoids wasteful multi-gigabyte downloads of full hours-long videos.
 
 ### 3. 🎙️ Dual-Engine Transcription
-Primary transcription runs via the Gemini 2.5 Flash API for high-speed cloud generation of word-level timestamped transcripts. If credentials are missing or the API is rate-limited, it automatically falls back to a local `faster-whisper` CTranslate2 model running on CPU/GPU.
+Primary transcription runs via Gemini 2.5 Flash for high-speed cloud-based word-level timestamp generation. Automatically falls back to local `faster-whisper` running on CPU or GPU if the cloud API is throttled.
 
-### 4. 🧠 Gemini Highlight Selection
-Gemini 2.5 Pro acts as an automated editor, reading the timestamps and scoring candidates across five viral dimensions: **Hook Strength**, **Emotional Peak**, **Dialogue Flow**, **Information Density**, and **Self-Containment**. It returns the exact start/end range, layout recommendation (`crop_center`, `crop_left`, or `crop_right`), and recommended titles and description.
+### 4. 🧠 Highlight Analysis
+Generates exact crop layouts (`crop_center`, `crop_left`, `crop_right`) and timestamps based on emotional peaks, keeping context and narrative complete.
 
-### 5. 🎬 Dual-Pass Rendering
-* **Pass 1:** Crops and scales the source video into a `1080x1920` vertical aspect ratio.
-* **Pass 2:** Builds an Advanced SubStation Alpha (`.ass`) subtitle script from word-level timestamps and burns it into the video using FFmpeg's GPU/CPU accelerated `libass` library. Crucially, it applies a **1.15× speedup** in this single encoding pass, preventing multiple transcoding iterations.
+### 5. 🎬 Burn & Render
+Renders crops at `1080x1920` (9:16 aspect ratio), overlaying styled `.ass` captions with FFmpeg's hardware-accelerated subtitle renderer.
 
 ---
 
-## 🖥️ Web Console Features
+## 🖥️ Web Console Dashboard
 
-Start the dashboard to access three highly polished, dark-mode panels:
+Start the local server to access a fully dark-themed, dashboard interface:
 
-| Component | Purpose | Details |
-|-----------|---------|---------|
-| **Autopilot Launchpad** | Fully Automated Production | Define a niche, select a duration (today/week/month), and let the watchdog scout, download, crop, style, and post. |
-| **Interactive Manual Studio** | Granular Clip Control | Paste any URL, inspect AI highlight scores, preview clips in-browser with mock phone frames, and edit before rendering. |
-| **Rendered Clip Library** | Asset Library Management | Browse rendered MP4 files, preview safe-zones, adjust titles, and post to YouTube via OAuth2 with one click. |
+| Panel | Function | Features |
+|---|---|---|
+| **Autopilot Launchpad** | Zero-touch production | Set a niche/topic, schedule, and let the daemon scout, crop, and upload. |
+| **Interactive Studio** | Granular control | Manual URL insertion, highlight scoring preview, real-time safety overlay, and custom typography edits. |
+| **Asset Library** | Media Manager | Browse rendered MP4 exports, modify descriptions, and post to YouTube via OAuth2. |
 
 ---
 
 ## 🛠️ Quick Start
 
 ### 📋 Prerequisites
-* **Python 3.11+**
-* **FFmpeg** (must be compiled with `--enable-libass` support)
-* **Gemini API Key** (available at [Google AI Studio](https://aistudio.google.com/))
+*   **Python 3.11+**
+*   **FFmpeg** (compiled with `--enable-libass` support)
+*   **Gemini API Key** (from [Google AI Studio](https://aistudio.google.com/))
 
 ### ⬇️ Installation
 
 ```bash
-# 1. Clone the repository
+# 1. Clone repository
 git clone https://github.com/random-or/shorts-clipper.git
 cd shorts-clipper
 
-# 2. Set up virtual environment
+# 2. Setup environment
 python -m venv env
 source env/bin/activate  # Windows: env\Scripts\activate
 
 # 3. Install packages in editable mode
 pip install -e .
 
-# 4. Configure environment settings
+# 4. Initialize config
 cp .env.example .env
 ```
 
-Open the newly created `.env` file and fill in your variables (at minimum `GEMINI_API_KEY`).
+Open the `.env` file and input your variables. At minimum, you must supply `GEMINI_API_KEY`.
 
 ### 🚀 Running the Application
 
 #### **1. Launch the Web Console**
 ```bash
-python -m shorts_clipper web --port 8000
-# Open http://localhost:8000 in your web browser
+python -m shorts_clipper web --host 127.0.0.1 --port 8000
+# Open http://localhost:8000 in your browser
 ```
 
-#### **2. Run via CLI**
-* **Clip a Specific Video:**
-  ```bash
-  python -m shorts_clipper clip "https://youtube.com/watch?v=VIDEO_ID" --count 3
-  ```
-* **Run in Autopilot Mode:**
-  ```bash
-  python -m shorts_clipper autopilot --niche "tech news" --count 2 --upload
-  ```
-* **Scout Trending Videos Only:**
-  ```bash
-  python -m shorts_clipper scout --niche "finance" --count 5
-  ```
+#### **2. CLI Commands**
+*   **Clip specific video:**
+    ```bash
+    python -m shorts_clipper clip "https://youtube.com/watch?v=VIDEO_ID" --count 1
+    ```
+*   **Run Autopilot:**
+    ```bash
+    python -m shorts_clipper autopilot --niche "motivation" --count 2 --upload
+    ```
+*   **Scout trends:**
+    ```bash
+    python -m shorts_clipper scout --niche "gaming" --count 5
+    ```
 
 ---
 
 ## ⚙️ Configuration Reference (`.env`)
 
-All parameters are configured in the `.env` file:
-
 | Variable | Default Value | Description |
-|----------|---------------|-------------|
+|---|---|---|
 | `GEMINI_API_KEY` | *(None)* | **Required.** Your Google Gemini API key. |
-| `SHORTS_WHISPER_MODEL` | `tiny.en` | Local transcription model size (`tiny.en` up to `large-v3`). |
+| `SHORTS_PROXY` | *(None)* | Optional. Comma-separated list of HTTP proxies (`http://user:pass@ip:port`). |
+| `SHORTS_WHISPER_MODEL` | `tiny.en` | Local Whisper model size (`tiny.en`, `base.en`, `small.en`, `large-v3`). |
 | `SHORTS_WHISPER_DEVICE` | `cpu` | Device for local Whisper running (`cpu` or `cuda`). |
-| `SHORTS_VIDEO_CODEC` | `libx264` | Video encoder encoder: standard `libx264` or NVIDIA GPU accelerated `h264_nvenc`. |
+| `SHORTS_VIDEO_CODEC` | `libx264` | Video encoder encoder: standard `libx264` or hardware GPU `h264_nvenc`. |
 | `SHORTS_ENABLE_GPU` | `false` | Enable hardware acceleration toggles for both Whisper and FFmpeg. |
 | `SHORTS_OUTPUT_DIR` | `./outputs` | Folder where generated vertical MP4 clips are stored. |
 
@@ -214,9 +216,7 @@ To authorize direct-to-YouTube publishing:
 
 ## 🐳 Docker & Cloud Deployment
 
-### 1. Local Container Deployment
-Run the entire application containerized (fully pre-configured with Python, FFmpeg, and `libass` libraries):
-
+### 1. Local Container
 ```bash
 # Build
 docker build -t shorts-clipper .
@@ -226,17 +226,19 @@ docker run -p 8000:7860 --env-file .env shorts-clipper
 ```
 
 ### 2. Hugging Face Spaces Deployment (Free Cloud Hosting)
-Shorts Clipper is fully optimized for Hugging Face Spaces out of the box:
+Shorts Clipper is optimized for Hugging Face Spaces out of the box:
 1. Create a **New Space** on [Hugging Face](https://huggingface.co/new-space).
 2. Select **Docker** as the SDK (use the **Blank** template).
-3. In your Space's **Settings**, add your `GEMINI_API_KEY` under the **Variables and secrets** section.
+3. In your Space's **Settings**, add your secrets under **Variables and secrets**:
+   * `GEMINI_API_KEY` (Required)
+   * `SHORTS_PROXY` (Highly Recommended to bypass cloud rate limits. Format: `http://user:pass@ip:port,http://user2:pass2@ip2:port2,...`)
 4. Push the codebase (or upload the files) to the Hugging Face Space repository. It will automatically build and launch on port `7860`.
 
 ---
 
-## 🖥️ Production Daemonizing (systemd setup)
+## 🖥️ Production Daemonizing (systemd)
 
-To keep the FastAPI server running persistently in a production Linux environment:
+To run the web service persistently in production:
 
 Create `/etc/systemd/system/shorts-clipper.service`:
 ```ini
@@ -287,10 +289,6 @@ sudo systemctl start shorts-clipper.service
 * **Cause:** Running larger Whisper models (like `small` or `large-v3`) on CPU or systems with low VRAM.
 * **Solution:** Set `SHORTS_WHISPER_MODEL=tiny.en` in `.env` for standard CPU execution, or enable GPU configurations (`SHORTS_WHISPER_DEVICE=cuda`, `SHORTS_ENABLE_GPU=true`).
 
-### **Q: Gemini returns HTTP 429 (Too Many Requests)**
-* **Cause:** The free-tier Gemini API key allows up to 15 requests per minute.
-* **Solution:** Space out manual video searches or register a pay-as-you-go billing profile on Google AI Studio to increase rate limits.
-
 ---
 
 ## 🧪 Testing and Linting
@@ -305,5 +303,11 @@ pip install -e ".[dev]"
 pytest
 
 # Code style checks
-ruff check shorts_clipper
+ruff check .
+ruff format --check .
 ```
+
+---
+
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
