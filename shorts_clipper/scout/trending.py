@@ -274,6 +274,8 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
 
     cmd = [
         "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
         query,
         "--dump-json",
         "--skip-download",
@@ -322,6 +324,8 @@ def _fetch_video_metadata(vid_id: str) -> dict | None:
 
     cmd = [
         "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
         f"https://www.youtube.com/watch?v={vid_id}",
         "--dump-json",
         "--skip-download",

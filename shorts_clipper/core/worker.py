@@ -116,6 +116,8 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
             # Fetch latest video id via yt-dlp
             cmd = [
                 "yt-dlp",
+                "--extractor-args",
+                "youtube:player_client=default,-android_sdkless",
                 "--playlist-end",
                 "1",
                 "--dump-json",

@@ -32,6 +32,8 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
     output_base = work_dir / "subs"
     cmd = [
         "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
         "--write-auto-subs",
         "--write-subs",
         "--sub-lang",
@@ -102,6 +104,8 @@ def download_audio(
 
     cmd = [
         "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
         "--retries",
         "5",
         "--socket-timeout",
@@ -170,6 +174,8 @@ def download_clip(
     )
     cmd = [
         "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
         "--retries",
         "5",
         "--fragment-retries",

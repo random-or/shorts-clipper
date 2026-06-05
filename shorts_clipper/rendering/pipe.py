@@ -26,7 +26,16 @@ _TARGET_H = 1920
 def get_url_dimensions(url: str) -> tuple[int, int]:
     """Fetch video width and height from YouTube URL using yt-dlp without downloading."""
     log.info("🔍 Probing video dimensions for %s...", url)
-    cmd = ["yt-dlp", "--skip-download", "--dump-json", "--socket-timeout", "10", url]
+    cmd = [
+        "yt-dlp",
+        "--extractor-args",
+        "youtube:player_client=default,-android_sdkless",
+        "--skip-download",
+        "--dump-json",
+        "--socket-timeout",
+        "10",
+        url,
+    ]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
         if res.returncode == 0:
@@ -57,6 +66,8 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
         # Download 3s low-res clip
         cmd = [
             "yt-dlp",
+            "--extractor-args",
+            "youtube:player_client=default,-android_sdkless",
             "-f",
             "worstvideo[ext=mp4][height<=360]/worst",
             "--download-sections",
@@ -214,6 +225,8 @@ def stream_render_pipeline(
         fmt = "bestvideo[ext=mp4][height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best"
         yt_cmd = [
             "yt-dlp",
+            "--extractor-args",
+            "youtube:player_client=default,-android_sdkless",
             "--retries",
             "5",
             "--socket-timeout",
