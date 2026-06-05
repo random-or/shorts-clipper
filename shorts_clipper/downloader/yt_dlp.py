@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 
 def _get_base_yt_dlp_cmd() -> list[str]:
+    import random
     cmd = [
         "yt-dlp",
         "--extractor-args",
@@ -26,9 +27,11 @@ def _get_base_yt_dlp_cmd() -> list[str]:
     except ImportError:
         pass
 
-    proxy = os.environ.get("SHORTS_PROXY")
-    if proxy:
-        cmd.extend(["--proxy", proxy])
+    proxy_str = os.environ.get("SHORTS_PROXY")
+    if proxy_str:
+        proxies = [p.strip() for p in proxy_str.split(",") if p.strip()]
+        if proxies:
+            cmd.extend(["--proxy", random.choice(proxies)])
     return cmd
 
 

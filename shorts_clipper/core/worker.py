@@ -115,6 +115,7 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
 
             # Fetch latest video id via yt-dlp
             import os
+            import random
             cmd = [
                 "yt-dlp",
                 "--extractor-args",
@@ -125,9 +126,11 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
                 cmd.extend(["--impersonate", "Chrome"])
             except ImportError:
                 pass
-            proxy = os.environ.get("SHORTS_PROXY")
-            if proxy:
-                cmd.extend(["--proxy", proxy])
+            proxy_str = os.environ.get("SHORTS_PROXY")
+            if proxy_str:
+                proxies = [p.strip() for p in proxy_str.split(",") if p.strip()]
+                if proxies:
+                    cmd.extend(["--proxy", random.choice(proxies)])
 
             cmd.extend([
                 "--playlist-end",

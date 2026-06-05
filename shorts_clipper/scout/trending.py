@@ -31,11 +31,12 @@ _NICHE_ROTATION_INDEX = 0
 _scout_lock = threading.Lock()
 _consecutive_failures = 0
 _rate_limited = False
-_MAX_CONSECUTIVE_FAILURES = 3
+_MAX_CONSECUTIVE_FAILURES = 15
 
 
 def _get_base_yt_dlp_cmd() -> list[str]:
     import os
+    import random
     cmd = [
         "yt-dlp",
         "--extractor-args",
@@ -48,9 +49,11 @@ def _get_base_yt_dlp_cmd() -> list[str]:
     except ImportError:
         pass
 
-    proxy = os.environ.get("SHORTS_PROXY")
-    if proxy:
-        cmd.extend(["--proxy", proxy])
+    proxy_str = os.environ.get("SHORTS_PROXY")
+    if proxy_str:
+        proxies = [p.strip() for p in proxy_str.split(",") if p.strip()]
+        if proxies:
+            cmd.extend(["--proxy", random.choice(proxies)])
     return cmd
 
 TRENDING_TOPICS_FALLBACK = [
@@ -301,14 +304,14 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
         "--retries",
         "1",
         "--socket-timeout",
-        "5",
+        "15",
         "--quiet",
     ])
     if "youtube.com/" in query or query.startswith("http"):
         cmd.extend(["--playlist-end", "15"])
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=12)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
         videos = []
         for line in result.stdout.splitlines():
             line = line.strip()
@@ -348,11 +351,11 @@ def _fetch_video_metadata(vid_id: str) -> dict | None:
         "--retries",
         "1",
         "--socket-timeout",
-        "5",
+        "15",
         "--quiet",
     ])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=12)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
         with _scout_lock:
             _consecutive_failures = 0
         return json.loads(result.stdout)
@@ -681,6 +684,10 @@ def get_trending_link(
         return None
 
     for attempt in range(1, max_retries + 1):
+        with _scout_lock:
+            _rate_limited = False
+            _consecutive_failures = 0
+
         if fixed_queries is not None:
             queries = list(fixed_queries)
         else:
