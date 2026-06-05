@@ -17,6 +17,7 @@ import logging
 import random
 import re
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -26,6 +27,11 @@ from typing import NamedTuple
 log = logging.getLogger(__name__)
 
 _NICHE_ROTATION_INDEX = 0
+
+_scout_lock = threading.Lock()
+_consecutive_failures = 0
+_rate_limited = False
+_MAX_CONSECUTIVE_FAILURES = 3
 
 TRENDING_TOPICS_FALLBACK = [
     "podcast",
@@ -260,6 +266,12 @@ def _generate_dynamic_queries(pool_name: str, count: int = 5) -> list[str]:
 
 def _search_and_fetch_metadata(query: str) -> list[dict]:
     """Run search and dump flat metadata for top results."""
+    global _consecutive_failures, _rate_limited
+
+    with _scout_lock:
+        if _rate_limited:
+            return []
+
     cmd = [
         "yt-dlp",
         query,
@@ -267,16 +279,16 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
         "--skip-download",
         "--flat-playlist",
         "--retries",
-        "2",
+        "1",
         "--socket-timeout",
-        "10",
+        "5",
         "--quiet",
     ]
     if "youtube.com/" in query or query.startswith("http"):
         cmd.extend(["--playlist-end", "15"])
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=12)
         videos = []
         for line in result.stdout.splitlines():
             line = line.strip()
@@ -285,30 +297,54 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
                     videos.append(json.loads(line))
                 except Exception:
                     continue
+        with _scout_lock:
+            _consecutive_failures = 0
         return videos
     except Exception as exc:  # noqa: BLE001
         log.warning("Search and metadata fetch failed for query %r: %s", query, exc)
+        with _scout_lock:
+            _consecutive_failures += 1
+            if _consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+                _rate_limited = True
+                log.warning(
+                    "⚠️ Multiple consecutive yt-dlp failures detected. Activating rate-limit fail-fast to prevent server hang."
+                )
         return []
 
 
 def _fetch_video_metadata(vid_id: str) -> dict | None:
     """Fetch full metadata for a specific video."""
+    global _consecutive_failures, _rate_limited
+
+    with _scout_lock:
+        if _rate_limited:
+            return None
+
     cmd = [
         "yt-dlp",
         f"https://www.youtube.com/watch?v={vid_id}",
         "--dump-json",
         "--skip-download",
         "--retries",
-        "2",
+        "1",
         "--socket-timeout",
-        "10",
+        "5",
         "--quiet",
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=12)
+        with _scout_lock:
+            _consecutive_failures = 0
         return json.loads(result.stdout)
     except Exception as exc:
         log.warning("Metadata fetch failed for %s: %s", vid_id, exc)
+        with _scout_lock:
+            _consecutive_failures += 1
+            if _consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+                _rate_limited = True
+                log.warning(
+                    "⚠️ Multiple consecutive yt-dlp failures detected. Activating rate-limit fail-fast to prevent server hang."
+                )
         return None
 
 
@@ -552,6 +588,11 @@ def get_trending_link(
     Returns:
         A YouTube URL string, or None if no suitable video was found.
     """
+    global _rate_limited, _consecutive_failures
+    with _scout_lock:
+        _rate_limited = False
+        _consecutive_failures = 0
+
     seen = _load_cache() if cache else {}
     log.info("\n🚀 ADVANCED VIRAL SCOUT — %d seen IDs cached", len(seen))
 
