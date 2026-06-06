@@ -228,10 +228,9 @@ FALLBACK_VIDEOS: list[str] = [
     "https://www.youtube.com/watch?v=jNQXAC9IVRw",  # Me at the zoo (classic)
     "https://www.youtube.com/watch?v=dQw4w9WgXcQ",  # Never gonna give you up
     "https://www.youtube.com/watch?v=wXhTHyIgQ_U",  # Lex Fridman Podcast
-    "https://www.youtube.com/watch?v=f31U7Kz_1lA",  # Diary of a CEO Simon Sinek
-    "https://www.youtube.com/watch?v=8mG53T1q63A",  # JRE Elon Musk
-    "https://www.youtube.com/watch?v=z3z5bC-S1cM",  # Colin and Samir Creator Economics
-    "https://www.youtube.com/watch?v=M2_M0rP58L4",  # Huberman Lab Focus Protocol
+    "https://www.youtube.com/watch?v=862r3XS2YB0",  # Steve Jobs Stanford Speech
+    "https://www.youtube.com/watch?v=R9OHn5ZF4Uo",  # Tim Urban TED Talk
+    "https://www.youtube.com/watch?v=9bZkp7q19f0",  # PSY Gangnam Style
 ]
 
 
