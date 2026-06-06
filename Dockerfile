@@ -25,7 +25,7 @@ COPY --chown=user:user shorts_clipper ./shorts_clipper
 
 RUN python -m pip install --upgrade pip \
     && pip install -e . \
-    && pip install -U --no-cache-dir yt-dlp
+    && pip install -U --no-cache-dir git+https://github.com/yt-dlp/yt-dlp.git
 
 EXPOSE 7860
 CMD ["uvicorn", "shorts_clipper.api.server:app", "--host", "0.0.0.0", "--port", "7860", "--proxy-headers", "--forwarded-allow-ips=*"]
