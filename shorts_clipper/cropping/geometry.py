@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class CropBox:
-    x: int
-    y: int
+    x: int | str
+    y: int | str
     width: int
     height: int
 

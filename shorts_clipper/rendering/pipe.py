@@ -145,6 +145,132 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
     return None
 
 
+def run_dynamic_face_tracking(
+    url: str,
+    start_time: float,
+    end_time: float,
+    src_w: int,
+    src_h: int,
+    crop_width: int,
+    step_seconds: float = 2.0,
+) -> str | None:
+    """Download low-res video, run face detection every step_seconds, and build an FFmpeg panning expression."""
+    try:
+        import cv2
+    except ImportError:
+        log.warning(
+            "⚠️ OpenCV (opencv-python-headless) not installed. Dynamic face panning disabled."
+        )
+        return None
+
+    duration = end_time - start_time
+    if duration <= 0:
+        return None
+
+    log.info("🤖 Starting dynamic face-tracking analysis across %.1f seconds...", duration)
+    with tempfile.TemporaryDirectory(prefix="face_pan_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        sample_path = tmp_path / "sample.mp4"
+
+        # Download low-res segment
+        cmd = _get_base_yt_dlp_cmd()
+        cmd.extend(
+            [
+                "-f",
+                "worstvideo[ext=mp4][height<=240]/worst",
+                "--download-sections",
+                f"*{start_time}-{end_time}",
+                "-o",
+                str(sample_path),
+                url,
+            ]
+        )
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, timeout=30)
+        except Exception as err:
+            log.warning("Failed to download sample clip for dynamic face tracking: %s", err)
+            return None
+
+        try:
+            cap = cv2.VideoCapture(str(sample_path))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            sample_w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+            if fps <= 0 or frame_count <= 0 or sample_w <= 0:
+                cap.release()
+                return None
+
+            face_cascade = cv2.CascadeClassifier(
+                cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            )
+
+            # Sample every step_seconds
+            raw_x: list[float] = []
+            timestamps: list[float] = []
+
+            num_steps = int(duration / step_seconds) + 1
+            last_known_x = (src_w - crop_width) // 2
+
+            for i in range(num_steps):
+                t_rel = i * step_seconds
+                if t_rel > duration:
+                    t_rel = duration
+
+                frame_idx = int(t_rel * fps)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, min(frame_idx, frame_count - 1)))
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray, 1.2, 4)
+
+                if len(faces) > 0:
+                    # Average x-center of all detected faces
+                    avg_face_x = sum(x + w // 2 for x, _y, w, _h in faces) / len(faces)
+                    # Map to source resolution
+                    face_src_x = avg_face_x * (src_w / sample_w)
+                    # Center the crop box on face
+                    target_x = face_src_x - crop_width // 2
+                    # Clamp
+                    target_x = max(0.0, min(target_x, src_w - crop_width))
+                    last_known_x = target_x
+
+                raw_x.append(last_known_x)
+                timestamps.append(t_rel)
+
+            cap.release()
+
+            if not raw_x:
+                return None
+
+            # Smooth the tracking coordinates with a moving average filter
+            smoothed_x = []
+            for i in range(len(raw_x)):
+                neighbors = [raw_x[j] for j in range(max(0, i - 1), min(len(raw_x), i + 2))]
+                smoothed_x.append(sum(neighbors) / len(neighbors))
+
+            # Build recursion for piecewise linear interpolation expression
+            points = list(zip(timestamps, smoothed_x, strict=True))
+
+            def build_expr(idx: int) -> str:
+                if idx == len(points) - 1:
+                    return f"{points[idx][1]:.2f}"
+                t_curr, x_curr = points[idx]
+                t_next, x_next = points[idx + 1]
+                slope = (x_next - x_curr) / (t_next - t_curr)
+                rest = build_expr(idx + 1)
+                return f"if(lt(t,{t_next:.2f}),{x_curr:.2f}+{slope:.4f}*(t-{t_curr:.2f}),{rest})"
+
+            expr = build_expr(0)
+            log.info("🎯 Generated dynamic panning FFmpeg expression (length=%d)", len(expr))
+            return expr
+
+        except Exception as err:
+            log.warning("Error computing dynamic face tracking: %s", err)
+            return None
+
+
 def compute_custom_crop(
     width: int, height: int, layout: str, url: str, start_time: float, end_time: float
 ) -> CropBox:
@@ -160,7 +286,7 @@ def compute_custom_crop(
 
         # Center x offset
         center_x = (width - crop_width) // 2
-        x = center_x
+        x: int | str = center_x
 
         # Parse layout offset settings
         if layout.startswith("custom_offset_"):
@@ -186,15 +312,24 @@ def compute_custom_crop(
             else:
                 log.info("Face tracking fallback: using center crop.")
                 x = center_x
+        elif layout == "auto_pan":
+            expr = run_dynamic_face_tracking(url, start_time, end_time, width, height, crop_width)
+            if expr:
+                return CropBox(x=expr, y=0, width=crop_width, height=crop_height)
+            else:
+                log.info("Dynamic face panning fallback: using center crop.")
+                x = center_x
     else:
         crop_width = width
         crop_height = max(1, round(width / target_ratio))
         x = 0
-        y = (height - crop_height) // 2
+        y: int | str = (height - crop_height) // 2
 
-    # Clamp bounds to verify it is within video dimensions
-    x = max(0, min(x, width - crop_width))
-    y = max(0, min(y, height - crop_height))
+    # Clamp bounds to verify it is within video dimensions (only if it is static int)
+    if isinstance(x, (int, float)):
+        x = max(0, min(int(x), width - crop_width))
+    if isinstance(y, (int, float)):
+        y = max(0, min(int(y), height - crop_height))
 
     return CropBox(x=x, y=y, width=crop_width, height=crop_height)
 
