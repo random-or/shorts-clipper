@@ -43,7 +43,7 @@ flowchart TD
 **Linux Setup Instructions**
 1. Clone the repository:
    ```bash
-   git clone https://github.com/username/shorts-clipper.git
+   git clone https://github.com/random-or/shorts-clipper.git
    cd shorts-clipper
    ```
 2. Create and activate a virtual environment:
