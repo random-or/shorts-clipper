@@ -181,7 +181,8 @@ class DownloaderTests(unittest.TestCase):
         # Check command structure
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
-        self.assertIn("yt-dlp", args)
+        self.assertIn("yt_dlp", args)
+        self.assertIn("-m", args)
         self.assertIn("--extract-audio", args)
         self.assertIn("--audio-format", args)
         self.assertIn("m4a", args)
@@ -200,7 +201,8 @@ class DownloaderTests(unittest.TestCase):
         # Check command structure
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
-        self.assertIn("yt-dlp", args)
+        self.assertIn("yt_dlp", args)
+        self.assertIn("-m", args)
         self.assertIn("--extract-audio", args)
         self.assertIn("--audio-format", args)
         self.assertIn("m4a", args)
