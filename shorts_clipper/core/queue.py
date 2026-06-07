@@ -104,6 +104,9 @@ def _row_to_job(row: sqlite3.Row) -> Job:
     )
 
 
+_CLEANUP_DONE = False
+
+
 class JobQueue:
     """Thread-safe SQLite job queue with CRUD operations."""
 
@@ -114,19 +117,22 @@ class JobQueue:
         self._conn = _connect()
         _ensure_table(self._conn)
 
-        # Reset any stuck 'running' or 'pending' jobs to failed on server start
-        with _lock:
-            self._conn.execute(
-                "UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE status IN (?, ?)",
-                (
-                    JobStatus.FAILED.value,
-                    "Interrupted by server restart",
-                    time.time(),
-                    JobStatus.RUNNING.value,
-                    JobStatus.PENDING.value,
-                ),
-            )
-            self._conn.commit()
+        global _CLEANUP_DONE
+        if not _CLEANUP_DONE:
+            # Reset any stuck 'running' or 'pending' jobs to failed on server start
+            with _lock:
+                self._conn.execute(
+                    "UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE status IN (?, ?)",
+                    (
+                        JobStatus.FAILED.value,
+                        "Interrupted by server restart",
+                        time.time(),
+                        JobStatus.RUNNING.value,
+                        JobStatus.PENDING.value,
+                    ),
+                )
+                self._conn.commit()
+            _CLEANUP_DONE = True
 
     def close(self) -> None:
         self._conn.close()
@@ -162,7 +168,9 @@ class JobQueue:
 
     def get(self, job_id: str) -> Job | None:
         with _lock:
-            row = self._conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+            row = self._conn.execute(
+                "SELECT * FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
         if row is None:
             return None
         return _row_to_job(row)

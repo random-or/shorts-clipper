@@ -52,7 +52,10 @@ def build_vertical_render_command(
         target_height=opts.target_height,
     )
 
-    filters = [crop.as_ffmpeg_filter(), f"scale={opts.target_width}:{opts.target_height}"]
+    filters = [
+        crop.as_ffmpeg_filter(),
+        f"scale={opts.target_width}:{opts.target_height}",
+    ]
 
     if opts.zoom_effect:
         # Subtle slow zoom in for emotional intensity

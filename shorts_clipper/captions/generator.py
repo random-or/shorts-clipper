@@ -114,7 +114,9 @@ def _ass_header(style_name: str = "default") -> str:
             "-1,0,0,0,100,100,0,0,1,2.5,1,2,40,40,180,1"
         )
 
-    event_format = "Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
+    event_format = (
+        "Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
+    )
     return "\n".join(
         [
             "[Script Info]",
@@ -168,7 +170,9 @@ def _build_ass_chunks(
                                 0.0,
                                 (current_group[0].start - start_offset) / pacing - 0.05,
                             ),
-                            "end": max(0.01, (current_group[-1].end - start_offset) / pacing),
+                            "end": max(
+                                0.01, (current_group[-1].end - start_offset) / pacing
+                            ),
                         }
                     )
                     current_group = []
@@ -181,7 +185,9 @@ def _build_ass_chunks(
                             0.0,
                             (current_group[0].start - start_offset) / pacing - 0.05,
                         ),
-                        "end": max(0.01, (current_group[-1].end - start_offset) / pacing),
+                        "end": max(
+                            0.01, (current_group[-1].end - start_offset) / pacing
+                        ),
                     }
                 )
         else:
@@ -197,7 +203,8 @@ def _build_ass_chunks(
             # Group words into chunks of max 3 words
             chunk_size = 3
             word_groups = [
-                words_list[i : i + chunk_size] for i in range(0, len(words_list), chunk_size)
+                words_list[i : i + chunk_size]
+                for i in range(0, len(words_list), chunk_size)
             ]
 
             total_words = len(words_list)
@@ -208,7 +215,9 @@ def _build_ass_chunks(
                 group_duration = (len(group) / total_words) * duration
                 group_end = current_start + group_duration
 
-                chunks.append({"text": group_text, "start": current_start, "end": group_end})
+                chunks.append(
+                    {"text": group_text, "start": current_start, "end": group_end}
+                )
                 current_start = group_end
 
     # Prevent overlapping with the previous chunk due to the 50ms early start
@@ -332,7 +341,9 @@ def burn_subtitles(
 
     with tempfile.TemporaryDirectory(prefix="ass_") as tmp:
         ass_path = Path(tmp) / "subs.ass"
-        generate_ass_file(segments, start_offset, ass_path, pacing=pacing, style_name=style_name)
+        generate_ass_file(
+            segments, start_offset, ass_path, pacing=pacing, style_name=style_name
+        )
 
         # FFmpeg ASS filter — libass renders directly during encode
         # On Linux the path needs colons escaped
@@ -391,7 +402,9 @@ def burn_subtitles(
         )
         if result.returncode != 0:
             log.error("FFmpeg stderr: %s", result.stderr[-2000:])
-            raise RuntimeError(f"FFmpeg subtitle burn failed (exit {result.returncode})")
+            raise RuntimeError(
+                f"FFmpeg subtitle burn failed (exit {result.returncode})"
+            )
 
     log.info("✅ Subtitles burned → %s", output_path)
     return output_path

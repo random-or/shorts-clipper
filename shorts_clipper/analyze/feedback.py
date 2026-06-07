@@ -145,12 +145,15 @@ class FeedbackStore:
     def list_all(self, limit: int = 50) -> list[ClipFeedback]:
         with _lock:
             rows = self._conn.execute(
-                "SELECT * FROM feedback ORDER BY performance_score DESC LIMIT ?", (limit,)
+                "SELECT * FROM feedback ORDER BY performance_score DESC LIMIT ?",
+                (limit,),
             ).fetchall()
         return [_row_to_feedback(r) for r in rows]
 
     def delete(self, clip_name: str) -> bool:
         with _lock:
-            cursor = self._conn.execute("DELETE FROM feedback WHERE clip_name = ?", (clip_name,))
+            cursor = self._conn.execute(
+                "DELETE FROM feedback WHERE clip_name = ?", (clip_name,)
+            )
             self._conn.commit()
         return cursor.rowcount > 0

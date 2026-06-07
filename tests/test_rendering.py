@@ -2,12 +2,17 @@ import unittest
 from pathlib import Path
 
 from shorts_clipper.cropping.geometry import compute_center_crop
-from shorts_clipper.rendering.ffmpeg import FfmpegRenderOptions, build_vertical_render_command
+from shorts_clipper.rendering.ffmpeg import (
+    FfmpegRenderOptions,
+    build_vertical_render_command,
+)
 
 
 class CropGeometryTests(unittest.TestCase):
     def test_center_crop_wide_video_to_vertical_ratio(self):
-        crop = compute_center_crop(width=1920, height=1080, target_width=1080, target_height=1920)
+        crop = compute_center_crop(
+            width=1920, height=1080, target_width=1080, target_height=1920
+        )
 
         self.assertEqual(crop.x, 656)
         self.assertEqual(crop.y, 0)
@@ -15,7 +20,9 @@ class CropGeometryTests(unittest.TestCase):
         self.assertEqual(crop.height, 1080)
 
     def test_center_crop_tall_video_to_vertical_ratio(self):
-        crop = compute_center_crop(width=720, height=1600, target_width=1080, target_height=1920)
+        crop = compute_center_crop(
+            width=720, height=1600, target_width=1080, target_height=1920
+        )
 
         self.assertEqual(crop.x, 0)
         self.assertEqual(crop.width, 720)

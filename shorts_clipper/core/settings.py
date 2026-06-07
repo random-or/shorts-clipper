@@ -24,7 +24,9 @@ def _parse_env_file(env_path: Path) -> dict[str, str]:
     return values
 
 
-def _env(name: str, file_values: dict[str, str], default: str | None = None) -> str | None:
+def _env(
+    name: str, file_values: dict[str, str], default: str | None = None
+) -> str | None:
     return os.environ.get(name) or file_values.get(name) or default
 
 
@@ -33,6 +35,7 @@ class Settings:
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
+    youtube_api_key: str | None = None
     ollama_base_url: str = "http://localhost:11434"
     default_provider: str = "gemini"
     whisper_model: str = "tiny.en"
@@ -54,7 +57,9 @@ class Settings:
         path = Path(env_path)
         file_values = _parse_env_file(path)
 
-        enable_gpu = (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false").lower() in {
+        enable_gpu = (
+            _env("SHORTS_ENABLE_GPU", file_values, "false") or "false"
+        ).lower() in {
             "1",
             "true",
             "yes",
@@ -66,38 +71,58 @@ class Settings:
         ) or ("cuda" if enable_gpu else "cpu")
 
         whisper_compute_type = _env(
-            "SHORTS_WHISPER_COMPUTE_TYPE", file_values, "float16" if enable_gpu else "int8"
+            "SHORTS_WHISPER_COMPUTE_TYPE",
+            file_values,
+            "float16" if enable_gpu else "int8",
         ) or ("float16" if enable_gpu else "int8")
 
         default_video_codec = "h264_nvenc" if enable_gpu else "libx264"
         default_video_preset = "fast" if enable_gpu else "ultrafast"
 
         video_codec = (
-            _env("SHORTS_VIDEO_CODEC", file_values, default_video_codec) or default_video_codec
+            _env("SHORTS_VIDEO_CODEC", file_values, default_video_codec)
+            or default_video_codec
         )
         video_preset = (
-            _env("SHORTS_VIDEO_PRESET", file_values, default_video_preset) or default_video_preset
+            _env("SHORTS_VIDEO_PRESET", file_values, default_video_preset)
+            or default_video_preset
         )
 
-        scout_max_age_days = int(_env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90")
-        subtitle_style = _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
+        scout_max_age_days = int(
+            _env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90"
+        )
+        subtitle_style = (
+            _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
+        )
         proxy = _env("SHORTS_PROXY", file_values)
 
         if proxy:
             os.environ["SHORTS_PROXY"] = proxy
 
+        youtube_api_key = _env("YOUTUBE_API_KEY", file_values)
+        if youtube_api_key:
+            os.environ["YOUTUBE_API_KEY"] = youtube_api_key
+
         return cls(
             gemini_api_key=_env("GEMINI_API_KEY", file_values),
             openai_api_key=_env("OPENAI_API_KEY", file_values),
             anthropic_api_key=_env("ANTHROPIC_API_KEY", file_values),
-            ollama_base_url=_env("OLLAMA_BASE_URL", file_values, "http://localhost:11434")
+            youtube_api_key=_env("YOUTUBE_API_KEY", file_values),
+            ollama_base_url=_env(
+                "OLLAMA_BASE_URL", file_values, "http://localhost:11434"
+            )
             or "http://localhost:11434",
             default_provider=_env("SHORTS_PROVIDER", file_values, "gemini") or "gemini",
-            whisper_model=_env("SHORTS_WHISPER_MODEL", file_values, "tiny.en") or "tiny.en",
+            whisper_model=_env("SHORTS_WHISPER_MODEL", file_values, "tiny.en")
+            or "tiny.en",
             whisper_device=whisper_device,
             whisper_compute_type=whisper_compute_type,
-            models_dir=Path(_env("SHORTS_MODELS_DIR", file_values, "models") or "models"),
-            output_dir=Path(_env("SHORTS_OUTPUT_DIR", file_values, "outputs") or "outputs"),
+            models_dir=Path(
+                _env("SHORTS_MODELS_DIR", file_values, "models") or "models"
+            ),
+            output_dir=Path(
+                _env("SHORTS_OUTPUT_DIR", file_values, "outputs") or "outputs"
+            ),
             cache_dir=Path(
                 _env("SHORTS_CACHE_DIR", file_values, ".cache/shorts-clipper")
                 or ".cache/shorts-clipper"

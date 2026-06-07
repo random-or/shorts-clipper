@@ -15,6 +15,9 @@ def configure_logging(level: str = "INFO") -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "app.log"
 
+    logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
+    logging.getLogger("googleapiclient").setLevel(logging.WARNING)
+
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)

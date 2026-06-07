@@ -30,7 +30,16 @@ def _get_audio_bytes(media_path: Path) -> tuple[bytes, str]:
         tmp_path = Path(tmp.name)
 
     try:
-        cmd = ["ffmpeg", "-y", "-i", str(media_path), "-vn", "-c:a", "aac", str(tmp_path)]
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(media_path),
+            "-vn",
+            "-c:a",
+            "aac",
+            str(tmp_path),
+        ]
         subprocess.run(cmd, check=True, capture_output=True)
         return tmp_path.read_bytes(), "audio/m4a"
     finally:
@@ -74,7 +83,10 @@ def _transcribe_with_gemini(
 
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=[types.Part.from_bytes(data=audio_bytes, mime_type=mime_type), prompt],
+            contents=[
+                types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+                prompt,
+            ],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
             ),
@@ -109,7 +121,9 @@ def _transcribe_with_gemini(
         log.info("✅ Gemini transcription successful: %d segments", len(segments))
         return segments
     except Exception as exc:
-        log.warning("⚠️  Gemini transcription failed (%s). Falling back to local Whisper.", exc)
+        log.warning(
+            "⚠️  Gemini transcription failed (%s). Falling back to local Whisper.", exc
+        )
         return None
 
 
@@ -189,5 +203,7 @@ def transcribe_clip(
             )
         )
 
-    log.info("✅ Transcription done: %d segments (lang=%s)", len(segments), info.language)
+    log.info(
+        "✅ Transcription done: %d segments (lang=%s)", len(segments), info.language
+    )
     return segments

@@ -12,7 +12,10 @@ class YouTubePublisher(PublisherAdapter):
     """Handles publishing vertical clips directly to YouTube Shorts."""
 
     def publish(self, video_path: Path, title: str, description: str, **kwargs) -> bool:
-        log.info("🚀 [YouTube Publisher] Initializing upload for Shorts clip: %s", video_path.name)
+        log.info(
+            "🚀 [YouTube Publisher] Initializing upload for Shorts clip: %s",
+            video_path.name,
+        )
         log.info("   Target Title: %r", title)
         log.info("   Description:  %r", description)
 

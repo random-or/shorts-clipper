@@ -1,57 +1,90 @@
-"""Self-healing parallel trending video scout.
-
-Design:
-- Rotates through multiple search query pools so it never gets stuck
-  on one topic cluster.
-- Fetches video metadata in parallel (ThreadPoolExecutor) instead of
-  N sequential subprocess calls — scout time goes from ~45s to ~8s.
-- Maintains a local cache of already-processed video IDs (with TTL)
-  so the same clip is never generated twice within 7 days.
-- Automatically generates dynamic query variations using viral vocabulary.
+"""
+Self-healing parallel trending video scout.
+Completely redesigned with Staged Pipeline Architecture.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 import random
-import re
 import subprocess
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
-from pathlib import Path
-from typing import NamedTuple
+from datetime import UTC, datetime, timedelta
+
+from shorts_clipper.core.cache import get_cached, purge_expired, set_cached
+from shorts_clipper.scout.keywords import build_queries
+from shorts_clipper.scout.memory import get_successful_channels
+from shorts_clipper.scout.metrics import ScoutMetrics
+from shorts_clipper.scout.youtube_api import YouTubeAPIClient
 
 log = logging.getLogger(__name__)
 
-_NICHE_ROTATION_INDEX = 0
+_MAX_SCOUT_WORKERS = int(os.getenv("SCOUT_MAX_WORKERS", "1"))
+_BATCH_SIZE = int(os.getenv("SCOUT_BATCH_SIZE", "10"))
+_YT_DLP_TIMEOUT = int(os.getenv("SCOUT_YT_DLP_TIMEOUT", "90"))
+_MIN_DURATION = int(os.getenv("SCOUT_MIN_DURATION_S", "180"))
+_MAX_DURATION = int(os.getenv("SCOUT_MAX_DURATION_S", "2400"))
+_MIN_VIEWS = int(os.getenv("SCOUT_MIN_VIEWS", "1000"))
+_AGE_RELAXATION_ALLOWED = (
+    str(os.getenv("SCOUT_ALLOW_AGE_RELAXATION", "true")).lower() == "true"
+)
 
-_scout_lock = threading.Lock()
-_consecutive_failures = 0
-_rate_limited = False
-_MAX_CONSECUTIVE_FAILURES = 15
+_failure_lock = threading.Lock()
+_consecutive_yt_failures = 0
+_yt_paused_until: float = 0.0
+
+
+def _yt_circuit_breaker_check() -> bool:
+    global _yt_paused_until
+    with _failure_lock:
+        if _yt_paused_until and time.time() < _yt_paused_until:
+            log.warning(
+                "yt-dlp circuit breaker open. Resuming at %s",
+                datetime.fromtimestamp(_yt_paused_until).strftime("%H:%M:%S"),
+            )
+            return False
+        return True
+
+
+def _yt_record_failure() -> None:
+    global _consecutive_yt_failures, _yt_paused_until
+    with _failure_lock:
+        _consecutive_yt_failures += 1
+        if _consecutive_yt_failures >= 5:
+            _yt_paused_until = time.time() + 120
+            log.warning(
+                "yt-dlp: %d consecutive failures. Circuit breaker open for 2 minutes.",
+                _consecutive_yt_failures,
+            )
+            _consecutive_yt_failures = 0
+
+
+def _yt_record_success() -> None:
+    global _consecutive_yt_failures
+    with _failure_lock:
+        _consecutive_yt_failures = 0
 
 
 def _get_base_yt_dlp_cmd() -> list[str]:
-    import os
-    import random
+    import sys
 
     cmd = [
-        "yt-dlp",
+        sys.executable,
+        "-m",
+        "yt_dlp",
         "--extractor-args",
         "youtube:player_client=default,-android_sdkless",
     ]
-    # Check if curl-cffi is available for impersonation
     try:
         import curl_cffi  # noqa: F401
 
         cmd.extend(["--impersonate", "Chrome"])
     except ImportError:
         pass
-
-    proxy_str = os.environ.get("SHORTS_PROXY")
+    proxy_str = os.getenv("SHORTS_PROXY")
     if proxy_str:
         proxies = [p.strip() for p in proxy_str.split(",") if p.strip()]
         if proxies:
@@ -59,250 +92,198 @@ def _get_base_yt_dlp_cmd() -> list[str]:
     return cmd
 
 
-TRENDING_TOPICS_FALLBACK = [
-    "podcast",
-    "drama",
-    "gaming",
-    "ai",
-    "streamer",
-    "interview",
-    "debate",
-    "reaction",
-    "opinion",
-    "expose",
-]
-
-
-def _get_current_trending_keywords() -> list[str]:
-    """Helper to fetch 5 trending videos and extract key noun/topic words."""
-    entries = _search_entries("ytsearch5:trending")
-    if not entries:
-        return []
-
-    words: list[str] = []
-    stop_words = {
-        "to",
-        "in",
-        "and",
-        "the",
-        "a",
-        "of",
-        "for",
-        "on",
-        "with",
-        "how",
-        "start",
-        "trading",
-        "stock",
-        "market",
-        "beginners",
-        "free",
-        "guide",
-        "dubbed",
-        "movie",
-        "full",
-        "hindi",
-        "new",
-        "release",
-        "trending",
-        "viral",
-        "slowed",
-        "reverb",
-        "mashup",
-        "love",
-        "non",
-        "stop",
-        "instagram",
-        "song",
-        "songs",
-        "video",
-        "videos",
-        "shorts",
-        "short",
-        "clip",
-        "clips",
-        "part",
-        "episode",
-        "chera",
-        "tu",
-        "nahi",
-        "aisa",
-        "main",
-        "lo",
-        "fi",
-        "ultra",
-        "4k",
-        "south",
-        "techno",
-        "thriller",
-        "best",
-        "latest",
-        "today",
-        "now",
-    }
-    for entry in entries:
-        title = entry.get("title", "")
-        for word in re.findall(r"[a-zA-Z]{3,}", title.lower()):
-            if word not in stop_words:
-                words.append(word)
-    return list(set(words))
-
-
-# ---------------------------------------------------------------------------
-# Query pools — rotated on each call, escalated on failure
-# ---------------------------------------------------------------------------
-
-TREND_POOLS: dict[str, list[str]] = {
-    "drama": [
-        "heated podcast argument english",
-        "streamer rage moment english",
-        "viral awkward interview english",
-        "funniest reaction stream english",
-    ],
-    "motivation": [
-        "cold motivational speech english",
-        "street interview controversial opinion english",
-        "insane sports commentary english",
-        "celebrity uncomfortable moment english",
-    ],
-    "twitch": [
-        "twitch highlights english",
-        "funniest twitch moments english",
-        "streamer reaction english",
-        "best twitch clips english",
-        "xqc hasan kai cenat highlight english",
-    ],
-    "tech": [
-        "crazy tech breakthroughs english",
-        "insane AI robot review english",
-        "latest tech reveal controversial english",
-        "elon musk space future debate",
-    ],
-    "finance": [
-        "crypto millionaire debate english",
-        "crazy stock market advice controversial",
-        "money secrets high velocity wealth english",
-        "rich dad poor dad interview lesson",
-    ],
-    "comedy": [
-        "best standup crowd work english",
-        "street interview funny fails english",
-        "hilarious hidden camera prank viral",
-        "controversial street comedy reaction",
-    ],
-}
-
-VIRAL_VOCABULARY = [
-    "crashout",
-    "aura",
-    "locked in",
-    "cooked",
-    "standing on business",
-    "cold moment",
-    "nah bro",
-    "this is insane",
-    "villain arc",
-    "generational",
-    "cinema",
-    "no way",
-    "wild take",
-    "exposed",
-    "cooked him",
-    "listen to this",
-    "impossible",
-    "awkward silence",
-]
-
-_CACHE_FILE = Path(".cache/shorts-clipper/scouted_ids.json")
-_MIN_DURATION = 120  # seconds — exclude YouTube Shorts
-_MAX_DURATION = 3600  # 1 hour cap
-_MAX_WORKERS = 6  # parallel yt-dlp info fetches
-_CACHE_TTL = 7 * 24 * 3600  # 7 days in seconds
-
-# ---------------------------------------------------------------------------
-# Curated fallback videos — used when all yt-dlp searches fail (rate limiting)
-# ---------------------------------------------------------------------------
-
-FALLBACK_VIDEOS: list[str] = [
-    "https://www.youtube.com/watch?v=2ibDeUgZoqQ",  # Podcast english
-    "https://www.youtube.com/watch?v=jNQXAC9IVRw",  # Me at the zoo (classic)
-    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",  # Never gonna give you up
-    "https://www.youtube.com/watch?v=wXhTHyIgQ_U",  # Lex Fridman Podcast
-    "https://www.youtube.com/watch?v=862r3XS2YB0",  # Steve Jobs Stanford Speech
-    "https://www.youtube.com/watch?v=R9OHn5ZF4Uo",  # Tim Urban TED Talk
-    "https://www.youtube.com/watch?v=9bZkp7q19f0",  # PSY Gangnam Style
-]
-
-
-class VideoCandidate(NamedTuple):
-    url: str
-    video_id: str
-    duration: float
-    title: str
-
-
-# ---------------------------------------------------------------------------
-# Cache helpers
-# ---------------------------------------------------------------------------
-
-
-def _load_cache() -> dict[str, float]:
-    """Load seen-video cache, migrating old list format and pruning expired TTLs."""
+def _is_cancelled(job_id: str | None) -> bool:
+    if not job_id:
+        return False
     try:
-        _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        if _CACHE_FILE.exists():
-            data = json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
-            now = time.time()
-            if isinstance(data, list):
-                # Migrate old list format → dict with current timestamp
-                return {vid: now for vid in data}
-            if isinstance(data, dict):
-                return {vid: ts for vid, ts in data.items() if now - ts < _CACHE_TTL}
-    except Exception as exc:  # noqa: BLE001
-        log.warning("Cache load failed, starting fresh: %s", exc)
-    return {}
+        from shorts_clipper.core.queue import JobQueue
+
+        job = JobQueue().get(job_id)
+        return job is not None and job.get("status") == "cancelled"
+    except Exception:
+        return False
 
 
-def _save_cache(seen: dict[str, float]) -> None:
-    try:
-        _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _CACHE_FILE.write_text(json.dumps(seen, indent=2), encoding="utf-8")
-    except Exception as exc:  # noqa: BLE001
-        log.warning("Cache save failed: %s", exc)
-
-
-# ---------------------------------------------------------------------------
-# yt-dlp helpers
-# ---------------------------------------------------------------------------
-
-
-def _generate_dynamic_queries(pool_name: str, count: int = 5) -> list[str]:
-    """Build randomised search queries from a named pool + viral vocabulary."""
-    base_queries = TREND_POOLS.get(pool_name, [])
-    if not base_queries:
+def fetch_metadata_batch(video_ids: list[str]) -> list[dict]:
+    if not video_ids:
         return []
+    results = []
+    for i in range(0, len(video_ids), _BATCH_SIZE):
+        batch = video_ids[i : i + _BATCH_SIZE]
+        urls = [f"https://www.youtube.com/watch?v={vid}" for vid in batch]
+        if not _yt_circuit_breaker_check():
+            break
+        cmd = (
+            _get_base_yt_dlp_cmd()
+            + [
+                "--dump-json",
+                "--skip-download",
+                "--retries",
+                "1",
+                "--socket-timeout",
+                "20",
+                "--quiet",
+                "--no-warnings",
+            ]
+            + urls
+        )
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=_YT_DLP_TIMEOUT
+            )
+            _yt_record_success()
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    results.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        except subprocess.TimeoutExpired:
+            _yt_record_failure()
+            log.warning("Batch metadata fetch timed out for %d videos", len(batch))
+        except Exception as exc:
+            _yt_record_failure()
+            log.warning("Batch metadata fetch failed: %s", exc)
+    return results
 
-    results: set[str] = set()
-    for _ in range(count):
-        base = random.choice(base_queries)
-        # 50 % chance to spice the query with a trending vocab word
-        if random.random() > 0.5:
-            vocab = random.choice(VIRAL_VOCABULARY)
-            results.add(f"ytsearch5:{base} {vocab}")
+
+def compute_virality_score(video: dict, now: datetime) -> float:
+    import math
+
+    try:
+        pub_str = video.get("published_at") or video.get("upload_date") or ""
+        if pub_str and len(pub_str) == 8 and pub_str.isdigit():
+            published = datetime.strptime(pub_str, "%Y%m%d").replace(tzinfo=UTC)
+        elif pub_str:
+            published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
         else:
-            results.add(f"ytsearch5:{base}")
-    return list(results)
+            return 0.0
+    except Exception:
+        return 0.0
+
+    now_utc = now.replace(tzinfo=UTC) if now.tzinfo is None else now
+    hours_live = max((now_utc - published).total_seconds() / 3600, 1)
+
+    views = max(video.get("view_count", 0), 1)
+    likes = video.get("like_count", 0)
+    comments = video.get("comment_count", 0)
+
+    velocity_raw = views / hours_live
+    velocity_score = min(10.0, math.log1p(velocity_raw) / math.log1p(10_000) * 10)
+
+    like_ratio = likes / views
+    engagement_score = min(10.0, like_ratio * 250)
+
+    comment_ratio = comments / views
+    comment_score = min(10.0, comment_ratio * 1000)
+
+    recency_score = 10.0 * math.exp(-hours_live / (7 * 24) * math.log(2))
+
+    w_vel = float(os.getenv("SCOUT_WEIGHT_VELOCITY", "0.45"))
+    w_eng = float(os.getenv("SCOUT_WEIGHT_ENGAGEMENT", "0.25"))
+    w_com = float(os.getenv("SCOUT_WEIGHT_COMMENTS", "0.15"))
+    w_rec = float(os.getenv("SCOUT_WEIGHT_RECENCY", "0.15"))
+
+    score = (
+        velocity_score * w_vel
+        + engagement_score * w_eng
+        + comment_score * w_com
+        + recency_score * w_rec
+    )
+    video["_score_breakdown"] = {
+        "velocity": velocity_score,
+        "engagement": engagement_score,
+        "comments": comment_score,
+        "recency": recency_score,
+        "total": score,
+    }
+    return round(score, 3)
 
 
-def _search_and_fetch_metadata(query: str) -> list[dict]:
-    """Run search and dump flat metadata for top results."""
-    global _consecutive_failures, _rate_limited
+def _get_attempt_max_age(base_days: int, attempt: int) -> int | None:
+    if attempt == 1:
+        return base_days
+    if attempt == 2 and base_days >= 90 and _AGE_RELAXATION_ALLOWED:
+        relaxed = base_days * 2
+        log.warning(
+            "Scout: no candidates in %d days. Relaxing to %d days (user window >= 90d).",
+            base_days,
+            relaxed,
+        )
+        return relaxed
+    log.warning(
+        "Scout: exhausted all attempts for %d-day window. Returning None.", base_days
+    )
+    return None
 
-    with _scout_lock:
-        if _rate_limited:
-            return []
 
+def _has_english(info: dict) -> bool:
+    subs = info.get("subtitles") or {}
+    auto = info.get("automatic_captions") or {}
+    title = info.get("title", "").lower()
+    lang = info.get("language")
+    if lang and not str(lang).lower().startswith("en"):
+        return False
+    has_non_en_orig = any(k.endswith("-orig") and not k.startswith("en") for k in auto)
+    if has_non_en_orig:
+        return False
+    has_en_sub = bool(
+        "en" in subs or "en-orig" in subs or "en" in auto or "en-orig" in auto
+    )
+    if not has_en_sub:
+        return False
+    if any(ord(c) > 127 for c in title if c.isalpha()):
+        return False
+    return True
+
+
+def _discover_via_api(
+    client: YouTubeAPIClient, query: str, cutoff: datetime, metrics: ScoutMetrics
+) -> list[dict]:
+    import re
+
+    normalized_query = re.sub(r"^ytsearch\d*:", "", query).strip()
+    video_ids = client.search(normalized_query, published_after=cutoff)
+    if not video_ids:
+        return []
+    metrics.video_ids_discovered += len(video_ids)
+    details = client.get_video_details(video_ids)
+    results = []
+    for item in details:
+        snippet = item.get("snippet", {})
+        stats = item.get("statistics", {})
+        content = item.get("contentDetails", {})
+        results.append(
+            {
+                "id": item["id"],
+                "title": snippet.get("title", ""),
+                "published_at": snippet.get("publishedAt", ""),
+                "channel_id": snippet.get("channelId", ""),
+                "channel_title": snippet.get("channelTitle", ""),
+                "language": snippet.get("defaultAudioLanguage", ""),
+                "view_count": int(stats.get("viewCount", 0)),
+                "like_count": int(stats.get("likeCount", 0)),
+                "comment_count": int(stats.get("commentCount", 0)),
+                "duration_s": client.parse_duration_seconds(
+                    content.get("duration", "PT0S")
+                ),
+                "_source": "youtube_api",
+                "_source_query": query,
+            }
+        )
+    return results
+
+
+def _discover_via_ytdlp(
+    query: str, max_age_days: int, metrics: ScoutMetrics
+) -> list[dict]:
+    if not _yt_circuit_breaker_check():
+        return []
     cmd = _get_base_yt_dlp_cmd()
+    if max_age_days:
+        query += f" dateafter:now-{max_age_days}days"
     cmd.extend(
         [
             query,
@@ -316,282 +297,27 @@ def _search_and_fetch_metadata(query: str) -> list[dict]:
             "--quiet",
         ]
     )
-    if "youtube.com/" in query or query.startswith("http"):
-        cmd.extend(["--playlist-end", "15"])
-
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_YT_DLP_TIMEOUT
+        )
+        _yt_record_success()
         videos = []
         for line in result.stdout.splitlines():
             line = line.strip()
             if line:
                 try:
-                    videos.append(json.loads(line))
+                    v = json.loads(line)
+                    v["_source_query"] = query
+                    videos.append(v)
                 except Exception:
                     continue
-        with _scout_lock:
-            _consecutive_failures = 0
+        metrics.video_ids_discovered += len(videos)
         return videos
-    except Exception as exc:  # noqa: BLE001
-        log.warning("Search and metadata fetch failed for query %r: %s", query, exc)
-        with _scout_lock:
-            _consecutive_failures += 1
-            if _consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
-                _rate_limited = True
-                log.warning(
-                    "⚠️ Multiple consecutive yt-dlp failures detected. Activating rate-limit fail-fast to prevent server hang."
-                )
-        return []
-
-
-def _fetch_video_metadata(vid_id: str) -> dict | None:
-    """Fetch full metadata for a specific video."""
-    global _consecutive_failures, _rate_limited
-
-    with _scout_lock:
-        if _rate_limited:
-            return None
-
-    cmd = _get_base_yt_dlp_cmd()
-    cmd.extend(
-        [
-            f"https://www.youtube.com/watch?v={vid_id}",
-            "--dump-json",
-            "--skip-download",
-            "--retries",
-            "1",
-            "--socket-timeout",
-            "15",
-            "--quiet",
-        ]
-    )
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
-        with _scout_lock:
-            _consecutive_failures = 0
-        return json.loads(result.stdout)
     except Exception as exc:
-        log.warning("Metadata fetch failed for %s: %s", vid_id, exc)
-        with _scout_lock:
-            _consecutive_failures += 1
-            if _consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
-                _rate_limited = True
-                log.warning(
-                    "⚠️ Multiple consecutive yt-dlp failures detected. Activating rate-limit fail-fast to prevent server hang."
-                )
-        return None
-
-
-def _search_entries(query: str) -> list[dict]:
-    """Return flat playlist entries for a yt-dlp search query (wrapper for compatibility)."""
-    videos = _search_and_fetch_metadata(query)
-    entries = []
-    for v in videos:
-        if v.get("id"):
-            entries.append({"id": v["id"], "title": v.get("title", "")})
-    return entries
-
-
-def _has_english(info: dict) -> bool:
-    """Return True only if the video is primarily English (ignoring auto-translated captions)."""
-    subs = info.get("subtitles") or {}
-    auto = info.get("automatic_captions") or {}
-    title = info.get("title", "").lower()
-
-    # 1. Check yt-dlp language field if present
-    lang = info.get("language")
-    if lang:
-        if not str(lang).lower().startswith("en"):
-            return False
-
-    # 2. If there's an original auto-caption that is NOT English, reject it
-    # YouTube lists the original language auto-caption as '[lang]-orig' (e.g. 'es-orig', 'hi-orig')
-    has_non_en_orig = any(k.endswith("-orig") and not k.startswith("en") for k in auto)
-    if has_non_en_orig:
-        return False
-
-    # 3. Must have English manual subtitles or English auto-captions
-    has_en_sub = bool("en" in subs or "en-orig" in subs or "en" in auto or "en-orig" in auto)
-    if not has_en_sub:
-        return False
-
-    # 4. Reject obvious non-English titles (non-ASCII alpha chars)
-    if any(ord(c) > 127 for c in title if c.isalpha()):
-        return False
-
-    return True
-
-
-def _is_suitable(info: dict, seen: dict[str, float], max_age_days: int | None = None) -> bool:
-    vid_id = info.get("id", "")
-    duration = float(info.get("duration") or 0)
-
-    if vid_id in seen or not (_MIN_DURATION <= duration <= _MAX_DURATION) or not _has_english(info):
-        return False
-
-    # 5. Quality check: Reject low-resolution videos (less than 720p)
-    height = info.get("height")
-    if height is not None and height < 720:
-        log.info("   [Skip] Candidate %s is low resolution (%dp < 720p)", vid_id, height)
-        return False
-
-    if max_age_days is not None:
-        upload_date = info.get("upload_date")
-        if not upload_date:
-            return False
-        try:
-            upload_dt = datetime.strptime(upload_date, "%Y%m%d")
-            age_days = (datetime.now() - upload_dt).total_seconds() / 86400.0
-            if age_days > max_age_days:
-                log.info(
-                    "   [Skip] Candidate %s is too old (age=%.1f days > %d)",
-                    vid_id,
-                    age_days,
-                    max_age_days,
-                )
-                return False
-        except Exception:  # noqa: BLE001
-            return False
-
-    return True
-
-
-# ---------------------------------------------------------------------------
-# Virality scoring
-# ---------------------------------------------------------------------------
-
-
-def _calculate_virality_score(info: dict) -> float:
-    """Score a video by view velocity + title emotional intensity."""
-    view_count = float(info.get("view_count") or 0)
-    upload_date = info.get("upload_date")
-    title = info.get("title", "").lower()
-
-    # Emotional keyword bonuses
-    emotion_keywords = [
-        "crashout",
-        "insane",
-        "crazy",
-        "argument",
-        "fight",
-        "destroyed",
-        "awkward",
-        "silence",
-        "rage",
-        "cries",
-        "emotional",
-        "heated",
-        "shocking",
-        "exposed",
-        "confrontation",
-        "chaos",
-        "explosive",
-    ]
-    title_intensity = sum(2.0 for kw in emotion_keywords if kw in title)
-
-    # Penalty for generic/educational content
-    weak_keywords = [
-        "lecture",
-        "tutorial",
-        "course",
-        "education",
-        "calm",
-        "relaxing",
-        "slow",
-        "explanation",
-    ]
-    if any(kw in title for kw in weak_keywords):
-        title_intensity -= 10.0
-    title_intensity = max(0.0, title_intensity)
-
-    if not upload_date:
-        return view_count + (title_intensity * 2_000)
-
-    try:
-        upload_dt = datetime.strptime(upload_date, "%Y%m%d")
-        age_hours = max(1.0, (datetime.now() - upload_dt).total_seconds() / 3600.0)
-        velocity = view_count / age_hours
-        return velocity * (1.0 + title_intensity * 0.2)
-    except Exception:  # noqa: BLE001
-        return view_count + (title_intensity * 2_000)
-
-
-# ---------------------------------------------------------------------------
-# Core scout logic
-# ---------------------------------------------------------------------------
-
-
-def _scout_pool(
-    query: str,
-    seen: dict[str, float],
-    max_age_days: int | None = None,
-) -> list[tuple[float, VideoCandidate]]:
-    """
-    Search one query pool, filter & score candidates.
-
-    Returns a (possibly empty) list of (score, VideoCandidate) pairs sorted
-    descending by score — never None.
-    """
-    log.info("🔍 Searching (all-in-one): %s", query)
-
-    # Boost search count from ytsearch5 to ytsearch12 for more candidate variety
-    modified_query = query
-    if "ytsearch5:" in query:
-        modified_query = query.replace("ytsearch5:", "ytsearch12:")
-
-    flat_infos = _search_and_fetch_metadata(modified_query)
-    if not flat_infos:
-        log.warning("No entries returned for query: %s", query)
+        _yt_record_failure()
+        log.warning("yt-dlp flat search failed for %s: %s", query, exc)
         return []
-
-    candidates: list[tuple[float, VideoCandidate]] = []
-
-    def process_candidate(info: dict) -> tuple[float, VideoCandidate] | None:
-        vid_id = info.get("id")
-        if not vid_id or vid_id in seen:
-            return None
-
-        # Pre-filter by duration from flat playlist if available
-        duration = float(info.get("duration") or 0)
-        if duration > 0 and not (_MIN_DURATION <= duration <= _MAX_DURATION):
-            return None
-
-        # Fetch full metadata
-        full_info = _fetch_video_metadata(vid_id)
-        if not full_info:
-            return None
-
-        if _is_suitable(full_info, seen, max_age_days):
-            url = f"https://www.youtube.com/watch?v={vid_id}"
-            title = full_info.get("title", "Unknown")
-            final_dur = float(full_info.get("duration") or duration)
-            score = _calculate_virality_score(full_info)
-            return (
-                score,
-                VideoCandidate(url=url, video_id=vid_id, duration=final_dur, title=title),
-            )
-
-        return None
-
-    # Fetch full metadata concurrently for the pre-filtered candidates
-    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
-        futures = [executor.submit(process_candidate, info) for info in flat_infos]
-        for future in as_completed(futures):
-            try:
-                res = future.result()
-                if res:
-                    candidates.append(res)
-                    log.info(
-                        "🎯 Found valid candidate: [%s] %s (virality=%.2f)",
-                        res[1].video_id,
-                        res[1].title,
-                        res[0],
-                    )
-            except Exception as exc:
-                log.warning("Failed to process candidate: %s", exc)
-
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    return candidates
 
 
 def get_trending_link(
@@ -603,195 +329,162 @@ def get_trending_link(
     niche: str | None = None,
     keyword: str | None = None,
     max_age_days: int | None = 90,
+    job_id: str | None = None,
 ) -> str | None:
-    """
-    Find a trending YouTube video suitable for clipping.
-
-    Uses parallel multi-pool hunting across randomised queries and returns
-    the highest-virality-scored candidate not yet seen.
-
-    Args:
-        categories: Optional subset of pool names to search (default: all).
-        max_retries: Number of retry rounds if no candidate is found.
-        cache: Whether to use/update the local seen-video cache.
-        channel: Search only this channel's recent videos.
-        niche: Build 5 targeted search queries around this niche and rotate between them.
-        keyword: Search specifically for this term across multiple platforms.
-        max_age_days: Maximum age of trending videos in days (default: 90).
-
-    Returns:
-        A YouTube URL string, or None if no suitable video was found.
-    """
-    global _rate_limited, _consecutive_failures
-    with _scout_lock:
-        _rate_limited = False
-        _consecutive_failures = 0
-
-    seen = _load_cache() if cache else {}
-    log.info("\n🚀 ADVANCED VIRAL SCOUT — %d seen IDs cached", len(seen))
-
-    # Pre-build queries if specific options are provided
-    fixed_queries: list[str] | None = None
-    if channel:
-        if channel.startswith(("http://", "https://")):
-            channel_query = channel
-        elif channel.startswith("@"):
-            channel_query = f"https://www.youtube.com/{channel}/videos"
-        else:
-            channel_query = f"https://www.youtube.com/@{channel}/videos"
-        fixed_queries = [channel_query]
-        log.info("📢 Channel mode enabled. Target: %s", channel_query)
-    elif niche:
-        # 1. Fetch current trending keywords dynamically, with fallback
-        trending_kws = _get_current_trending_keywords()
-        if not trending_kws:
-            trending_kws = TRENDING_TOPICS_FALLBACK
-
-        # Define 5 premium queries with trending keyword injection
-        # to ensure results are fresh and relevant, without restricting text matching with calendar dates.
-        global _NICHE_ROTATION_INDEX
-        idx = _NICHE_ROTATION_INDEX
-
-        kw1 = trending_kws[idx % len(trending_kws)]
-        kw2 = trending_kws[(idx + 1) % len(trending_kws)]
-        kw3 = trending_kws[(idx + 2) % len(trending_kws)]
-        kw4 = trending_kws[(idx + 3) % len(trending_kws)]
-        kw5 = trending_kws[(idx + 4) % len(trending_kws)]
-
-        base_queries = [
-            f"ytsearch5:viral {niche} {kw1} english",
-            f"ytsearch5:best {niche} {kw2} highlights english",
-            f"ytsearch5:insane {niche} {kw3} moment english",
-            f"ytsearch5:heated {niche} {kw4} debate english",
-            f"ytsearch5:shocking {niche} {kw5} english",
-        ]
-
-        # Rotate the order of queries based on rotation index
-        idx_rot = idx % len(base_queries)
-        fixed_queries = base_queries[idx_rot:] + base_queries[:idx_rot]
-        _NICHE_ROTATION_INDEX += 1
-        log.info(
-            "📢 Niche mode (with trending context) enabled."
-            " Target niche: %s (rotated start index: %d)",
-            niche,
-            idx_rot,
-        )
-    elif keyword:
-        fixed_queries = [
-            f"ytsearch5:{keyword}",
-            f"ytsearch5:viral {keyword}",
-            f"ytsearch5:best {keyword} moments",
-            f"ytsearch5:insane {keyword}",
-        ]
-        log.info("📢 Keyword mode enabled. Target: %s", keyword)
-
-    available_pools = list(TREND_POOLS.keys())
-    pools_to_search = (
-        [c for c in categories if c in available_pools] if categories else available_pools
+    purge_expired()
+    metrics = ScoutMetrics(
+        niche=niche or "", keyword=keyword or "", time_window_days=max_age_days or 0
     )
+    api_key = os.getenv("YOUTUBE_API_KEY", "")
+    client = YouTubeAPIClient(api_key) if api_key else None
+    now = datetime.now(UTC)
 
-    if not pools_to_search and not fixed_queries:
-        log.error("No valid trend pools selected.")
-        return None
+    try:
+        for attempt in range(1, 4):
+            if _is_cancelled(job_id):
+                metrics.finish(None, "Cancelled by user")
+                return None
 
-    for attempt in range(1, max_retries + 1):
-        with _scout_lock:
-            _rate_limited = False
-            _consecutive_failures = 0
+            actual_max_age_days = _get_attempt_max_age(max_age_days or 90, attempt)
+            if actual_max_age_days is None:
+                metrics.finish(None, "No candidates within allowed time window")
+                log.error(
+                    "No suitable videos found within your selected time window. Try a longer window or different niche."
+                )
+                return None
 
-        if fixed_queries is not None:
-            queries = list(fixed_queries)
-        else:
-            # Build queries across all active pools — fewer queries, run throttled
+            cutoff = now - timedelta(days=actual_max_age_days)
             queries = []
-            for pool_name in pools_to_search:
-                queries.extend(_generate_dynamic_queries(pool_name, count=3))
-            random.shuffle(queries)
-            queries = list(dict.fromkeys(queries))  # deduplicate, preserve shuffle order
 
-        log.info(
-            "🔥 Throttled hunting: %d unique queries (attempt %d/%d)",
-            len(queries),
-            attempt,
-            max_retries,
-        )
+            # Stage 1: Discovery
+            known_channels = get_successful_channels(niche or "tech")
+            if channel:
+                queries.append(f"ytsearch15:from:{channel}")
+            elif attempt == 1 and known_channels:
+                for kc in known_channels[:2]:
+                    queries.append(f"ytsearch15:from:{kc}")
+            else:
+                if not known_channels and attempt == 1:
+                    log.info(
+                        "No learning data for niche '%s'. Using fresh discovery.", niche
+                    )
+                queries.extend(build_queries(niche or "tech", keyword))
 
-        all_candidates: list[tuple[float, VideoCandidate]] = []
+            discovered = []
+            for q in queries:
+                if _is_cancelled(job_id):
+                    return None
+                metrics.queries_fired += 1
+                if client and client.searches_available:
+                    metrics.api_used = True
+                    discovered.extend(_discover_via_api(client, q, cutoff, metrics))
+                else:
+                    discovered.extend(
+                        _discover_via_ytdlp(q, actual_max_age_days, metrics)
+                    )
 
-        # Progressive age filter relaxation to support self-healing queries
-        if attempt == 1:
-            actual_max_age_days = 30 if channel else max_age_days
-        elif attempt == 2:
-            actual_max_age_days = 180 if channel else (365 if max_age_days else None)
-            log.warning(
-                "⚠️  Attempt 2: Relaxing age filter limit to %s days to expand candidate pool",
-                actual_max_age_days,
-            )
-        else:
-            actual_max_age_days = None
-            log.warning(
-                "⚠️  Attempt 3: Disabling age filter limit entirely to guarantee unique trending match"
-            )
+            if not discovered:
+                continue
 
-        # Run at most 2 searches concurrently to avoid rate-limiting.
-        # Gather all candidates from all concurrent queries so we select the absolute best.
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = {
-                executor.submit(_scout_pool, q, seen, actual_max_age_days): q for q in queries
-            }
-            for future in as_completed(futures):
-                try:
-                    results = future.result()
-                    all_candidates.extend(results)
-                except Exception as exc:
-                    log.warning("Scout pool query failed: %s", exc)
+            metrics.queries_with_results += 1
+            survivors = []
 
-        if all_candidates:
-            all_candidates.sort(key=lambda x: x[0], reverse=True)
-            best_score, best_candidate = all_candidates[0]
-            log.info(
-                "🌟 Best candidate globally: [%s] %s (score=%.2f)",
-                best_candidate.video_id,
-                best_candidate.title,
-                best_score,
-            )
+            # Stages 2 & 3: Freshness & Quality
+            for video in discovered:
+                vid = video.get("id")
+                if not vid or get_cached(vid):
+                    continue
 
-            if cache:
-                seen[best_candidate.video_id] = time.time()
-                _save_cache(seen)
+                if video.get("_source") == "youtube_api":
+                    try:
+                        pub = datetime.fromisoformat(
+                            video["published_at"].replace("Z", "+00:00")
+                        )
+                        if (now - pub).days > actual_max_age_days:
+                            metrics.rejected_too_old += 1
+                            continue
+                    except Exception:
+                        pass
 
-            log.info(
-                "✅ ACQUIRED: %s (%.0fs) — %s",
-                best_candidate.video_id,
-                best_candidate.duration,
-                best_candidate.title,
-            )
-            return best_candidate.url
+                dur = float(video.get("duration") or video.get("duration_s") or 0)
+                if dur > 0:
+                    if dur < _MIN_DURATION:
+                        metrics.rejected_too_short += 1
+                        continue
+                    if dur > _MAX_DURATION:
+                        metrics.rejected_too_long += 1
+                        continue
 
-        wait = 2**attempt
-        log.warning(
-            "Attempt %d/%d: no candidates found. Waiting %ds before retry...",
-            attempt,
-            max_retries,
-            wait,
-        )
-        time.sleep(wait)
+                views = int(video.get("view_count") or 0)
+                if views > 0 and views < _MIN_VIEWS:
+                    metrics.rejected_low_views += 1
+                    continue
 
-    log.error("❌ Scout exhausted all pools after %d attempts.", max_retries)
+                survivors.append(video)
 
-    # Last resort: pick a random unseen video from the curated fallback list
-    unseen_fallbacks = [url for url in FALLBACK_VIDEOS if url.split("v=")[-1] not in seen]
-    if unseen_fallbacks:
-        fallback_url = random.choice(unseen_fallbacks)
-        vid_id = fallback_url.split("v=")[-1]
-        log.warning("⚠️  Using curated fallback video: %s", fallback_url)
-        if cache:
-            seen[vid_id] = time.time()
-            _save_cache(seen)
-        return fallback_url
+            if not survivors:
+                continue
 
-    log.warning(
-        "⚠️  All fallback videos already seen. Reusing a random fallback video to keep pipeline alive."
-    )
-    fallback_url = random.choice(FALLBACK_VIDEOS)
-    return fallback_url
+            # Stage 4: Virality Scoring
+            for v in survivors:
+                v["_score"] = compute_virality_score(v, now)
+            survivors.sort(key=lambda x: x["_score"], reverse=True)
+            # Stages 5, 6, 7: Optimized Metadata Enrichment & Winner Selection
+            finalists = []
+            for v in survivors:
+                if _is_cancelled(job_id):
+                    return None
+                vid = v.get("id")
+
+                # Check cache first
+                has_english = False
+                c = get_cached(vid)
+                if c and "has_english" in c:
+                    metrics.cache_hits += 1
+                    has_english = c["has_english"]
+                else:
+                    metrics.cache_misses += 1
+
+                    has_english_api = None
+                    if client and getattr(client, "has_english_captions", None):
+                        has_english_api = client.has_english_captions(vid)
+
+                    if has_english_api is not None:
+                        # API succeeded. Spoof subtitles to reuse _has_english filtering for title/language
+                        v_copy = v.copy()
+                        v_copy["subtitles"] = {"en": []} if has_english_api else {}
+                        has_english = _has_english(v_copy)
+                    else:
+                        # Fallback to yt-dlp only if API failed/unavailable
+                        metrics.yt_dlp_calls += 1
+                        fetched = fetch_metadata_batch([vid])
+                        if fetched:
+                            has_english = _has_english(fetched[0])
+
+                    # Update the API dictionary with the flag so we remember
+                    v["has_english"] = has_english
+                    set_cached(vid, v, int(os.getenv("SCOUT_METADATA_CACHE_TTL", "6")))
+
+                if not has_english:
+                    metrics.rejected_no_subtitles += 1
+                    continue
+
+                finalists.append(v)
+                break  # Single finalist enrichment
+
+            if finalists:
+                winner = finalists[0]
+                # Re-score is technically optional since it was the highest already, but preserves behavior
+                winner["_score"] = compute_virality_score(winner, now)
+                metrics.winner_virality_score = winner.get("_score", 0.0)
+                metrics.winning_query = winner.get("_source_query", "")
+                metrics.finish(winner)
+                vid = winner.get("id")
+                log.info("✅ ACQUIRED: %s - %s", vid, winner.get("title"))
+                return f"https://www.youtube.com/watch?v={vid}"
+
+        metrics.finish(None, "Exhausted all retries")
+        return None
+    except Exception as exc:
+        metrics.finish(None, f"Error: {exc}")
+        return None

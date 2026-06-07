@@ -69,7 +69,9 @@ def update_heartbeat() -> None:
     """Write current timestamp to worker_heartbeat.txt to signal health."""
     try:
         Path("outputs").mkdir(parents=True, exist_ok=True)
-        Path("outputs/worker_heartbeat.txt").write_text(str(time.time()), encoding="utf-8")
+        Path("outputs/worker_heartbeat.txt").write_text(
+            str(time.time()), encoding="utf-8"
+        )
     except Exception as e:
         logger.error("Failed to write worker heartbeat: %s", e)
 
@@ -230,6 +232,7 @@ def run_worker() -> None:
 
             def worker_progress(pct: int, jid: str = job.id) -> None:
                 check_cancelled(jid)
+                update_heartbeat()
                 job_queue.update_progress(jid, pct)
 
             payload = job.payload
@@ -254,6 +257,7 @@ def run_worker() -> None:
                     privacy=payload.get("privacy", "private"),
                     progress_callback=worker_progress,
                     max_age_days=max_age_days,
+                    job_id=job.id,
                 )
                 output_paths = []
                 if result:
@@ -309,7 +313,9 @@ def run_worker() -> None:
                     work_path = Path(work_dir)
                     audio_path = work_path / "audio.m4a"
 
-                    logger.info("⬇ Downloading lightweight audio section for Whisper...")
+                    logger.info(
+                        "⬇ Downloading lightweight audio section for Whisper..."
+                    )
                     from shorts_clipper.downloader.yt_dlp import download_audio
                     from shorts_clipper.transcription.whisper import transcribe_clip
 
@@ -321,7 +327,9 @@ def run_worker() -> None:
                     )
                     worker_progress(30)
 
-                    logger.info("🎙 Transcribing audio segment for word-level captions...")
+                    logger.info(
+                        "🎙 Transcribing audio segment for word-level captions..."
+                    )
                     precision_segments = transcribe_clip(
                         audio_path,
                         model_size=settings.whisper_model,
@@ -343,7 +351,9 @@ def run_worker() -> None:
                         pacing=1.15,
                         video_codec=settings.video_codec,
                         preset=settings.video_preset,
-                        subtitle_style=payload.get("subtitle_style", settings.subtitle_style),
+                        subtitle_style=payload.get(
+                            "subtitle_style", settings.subtitle_style
+                        ),
                         enable_gpu=settings.enable_gpu,
                     )
                     worker_progress(90)
@@ -366,10 +376,13 @@ def run_worker() -> None:
                     provider = GeminiProvider(api_key=settings.gemini_api_key)
                     meta = provider.generate_clip_metadata(precision_segments)
                 except Exception as meta_err:
-                    logger.warning("Failed to generate clip metadata with Gemini: %s", meta_err)
+                    logger.warning(
+                        "Failed to generate clip metadata with Gemini: %s", meta_err
+                    )
 
                 meta["segments"] = [
-                    {"start": s.start, "end": s.end, "text": s.text} for s in precision_segments
+                    {"start": s.start, "end": s.end, "text": s.text}
+                    for s in precision_segments
                 ]
                 meta_path = current_output_path.with_suffix(".json")
                 meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")

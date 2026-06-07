@@ -72,7 +72,9 @@ def get_url_dimensions(url: str) -> tuple[int, int]:
                 log.info("Fetched dimensions: %dx%d", width, height)
                 return int(width), int(height)
     except Exception as e:
-        log.warning("Failed to fetch dimensions from url: %s. Using default 1920x1080.", e)
+        log.warning(
+            "Failed to fetch dimensions from url: %s. Using default 1920x1080.", e
+        )
     return 1920, 1080
 
 
@@ -81,7 +83,9 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
     try:
         import cv2
     except ImportError:
-        log.warning("⚠️  OpenCV (opencv-python-headless) not installed. Face tracking disabled.")
+        log.warning(
+            "⚠️  OpenCV (opencv-python-headless) not installed. Face tracking disabled."
+        )
         return None
 
     log.info("🤖 Running auto face-tracking detection...")
@@ -138,7 +142,10 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
                 cap_ref.release()
                 if vid_width > 0:
                     avg_center_ratio = sum(x_centers) / len(x_centers) / vid_width
-                    log.info("🎯 Detected speaker center at %.2f%% width", avg_center_ratio * 100)
+                    log.info(
+                        "🎯 Detected speaker center at %.2f%% width",
+                        avg_center_ratio * 100,
+                    )
                     return avg_center_ratio
         except Exception as face_err:
             log.warning("Error running face detection cascade: %s", face_err)
@@ -167,7 +174,9 @@ def run_dynamic_face_tracking(
     if duration <= 0:
         return None
 
-    log.info("🤖 Starting dynamic face-tracking analysis across %.1f seconds...", duration)
+    log.info(
+        "🤖 Starting dynamic face-tracking analysis across %.1f seconds...", duration
+    )
     with tempfile.TemporaryDirectory(prefix="face_pan_") as tmp_dir:
         tmp_path = Path(tmp_dir)
         sample_path = tmp_path / "sample.mp4"
@@ -188,7 +197,9 @@ def run_dynamic_face_tracking(
         try:
             subprocess.run(cmd, check=True, capture_output=True, timeout=30)
         except Exception as err:
-            log.warning("Failed to download sample clip for dynamic face tracking: %s", err)
+            log.warning(
+                "Failed to download sample clip for dynamic face tracking: %s", err
+            )
             return None
 
         try:
@@ -217,7 +228,9 @@ def run_dynamic_face_tracking(
                     t_rel = duration
 
                 frame_idx = int(t_rel * fps)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, min(frame_idx, frame_count - 1)))
+                cap.set(
+                    cv2.CAP_PROP_POS_FRAMES, max(0, min(frame_idx, frame_count - 1))
+                )
                 ret, frame = cap.read()
                 if not ret:
                     continue
@@ -247,7 +260,9 @@ def run_dynamic_face_tracking(
             # Smooth the tracking coordinates with a moving average filter
             smoothed_x = []
             for i in range(len(raw_x)):
-                neighbors = [raw_x[j] for j in range(max(0, i - 1), min(len(raw_x), i + 2))]
+                neighbors = [
+                    raw_x[j] for j in range(max(0, i - 1), min(len(raw_x), i + 2))
+                ]
                 smoothed_x.append(sum(neighbors) / len(neighbors))
 
             # Build recursion for piecewise linear interpolation expression
@@ -263,7 +278,9 @@ def run_dynamic_face_tracking(
                 return f"if(lt(t,{t_next:.2f}),{x_curr:.2f}+{slope:.4f}*(t-{t_curr:.2f}),{rest})"
 
             expr = build_expr(0)
-            log.info("🎯 Generated dynamic panning FFmpeg expression (length=%d)", len(expr))
+            log.info(
+                "🎯 Generated dynamic panning FFmpeg expression (length=%d)", len(expr)
+            )
             return expr
 
         except Exception as err:
@@ -313,7 +330,9 @@ def compute_custom_crop(
                 log.info("Face tracking fallback: using center crop.")
                 x = center_x
         elif layout == "auto_pan":
-            expr = run_dynamic_face_tracking(url, start_time, end_time, width, height, crop_width)
+            expr = run_dynamic_face_tracking(
+                url, start_time, end_time, width, height, crop_width
+            )
             if expr:
                 return CropBox(x=expr, y=0, width=crop_width, height=crop_height)
             else:
@@ -359,7 +378,9 @@ def stream_render_pipeline(
     # 3. Create temporary ASS subtitles file
     with tempfile.TemporaryDirectory(prefix="pipe_ass_") as tmp_dir:
         ass_path = Path(tmp_dir) / "subs.ass"
-        generate_ass_file(segments, 0.0, ass_path, pacing=pacing, style_name=subtitle_style)
+        generate_ass_file(
+            segments, 0.0, ass_path, pacing=pacing, style_name=subtitle_style
+        )
 
         # Escape paths
         escaped_ass = str(ass_path).replace("\\", "/").replace(":", "\\:")
@@ -433,9 +454,14 @@ def stream_render_pipeline(
         log.info("yt-dlp: %s", " ".join(yt_cmd))
         log.info("ffmpeg: %s", " ".join(ffmpeg_cmd))
 
-        yt_proc = subprocess.Popen(yt_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        yt_proc = subprocess.Popen(
+            yt_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+        )
         ffmpeg_proc = subprocess.Popen(
-            ffmpeg_cmd, stdin=yt_proc.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ffmpeg_cmd,
+            stdin=yt_proc.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
 
         if yt_proc.stdout:
@@ -445,8 +471,13 @@ def stream_render_pipeline(
         yt_proc.wait()
 
         if ffmpeg_proc.returncode != 0:
-            log.error("FFmpeg stream rendering failed: %s", errs.decode(errors="ignore")[-2000:])
-            raise RuntimeError(f"FFmpeg stream render failed (exit {ffmpeg_proc.returncode})")
+            log.error(
+                "FFmpeg stream rendering failed: %s",
+                errs.decode(errors="ignore")[-2000:],
+            )
+            raise RuntimeError(
+                f"FFmpeg stream render failed (exit {ffmpeg_proc.returncode})"
+            )
 
     log.info("✅ Pipelined stream render successfully output to %s", output_path)
     return output_path

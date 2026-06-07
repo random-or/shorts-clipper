@@ -17,7 +17,8 @@ class WebhookPublisher(PublisherAdapter):
 
     def publish(self, video_path: Path, title: str, description: str, **kwargs) -> bool:
         log.info(
-            "🚀 [Webhook Publisher] Triggering notification webhook for clip: %s", video_path.name
+            "🚀 [Webhook Publisher] Triggering notification webhook for clip: %s",
+            video_path.name,
         )
 
         payload = {
