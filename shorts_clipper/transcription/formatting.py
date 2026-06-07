@@ -43,15 +43,11 @@ def format_transcript(segments: Iterable[TranscriptSegment | Any]) -> str:
             if isinstance(raw_segment, TranscriptSegment)
             else segment_from_any(raw_segment)
         )
-        formatted.append(
-            f"[{segment.start:.2f}s -> {segment.end:.2f}s]: {segment.text}"
-        )
+        formatted.append(f"[{segment.start:.2f}s -> {segment.end:.2f}s]: {segment.text}")
     return "\n".join(formatted)
 
 
-def to_srt(
-    segments: Iterable[TranscriptSegment | Any], start_offset: float = 0.0
-) -> str:
+def to_srt(segments: Iterable[TranscriptSegment | Any], start_offset: float = 0.0) -> str:
     lines = []
     for i, raw_segment in enumerate(segments, 1):
         segment = (

@@ -28,9 +28,7 @@ _YT_DLP_TIMEOUT = int(os.getenv("SCOUT_YT_DLP_TIMEOUT", "90"))
 _MIN_DURATION = int(os.getenv("SCOUT_MIN_DURATION_S", "180"))
 _MAX_DURATION = int(os.getenv("SCOUT_MAX_DURATION_S", "2400"))
 _MIN_VIEWS = int(os.getenv("SCOUT_MIN_VIEWS", "1000"))
-_AGE_RELAXATION_ALLOWED = (
-    str(os.getenv("SCOUT_ALLOW_AGE_RELAXATION", "true")).lower() == "true"
-)
+_AGE_RELAXATION_ALLOWED = str(os.getenv("SCOUT_ALLOW_AGE_RELAXATION", "true")).lower() == "true"
 
 _failure_lock = threading.Lock()
 _consecutive_yt_failures = 0
@@ -128,9 +126,7 @@ def fetch_metadata_batch(video_ids: list[str]) -> list[dict]:
             + urls
         )
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=_YT_DLP_TIMEOUT
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=_YT_DLP_TIMEOUT)
             _yt_record_success()
             for line in result.stdout.splitlines():
                 line = line.strip()
@@ -213,9 +209,7 @@ def _get_attempt_max_age(base_days: int, attempt: int) -> int | None:
             relaxed,
         )
         return relaxed
-    log.warning(
-        "Scout: exhausted all attempts for %d-day window. Returning None.", base_days
-    )
+    log.warning("Scout: exhausted all attempts for %d-day window. Returning None.", base_days)
     return None
 
 
@@ -229,9 +223,7 @@ def _has_english(info: dict) -> bool:
     has_non_en_orig = any(k.endswith("-orig") and not k.startswith("en") for k in auto)
     if has_non_en_orig:
         return False
-    has_en_sub = bool(
-        "en" in subs or "en-orig" in subs or "en" in auto or "en-orig" in auto
-    )
+    has_en_sub = bool("en" in subs or "en-orig" in subs or "en" in auto or "en-orig" in auto)
     if not has_en_sub:
         return False
     if any(ord(c) > 127 for c in title if c.isalpha()):
@@ -266,9 +258,7 @@ def _discover_via_api(
                 "view_count": int(stats.get("viewCount", 0)),
                 "like_count": int(stats.get("likeCount", 0)),
                 "comment_count": int(stats.get("commentCount", 0)),
-                "duration_s": client.parse_duration_seconds(
-                    content.get("duration", "PT0S")
-                ),
+                "duration_s": client.parse_duration_seconds(content.get("duration", "PT0S")),
                 "_source": "youtube_api",
                 "_source_query": query,
             }
@@ -276,9 +266,7 @@ def _discover_via_api(
     return results
 
 
-def _discover_via_ytdlp(
-    query: str, max_age_days: int, metrics: ScoutMetrics
-) -> list[dict]:
+def _discover_via_ytdlp(query: str, max_age_days: int, metrics: ScoutMetrics) -> list[dict]:
     if not _yt_circuit_breaker_check():
         return []
     cmd = _get_base_yt_dlp_cmd()
@@ -298,9 +286,7 @@ def _discover_via_ytdlp(
         ]
     )
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=_YT_DLP_TIMEOUT
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_YT_DLP_TIMEOUT)
         _yt_record_success()
         videos = []
         for line in result.stdout.splitlines():
@@ -365,9 +351,7 @@ def get_trending_link(
                     queries.append(f"ytsearch15:from:{kc}")
             else:
                 if not known_channels and attempt == 1:
-                    log.info(
-                        "No learning data for niche '%s'. Using fresh discovery.", niche
-                    )
+                    log.info("No learning data for niche '%s'. Using fresh discovery.", niche)
                 queries.extend(build_queries(niche or "tech", keyword))
 
             discovered = []
@@ -379,9 +363,7 @@ def get_trending_link(
                     metrics.api_used = True
                     discovered.extend(_discover_via_api(client, q, cutoff, metrics))
                 else:
-                    discovered.extend(
-                        _discover_via_ytdlp(q, actual_max_age_days, metrics)
-                    )
+                    discovered.extend(_discover_via_ytdlp(q, actual_max_age_days, metrics))
 
             if not discovered:
                 continue
@@ -397,9 +379,7 @@ def get_trending_link(
 
                 if video.get("_source") == "youtube_api":
                     try:
-                        pub = datetime.fromisoformat(
-                            video["published_at"].replace("Z", "+00:00")
-                        )
+                        pub = datetime.fromisoformat(video["published_at"].replace("Z", "+00:00"))
                         if (now - pub).days > actual_max_age_days:
                             metrics.rejected_too_old += 1
                             continue

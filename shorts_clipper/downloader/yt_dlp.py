@@ -127,9 +127,7 @@ def download_audio(
             p.unlink()
 
     if start_time is not None and end_time is not None:
-        log.info(
-            "⬇ Downloading audio section %.1fs–%.1fs from %s", start_time, end_time, url
-        )
+        log.info("⬇ Downloading audio section %.1fs–%.1fs from %s", start_time, end_time, url)
     else:
         log.info("⬇ Downloading full audio from %s", url)
 

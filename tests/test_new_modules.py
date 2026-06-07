@@ -108,9 +108,7 @@ class ScoutCacheTests(unittest.TestCase):
                 self.assertEqual(loaded["title"], "test")
 
     def test_load_cache_returns_empty_set_if_missing(self):
-        with patch(
-            "shorts_clipper.core.cache._DB_PATH", Path("/nonexistent/path/jobs.db")
-        ):
+        with patch("shorts_clipper.core.cache._DB_PATH", Path("/nonexistent/path/jobs.db")):
             result = get_cached("missing")
         self.assertIsNone(result)
 
@@ -119,26 +117,16 @@ class ScoutFilterTests(unittest.TestCase):
     def test_has_english_detects_auto_captions(self):
         self.assertTrue(_has_english({"automatic_captions": {"en": []}}))
         self.assertTrue(_has_english({"subtitles": {"en-orig": []}}))
-        self.assertFalse(
-            _has_english({"automatic_captions": {"fr": []}, "subtitles": {}})
-        )
+        self.assertFalse(_has_english({"automatic_captions": {"fr": []}, "subtitles": {}}))
 
     def test_has_english_rejects_non_english_language_field(self):
-        self.assertFalse(
-            _has_english({"language": "hi", "automatic_captions": {"en": []}})
-        )
+        self.assertFalse(_has_english({"language": "hi", "automatic_captions": {"en": []}}))
         self.assertFalse(_has_english({"language": "es", "subtitles": {"en": []}}))
-        self.assertTrue(
-            _has_english({"language": "en-US", "automatic_captions": {"en": []}})
-        )
+        self.assertTrue(_has_english({"language": "en-US", "automatic_captions": {"en": []}}))
 
     def test_has_english_rejects_non_english_orig(self):
-        self.assertFalse(
-            _has_english({"automatic_captions": {"es-orig": [], "en": []}})
-        )
-        self.assertFalse(
-            _has_english({"automatic_captions": {"hi-orig": [], "en": []}})
-        )
+        self.assertFalse(_has_english({"automatic_captions": {"es-orig": [], "en": []}}))
+        self.assertFalse(_has_english({"automatic_captions": {"hi-orig": [], "en": []}}))
         self.assertTrue(_has_english({"automatic_captions": {"en-orig": [], "en": []}}))
 
 

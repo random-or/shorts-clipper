@@ -121,9 +121,7 @@ def _transcribe_with_gemini(
         log.info("✅ Gemini transcription successful: %d segments", len(segments))
         return segments
     except Exception as exc:
-        log.warning(
-            "⚠️  Gemini transcription failed (%s). Falling back to local Whisper.", exc
-        )
+        log.warning("⚠️  Gemini transcription failed (%s). Falling back to local Whisper.", exc)
         return None
 
 
@@ -203,7 +201,5 @@ def transcribe_clip(
             )
         )
 
-    log.info(
-        "✅ Transcription done: %d segments (lang=%s)", len(segments), info.language
-    )
+    log.info("✅ Transcription done: %d segments (lang=%s)", len(segments), info.language)
     return segments

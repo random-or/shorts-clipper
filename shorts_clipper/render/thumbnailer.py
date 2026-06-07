@@ -50,9 +50,7 @@ def extract_thumbnail(
             meta = get_video_metadata(str(video_path))
             position = meta.duration * 0.25 if meta.duration > 0 else 1.0
         except Exception as err:
-            log.warning(
-                "Probing video duration failed: %s. Using default 1.0s position.", err
-            )
+            log.warning("Probing video duration failed: %s. Using default 1.0s position.", err)
             position = 1.0
 
     cmd = [

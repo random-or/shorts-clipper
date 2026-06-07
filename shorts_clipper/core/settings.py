@@ -24,9 +24,7 @@ def _parse_env_file(env_path: Path) -> dict[str, str]:
     return values
 
 
-def _env(
-    name: str, file_values: dict[str, str], default: str | None = None
-) -> str | None:
+def _env(name: str, file_values: dict[str, str], default: str | None = None) -> str | None:
     return os.environ.get(name) or file_values.get(name) or default
 
 
@@ -57,9 +55,7 @@ class Settings:
         path = Path(env_path)
         file_values = _parse_env_file(path)
 
-        enable_gpu = (
-            _env("SHORTS_ENABLE_GPU", file_values, "false") or "false"
-        ).lower() in {
+        enable_gpu = (_env("SHORTS_ENABLE_GPU", file_values, "false") or "false").lower() in {
             "1",
             "true",
             "yes",
@@ -80,20 +76,14 @@ class Settings:
         default_video_preset = "fast" if enable_gpu else "ultrafast"
 
         video_codec = (
-            _env("SHORTS_VIDEO_CODEC", file_values, default_video_codec)
-            or default_video_codec
+            _env("SHORTS_VIDEO_CODEC", file_values, default_video_codec) or default_video_codec
         )
         video_preset = (
-            _env("SHORTS_VIDEO_PRESET", file_values, default_video_preset)
-            or default_video_preset
+            _env("SHORTS_VIDEO_PRESET", file_values, default_video_preset) or default_video_preset
         )
 
-        scout_max_age_days = int(
-            _env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90"
-        )
-        subtitle_style = (
-            _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
-        )
+        scout_max_age_days = int(_env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90")
+        subtitle_style = _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
         proxy = _env("SHORTS_PROXY", file_values)
 
         if proxy:
@@ -108,21 +98,14 @@ class Settings:
             openai_api_key=_env("OPENAI_API_KEY", file_values),
             anthropic_api_key=_env("ANTHROPIC_API_KEY", file_values),
             youtube_api_key=_env("YOUTUBE_API_KEY", file_values),
-            ollama_base_url=_env(
-                "OLLAMA_BASE_URL", file_values, "http://localhost:11434"
-            )
+            ollama_base_url=_env("OLLAMA_BASE_URL", file_values, "http://localhost:11434")
             or "http://localhost:11434",
             default_provider=_env("SHORTS_PROVIDER", file_values, "gemini") or "gemini",
-            whisper_model=_env("SHORTS_WHISPER_MODEL", file_values, "tiny.en")
-            or "tiny.en",
+            whisper_model=_env("SHORTS_WHISPER_MODEL", file_values, "tiny.en") or "tiny.en",
             whisper_device=whisper_device,
             whisper_compute_type=whisper_compute_type,
-            models_dir=Path(
-                _env("SHORTS_MODELS_DIR", file_values, "models") or "models"
-            ),
-            output_dir=Path(
-                _env("SHORTS_OUTPUT_DIR", file_values, "outputs") or "outputs"
-            ),
+            models_dir=Path(_env("SHORTS_MODELS_DIR", file_values, "models") or "models"),
+            output_dir=Path(_env("SHORTS_OUTPUT_DIR", file_values, "outputs") or "outputs"),
             cache_dir=Path(
                 _env("SHORTS_CACHE_DIR", file_values, ".cache/shorts-clipper")
                 or ".cache/shorts-clipper"

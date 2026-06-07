@@ -152,8 +152,6 @@ class FeedbackStore:
 
     def delete(self, clip_name: str) -> bool:
         with _lock:
-            cursor = self._conn.execute(
-                "DELETE FROM feedback WHERE clip_name = ?", (clip_name,)
-            )
+            cursor = self._conn.execute("DELETE FROM feedback WHERE clip_name = ?", (clip_name,))
             self._conn.commit()
         return cursor.rowcount > 0

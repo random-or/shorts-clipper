@@ -42,9 +42,7 @@ def get_cached(video_id: str) -> dict | None:
             metadata_json, cached_at, ttl_hours = row
             cached_dt = datetime.fromisoformat(cached_at)
             if datetime.now() > cached_dt + timedelta(hours=ttl_hours):
-                con.execute(
-                    "DELETE FROM metadata_cache WHERE video_id = ?", (video_id,)
-                )
+                con.execute("DELETE FROM metadata_cache WHERE video_id = ?", (video_id,))
                 con.commit()
                 con.close()
                 return None

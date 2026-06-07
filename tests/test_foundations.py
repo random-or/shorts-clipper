@@ -86,9 +86,7 @@ class HighlightScoringTests(unittest.TestCase):
                 TranscriptWord(start=1.7, end=2.1, word="believe"),
             ],
         )
-        dull = TranscriptSegment(
-            start=9, end=18, text="and then we continued with the next part"
-        )
+        dull = TranscriptSegment(start=9, end=18, text="and then we continued with the next part")
 
         scorer = RuleBasedHighlightScorer()
         exciting_score = scorer.score_segment(exciting)
