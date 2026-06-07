@@ -15,9 +15,12 @@ log = logging.getLogger(__name__)
 
 def _get_base_yt_dlp_cmd() -> list[str]:
     import random
+    import sys
 
     cmd = [
-        "yt-dlp",
+        sys.executable,
+        "-m",
+        "yt_dlp",
         "--extractor-args",
         "youtube:player_client=default,-android_sdkless",
     ]
