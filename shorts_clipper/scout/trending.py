@@ -166,50 +166,39 @@ def compute_virality_score(video: dict, now: datetime) -> float:
     likes = video.get("like_count", 0)
     comments = video.get("comment_count", 0)
 
-    velocity_raw = views / hours_live
-    velocity_score = min(10.0, math.log1p(velocity_raw) / math.log1p(10_000) * 10)
+    views_velocity = views / hours_live
+    velocity_score = views_velocity / 1000
 
-    like_ratio = likes / views
-    engagement_score = min(10.0, like_ratio * 250)
+    engagement_ratio = (likes + (comments * 2)) / views if views > 0 else 0
+    engagement_score = min(20.0, engagement_ratio * 200)
 
-    comment_ratio = comments / views
-    comment_score = min(10.0, comment_ratio * 1000)
+    recency_bonus = 15.0 if hours_live < 24 else (5.0 if hours_live < 72 else 0.0)
 
-    recency_score = 10.0 * math.exp(-hours_live / (7 * 24) * math.log(2))
+    momentum_score = math.log1p(likes) / math.log1p(10_000) * 5
 
-    w_vel = float(os.getenv("SCOUT_WEIGHT_VELOCITY", "0.45"))
-    w_eng = float(os.getenv("SCOUT_WEIGHT_ENGAGEMENT", "0.25"))
-    w_com = float(os.getenv("SCOUT_WEIGHT_COMMENTS", "0.15"))
-    w_rec = float(os.getenv("SCOUT_WEIGHT_RECENCY", "0.15"))
+    score = velocity_score + engagement_score + recency_bonus + momentum_score
 
-    score = (
-        velocity_score * w_vel
-        + engagement_score * w_eng
-        + comment_score * w_com
-        + recency_score * w_rec
-    )
     video["_score_breakdown"] = {
-        "velocity": velocity_score,
-        "engagement": engagement_score,
-        "comments": comment_score,
-        "recency": recency_score,
-        "total": score,
+        "velocity": round(velocity_score, 2),
+        "engagement": round(engagement_score, 2),
+        "recency": round(recency_bonus, 2),
+        "momentum": round(momentum_score, 2),
+        "base_total": round(score, 2),
     }
-    return round(score, 3)
+    return round(score, 2)
 
 
 def _get_attempt_max_age(base_days: int, attempt: int) -> int | None:
     if attempt == 1:
         return base_days
-    if attempt == 2 and base_days >= 90 and _AGE_RELAXATION_ALLOWED:
-        relaxed = base_days * 2
-        log.warning(
-            "Scout: no candidates in %d days. Relaxing to %d days (user window >= 90d).",
-            base_days,
-            relaxed,
-        )
+    if attempt == 2:
+        relaxed = max(base_days * 2, 30) if base_days < 30 else base_days * 2
+        log.warning("Scout: no candidates found. Relaxing window to %d days.", relaxed)
         return relaxed
-    log.warning("Scout: exhausted all attempts for %d-day window. Returning None.", base_days)
+    if attempt == 3:
+        relaxed = max(base_days * 4, 90)
+        log.warning("Scout: still no candidates. Relaxing window to %d days.", relaxed)
+        return relaxed
     return None
 
 
@@ -226,7 +215,8 @@ def _has_english(info: dict) -> bool:
     has_en_sub = bool("en" in subs or "en-orig" in subs or "en" in auto or "en-orig" in auto)
     if not has_en_sub:
         return False
-    if any(ord(c) > 127 for c in title if c.isalpha()):
+    strict_ascii = str(os.getenv("SCOUT_STRICT_ASCII", "false")).lower() == "true"
+    if strict_ascii and any(ord(c) > 127 for c in title if c.isalpha()):
         return False
     return True
 
@@ -335,7 +325,13 @@ def get_trending_link(
             if actual_max_age_days is None:
                 metrics.finish(None, "No candidates within allowed time window")
                 log.error(
-                    "No suitable videos found within your selected time window. Try a longer window or different niche."
+                    "No videos found.\n"
+                    "Reason breakdown:\n"
+                    f"- {metrics.rejected_no_subtitles} rejected: missing subtitles\n"
+                    f"- {metrics.rejected_too_long} rejected: duration too long\n"
+                    f"- {metrics.rejected_too_short} rejected: duration too short\n"
+                    f"- {metrics.rejected_too_old} rejected: too old\n"
+                    f"- {metrics.rejected_low_views} rejected: low views"
                 )
                 return None
 
@@ -382,6 +378,7 @@ def get_trending_link(
                         pub = datetime.fromisoformat(video["published_at"].replace("Z", "+00:00"))
                         if (now - pub).days > actual_max_age_days:
                             metrics.rejected_too_old += 1
+                            log.info("Rejected video %s: too old", vid)
                             continue
                     except Exception:
                         pass
@@ -390,14 +387,17 @@ def get_trending_link(
                 if dur > 0:
                     if dur < _MIN_DURATION:
                         metrics.rejected_too_short += 1
+                        log.info("Rejected video %s: duration too short", vid)
                         continue
                     if dur > _MAX_DURATION:
                         metrics.rejected_too_long += 1
+                        log.info("Rejected video %s: duration too long", vid)
                         continue
 
                 views = int(video.get("view_count") or 0)
                 if views > 0 and views < _MIN_VIEWS:
                     metrics.rejected_low_views += 1
+                    log.info("Rejected video %s: views below threshold", vid)
                     continue
 
                 survivors.append(video)
@@ -409,9 +409,19 @@ def get_trending_link(
             for v in survivors:
                 v["_score"] = compute_virality_score(v, now)
             survivors.sort(key=lambda x: x["_score"], reverse=True)
+
+            if survivors:
+                log.info("\n========== TOP CANDIDATES ==========")
+                log.info(f"{'Rank':<5} | {'Video ID':<11} | {'Views':<10} | {'Score':<8} | Title")
+                for idx, v in enumerate(survivors[:10], 1):
+                    log.info(
+                        f"{idx:<5} | {v.get('id', ''):<11} | {v.get('view_count', 0):<10} | {v.get('_score', 0):<8} | {v.get('title', '')[:50]}"
+                    )
+                log.info("====================================")
+
             # Stages 5, 6, 7: Optimized Metadata Enrichment & Winner Selection
             finalists = []
-            for v in survivors:
+            for v in survivors[:5]:
                 if _is_cancelled(job_id):
                     return None
                 vid = v.get("id")
@@ -445,25 +455,48 @@ def get_trending_link(
                     v["has_english"] = has_english
                     set_cached(vid, v, int(os.getenv("SCOUT_METADATA_CACHE_TTL", "6")))
 
-                if not has_english:
+                if has_english:
+                    v["_score"] += 5.0
+                else:
                     metrics.rejected_no_subtitles += 1
-                    continue
+                    v["_score"] -= 5.0
+                    log.info(
+                        "Video %s missing subtitles. Whisper fallback enabled (-5.0 score penalty).",
+                        vid,
+                    )
 
                 finalists.append(v)
-                break  # Single finalist enrichment
 
             if finalists:
+                finalists.sort(key=lambda x: x["_score"], reverse=True)
                 winner = finalists[0]
-                # Re-score is technically optional since it was the highest already, but preserves behavior
-                winner["_score"] = compute_virality_score(winner, now)
                 metrics.winner_virality_score = winner.get("_score", 0.0)
                 metrics.winning_query = winner.get("_source_query", "")
                 metrics.finish(winner)
                 vid = winner.get("id")
+
+                log.info(
+                    "Scout Summary:\n"
+                    f"- API results found: {metrics.video_ids_discovered}\n"
+                    f"- After age filter: {metrics.video_ids_discovered - metrics.rejected_too_old}\n"
+                    f"- After view filter: {metrics.video_ids_discovered - metrics.rejected_too_old - metrics.rejected_too_short - metrics.rejected_too_long - metrics.rejected_low_views}\n"
+                    f"- After subtitle filter: {metrics.video_ids_discovered - metrics.rejected_too_old - metrics.rejected_too_short - metrics.rejected_too_long - metrics.rejected_low_views - metrics.rejected_no_subtitles}\n"
+                    f"- Final candidates: {len(finalists)}"
+                )
+
                 log.info("✅ ACQUIRED: %s - %s", vid, winner.get("title"))
                 return f"https://www.youtube.com/watch?v={vid}"
 
         metrics.finish(None, "Exhausted all retries")
+        log.error(
+            "No videos found.\n"
+            "Reason breakdown:\n"
+            f"- {metrics.rejected_no_subtitles} rejected: missing subtitles\n"
+            f"- {metrics.rejected_too_long} rejected: duration too long\n"
+            f"- {metrics.rejected_too_short} rejected: duration too short\n"
+            f"- {metrics.rejected_too_old} rejected: too old\n"
+            f"- {metrics.rejected_low_views} rejected: low views"
+        )
         return None
     except Exception as exc:
         metrics.finish(None, f"Error: {exc}")

@@ -296,6 +296,10 @@ def run_autopilot(
     Returns:
         Output path (or list of paths) on success, or None if no suitable video was found.
     """
+    import time
+
+    start_time = time.time()
+
     if settings is None:
         settings = Settings.from_env()
 
@@ -343,6 +347,24 @@ def run_autopilot(
                 if vid and vid in url:
                     winner_dict = get_cached(vid) or {"id": vid}
                     record_success(winner_dict, niche_str, query_str, virality)
+
+                duration = time.time() - start_time
+                quota = last_m.get("queries_fired", 0) * 100
+                rejected = max(0, last_m.get("video_ids_discovered", 0) - 1)
+                log.info(
+                    "\n========== AUTOPILOT REPORT ==========\n"
+                    f"Query: {query_str}\n"
+                    f"Window: {age_days} days\n"
+                    f"Candidates Found: {last_m.get('video_ids_discovered', 0)}\n"
+                    f"Candidates Rejected: {rejected}\n"
+                    f"Top Candidate: {last_m.get('winner_title', 'N/A')}\n"
+                    f"Final Winner: {url}\n"
+                    f"Processing Time: {duration:.2f}s\n"
+                    f"API Calls: {last_m.get('queries_fired', 0)}\n"
+                    f"Quota Cost: {quota}\n"
+                    f"Reason Winner Was Selected: Highest Virality Score ({virality})\n"
+                    "======================================"
+                )
         except Exception as e:
             log.warning("Failed to record learning success: %s", e)
 

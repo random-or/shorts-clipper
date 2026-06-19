@@ -88,16 +88,24 @@ class YouTubeAPIClient:
 
         params = {
             "part": "id",
-            "q": query,
             "type": "video",
             "publishedAfter": after_str,
-            "maxResults": min(max_results, 50),
+            "maxResults": 50,
             "videoDuration": "medium",  # 4-20 minutes
             "videoEmbeddable": "true",
             "relevanceLanguage": "en",
-            "order": "viewCount",
+            "order": "date",
             "key": self.api_key,
         }
+
+        if query.startswith("from:"):
+            channel_id = query[5:]
+            params["channelId"] = channel_id
+        else:
+            params["q"] = query
+            params["order"] = "viewCount"
+
+        log.debug("YouTube API search params: %s", {k: v for k, v in params.items() if k != "key"})
         url = f"{self.BASE}/search?" + urllib.parse.urlencode(params)
         try:
             with urllib.request.urlopen(url, timeout=15) as resp:
@@ -112,7 +120,12 @@ class YouTubeAPIClient:
             log.info("YouTube API search: '%s' → %d results", query, len(ids))
             return ids
         except Exception as exc:
-            log.warning("YouTube API search failed: %s", exc)
+            import urllib.error as uerror
+
+            if isinstance(exc, uerror.HTTPError):
+                log.warning("YouTube API search failed: %s. Response: %s", exc, exc.read().decode())
+            else:
+                log.warning("YouTube API search failed: %s", exc)
             return []
 
     def get_video_details(self, video_ids: list[str]) -> list[dict]:
