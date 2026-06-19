@@ -2727,11 +2727,27 @@
         let lastFetchedUrl = "";
         let fetchedDetailsCache = null;
 
+        function isPlaceholderCache(cache) {
+            if (!cache) return true;
+            const title = cache.title || "";
+            const thumbnail = cache.thumbnail || "";
+            return (
+                title === "YouTube Video" ||
+                title === "YouTube Video Loaded (Ready to Analyze)" ||
+                title === "Fetching video details..." ||
+                !thumbnail ||
+                thumbnail === "" ||
+                thumbnail.includes("unsplash.com")
+            );
+        }
+
         async function fetchVideoDetails(url) {
             if (url !== lastFetchedUrl) {
                 fetchedDetailsCache = null;
             }
-            if (url === lastFetchedUrl && fetchedDetailsCache) return fetchedDetailsCache;
+            if (url === lastFetchedUrl && fetchedDetailsCache && !isPlaceholderCache(fetchedDetailsCache)) {
+                return fetchedDetailsCache;
+            }
             lastFetchedUrl = url;
 
             const detailsCard = document.getElementById('interactive-video-card');
@@ -2753,15 +2769,32 @@
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    titleEl.textContent = data.title;
-                    thumbEl.src = data.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320";
-                    fetchedDetailsCache = data;
-                    return data;
-                } else {
-                    titleEl.textContent = "YouTube Video Loaded (Ready to Analyze)";
-                    fetchedDetailsCache = { title: "YouTube Video", thumbnail: "" };
-                    return fetchedDetailsCache;
+                    if (!isPlaceholderCache(data)) {
+                        titleEl.textContent = data.title;
+                        thumbEl.src = data.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320";
+                        fetchedDetailsCache = data;
+                        
+                        // Update localStorage details if matching URL exists
+                        const storedUrl = localStorage.getItem('interactive-manual-url');
+                        if (storedUrl === url) {
+                            const storedResultsStr = localStorage.getItem('interactive-manual-results');
+                            if (storedResultsStr) {
+                                try {
+                                    const saved = JSON.parse(storedResultsStr);
+                                    saved.details = data;
+                                    localStorage.setItem('interactive-manual-results', JSON.stringify(saved));
+                                } catch (e) {
+                                    console.error("Failed to update localStorage with real details", e);
+                                }
+                            }
+                        }
+                        return data;
+                    }
                 }
+                
+                titleEl.textContent = "YouTube Video Loaded (Ready to Analyze)";
+                fetchedDetailsCache = { title: "YouTube Video", thumbnail: "" };
+                return fetchedDetailsCache;
             } catch (err) {
                 console.error("Error fetching video details:", err);
                 titleEl.textContent = "YouTube Video Loaded (Ready to Analyze)";
@@ -3006,6 +3039,11 @@
                     titleEl.textContent = saved.details.title;
                     thumbEl.src = saved.details.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=320";
                     urlEl.textContent = storedUrl;
+
+                    // If restored cache is a placeholder, trigger a fresh fetch in the background
+                    if (isPlaceholderCache(saved.details)) {
+                        fetchVideoDetails(storedUrl).catch(e => console.error("Background restore fetch failed:", e));
+                    }
                     
                     // Restore Highlights Grid
                     const grid = document.getElementById('highlights-cards-grid');

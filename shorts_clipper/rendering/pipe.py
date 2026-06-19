@@ -332,8 +332,34 @@ def stream_render_pipeline(
     # 1. Fetch dimensions
     src_w, src_h = get_url_dimensions(url)
 
+    if src_w <= 0 or src_h <= 0:
+        raise ValueError(f"Invalid probed video dimensions: {src_w}x{src_h}")
+
+    # Scale probed dimensions to fit within the download format limit (height <= 1080)
+    # matching the yt-dlp format selection [height<=1080]
+    if src_h > 1080:
+        scale = 1080 / src_h
+        src_w = round(src_w * scale)
+        src_h = 1080
+        log.info("Scaled probed dimensions to download format resolution: %dx%d (scale: %.4f)", src_w, src_h, scale)
+
     # 2. Compute custom crop box
     crop = compute_custom_crop(src_w, src_h, layout, url, start_time, end_time)
+
+    # Validate crop dimensions to prevent FFmpeg filter graph out-of-bounds error (exit 224)
+    if isinstance(crop.width, (int, float)) and crop.width > src_w:
+        raise ValueError(f"Crop width {crop.width} exceeds video width {src_w}")
+    if isinstance(crop.height, (int, float)) and crop.height > src_h:
+        raise ValueError(f"Crop height {crop.height} exceeds video height {src_h}")
+    
+    if isinstance(crop.x, (int, float)):
+        if crop.x < 0 or crop.x + crop.width > src_w:
+            raise ValueError(f"Crop x coordinate {crop.x} (width {crop.width}) is out of bounds for video width {src_w}")
+    if isinstance(crop.y, (int, float)):
+        if crop.y < 0 or crop.y + crop.height > src_h:
+            raise ValueError(f"Crop y coordinate {crop.y} (height {crop.height}) is out of bounds for video height {src_h}")
+
+    log.info("Valid crop box computed and verified: crop=%dx%d at x=%s, y=%s", crop.width, crop.height, crop.x, crop.y)
 
     # 3. Create temporary ASS subtitles file
     with tempfile.TemporaryDirectory(prefix="pipe_ass_") as tmp_dir:
