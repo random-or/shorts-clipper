@@ -999,6 +999,274 @@
             display: block; 
             animation: slideFadeIn 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
         }
+
+        /* ==========================================================================
+           PHASE 1 ADDITIONS: TOASTS, TERMINAL COLLAPSIBLE, ACTIVITY MESSAGE, MEDIA QUERIES
+           ========================================================================== */
+
+        /* Task 1: Toast System */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            z-index: 9999;
+            max-width: 420px;
+            width: calc(100% - 4rem);
+            pointer-events: none;
+        }
+        .toast {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.85rem;
+            background: rgba(13, 14, 27, 0.95);
+            border: 1px solid var(--wire);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            color: var(--smoke);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            animation: toastFadeIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+            transition: all 0.3s ease;
+            pointer-events: auto;
+        }
+        .toast.hide {
+            animation: toastFadeOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        .toast-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .toast-success {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 15px rgba(5, 218, 138, 0.15);
+        }
+        .toast-success .toast-icon {
+            color: var(--accent-green);
+        }
+        .toast-error {
+            border-color: #ff3366;
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.15);
+        }
+        .toast-error .toast-icon {
+            color: #ff3366;
+        }
+        .toast-warning {
+            border-color: var(--gold);
+            box-shadow: 0 0 15px rgba(223, 178, 63, 0.15);
+        }
+        .toast-warning .toast-icon {
+            color: var(--gold);
+        }
+        .toast-info {
+            border-color: var(--cyan);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.15);
+        }
+        .toast-info .toast-icon {
+            color: var(--cyan);
+        }
+        .toast-content {
+            flex: 1;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            font-family: var(--font-ui);
+            word-break: break-word;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--ghost);
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 0;
+            margin: 0;
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+        .toast-close:hover {
+            color: var(--smoke);
+        }
+
+        @keyframes toastFadeIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes toastFadeOut {
+            from { opacity: 1; transform: translateY(0) scale(1); }
+            to { opacity: 0; transform: translateY(-20px) scale(0.95); }
+        }
+
+        /* Mobile layout styling */
+        .mobile-header {
+            display: none;
+        }
+        .sidebar-overlay {
+            display: none;
+        }
+
+        /* Task 4: Responsive Breakpoints */
+        @media (max-width: 1024px) {
+            .main-content {
+                padding: 2rem 2.5rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .mobile-header {
+                display: flex !important;
+                align-items: center;
+                justify-content: space-between;
+                padding: 1rem 1.5rem;
+                background: var(--ink2);
+                border-bottom: 1px solid var(--wire);
+                position: sticky;
+                top: 0;
+                z-index: 500;
+                margin: -3rem -4rem 2rem -4rem;
+            }
+            .main-content {
+                margin-left: 0 !important;
+                padding: 1rem 1.5rem !important;
+            }
+            .mobile-header {
+                margin: -1rem -1.5rem 1.5rem -1.5rem;
+            }
+            .hamburger-btn {
+                background: none;
+                border: none;
+                color: var(--smoke);
+                font-size: 1.25rem;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 36px;
+                height: 36px;
+                border-radius: 6px;
+                border: 1px solid var(--wire);
+                background: rgba(255, 255, 255, 0.02);
+            }
+            .hamburger-btn:hover {
+                border-color: var(--cyan);
+                color: var(--cyan);
+            }
+            .mobile-brand {
+                font-family: var(--font-display);
+                font-size: 1rem;
+                font-weight: 800;
+                letter-spacing: 0.05em;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .sidebar {
+                transform: translateX(-100%);
+                width: 280px !important;
+                height: 100vh;
+                position: fixed;
+                left: 0;
+                top: 0;
+                z-index: 1000;
+                box-shadow: 5px 0 25px rgba(0,0,0,0.8);
+                transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+                padding: 2.2rem 1.8rem !important;
+            }
+            body.sidebar-mobile-open .sidebar {
+                transform: translateX(0);
+            }
+            .sidebar-toggle {
+                display: none !important;
+            }
+            .sidebar-overlay {
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(4, 5, 10, 0.8);
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+                z-index: 999;
+                display: none;
+            }
+            body.sidebar-mobile-open .sidebar-overlay {
+                display: block;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 1.2rem;
+            }
+            .form-group-full {
+                grid-column: span 1;
+            }
+
+            .stats-bar {
+                justify-content: flex-start;
+                gap: 0.5rem;
+            }
+            .stat-card {
+                flex-grow: 1;
+                justify-content: center;
+            }
+
+            .assistant-drawer {
+                width: 100% !important;
+                right: -100% !important;
+            }
+            .assistant-drawer.active {
+                right: 0 !important;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .stage-pipeline {
+                padding: 0.6rem 0.8rem;
+            }
+            .stage-icon {
+                width: 28px;
+                height: 28px;
+                font-size: 0.75rem;
+            }
+            .stage-label {
+                font-size: 7.5px;
+                letter-spacing: 0;
+            }
+            .pipeline-bar {
+                margin: 0 4px;
+                height: 2px;
+            }
+            #activity-status-message {
+                font-size: 1rem !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .modal-content {
+                max-width: 95vw;
+            }
+            .modal-body {
+                height: 380px !important;
+            }
+            .modal-body video, .modal-body iframe {
+                width: 100% !important;
+                max-width: 220px !important;
+                height: auto !important;
+                aspect-ratio: 9/16;
+            }
+            .toast-container {
+                bottom: 1rem;
+                right: 1rem;
+                width: calc(100% - 2rem);
+            }
+        }
+
+        @media (max-height: 600px) {
+            .modal-body {
+                height: 320px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1067,6 +1335,19 @@
         <!-- Main Content Area -->
         <div class="main-content">
             
+            <!-- Mobile Navigation Header -->
+            <div class="mobile-header">
+                <button class="hamburger-btn" onclick="toggleMobileSidebar(true)">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="mobile-brand">
+                    <i class="fa-solid fa-clapperboard" style="color: var(--gold); font-size: 1rem;"></i>
+                    <span style="color: var(--gold); font-weight: 900;">SHORTS</span>
+                    <span style="color: var(--cyan); font-weight: 900;">CLIPPER</span>
+                </div>
+                <div style="width: 36px;"></div> <!-- Spacer to center -->
+            </div>
+
             <!-- Statistics Bar -->
             <div class="stats-bar">
                 <div class="stat-card">
@@ -1087,6 +1368,11 @@
                 </div>
             </div>
             
+            <!-- Central Activity Status -->
+            <div id="activity-status-container" style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1.25rem; text-align: center;">
+                <span id="activity-status-message" style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; color: var(--cyan); text-shadow: 0 0 10px var(--cyan-glow); min-height: 1.75rem; transition: opacity 0.15s ease, transform 0.15s ease; opacity: 1; transform: translateY(0);">Ready.</span>
+            </div>
+
             <!-- Pipeline Stage Badges -->
             <div class="stage-pipeline" id="progress-pipeline-bar">
                 <div class="stage-step active" id="step-idle">
@@ -1396,14 +1682,67 @@
                     <button class="btn btn-cyan" onclick="saveSettings()">SAVE CONFIGURATION</button>
                 </div>
             </div>
+
+            <!-- VIEW: WATCHDOG -->
+            <div id="view-watchdog" class="app-view" style="display: none;">
+                <div class="glass-panel" style="padding: 2rem;">
+                    <h2 class="panel-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><i class="fa-solid fa-eye" style="color: var(--cyan);"></i> Autopilot Channel Watchdog</span>
+                        <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; color: var(--smoke);">
+                            <input type="checkbox" id="watchdog-toggle" onchange="toggleWatchdog(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span>Watchdog Polling Active</span>
+                        </label>
+                    </h2>
+                    <p style="color: var(--ghost); font-size: 0.85rem; margin-top: -0.5rem; margin-bottom: 1.5rem;">
+                        Watchdog automatically scans the channels below for new uploads. When a new long-form video is detected, it triggers Autopilot to scout, crop, burn captions, and queue/publish drafts automatically.
+                    </p>
+                    
+                    <!-- Add Channel Row -->
+                    <div style="display: flex; gap: 1rem; margin-bottom: 2rem; background: rgba(255,255,255,0.01); border: 1px solid var(--wire); padding: 1rem; border-radius: 8px;">
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.4rem;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--smoke);">Add YouTube Channel URL or Handle</label>
+                            <input type="text" id="watchdog-url-input" placeholder="e.g. https://www.youtube.com/@LexFridman or @joerogan" style="flex: 1; padding: 0.6rem 1rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 6px; color: var(--smoke); font-size: 0.88rem;">
+                        </div>
+                        <div style="display: flex; align-items: flex-end;">
+                            <button class="btn btn-cyan" onclick="addWatchdogChannel()" style="padding: 0.6rem 1.5rem; font-weight: 600;">
+                                <i class="fa-solid fa-plus"></i> Add Channel
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Monitored Channels Table -->
+                    <h3 style="font-size: 1rem; color: var(--smoke); margin-bottom: 1rem; font-family: var(--font-display);">📺 Monitored Channels</h3>
+                    <div style="overflow-x: auto;">
+                        <table class="highlights-table" style="width: 100%; text-align: left; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th>Channel Handle/Name</th>
+                                    <th>YouTube URL</th>
+                                    <th>Last Seen Video ID</th>
+                                    <th style="text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="watchdog-channels-list">
+                                <!-- Dynamically populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
             
             <!-- Live scrolling console terminal -->
-            <div class="glass-panel" style="padding: 1.5rem;">
-                <h3 style="font-size:1.05rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
-                    <span><i class="fa-solid fa-terminal" style="color:var(--accent-green)"></i> Real-Time Processing Console</span>
-                    <span style="font-size:0.75rem;  background:rgba(16,185,129,0.15); padding:2px 8px; border-radius:4px;" id="term-status-badge">Stream Listening</span>
+            <div class="glass-panel" style="padding: 1.5rem;" id="terminal-panel">
+                <h3 style="font-size:1.05rem; margin-bottom:0px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleTerminalCollapsed()">
+                    <span style="display:flex; align-items:center; gap:0.5rem;"><i class="fa-solid fa-terminal" style="color:var(--accent-green)"></i> Real-Time Processing Console</span>
+                    <div style="display:flex; align-items:center; gap:0.75rem;">
+                        <span style="font-size:0.75rem; background:rgba(16,185,129,0.15); padding:2px 8px; border-radius:4px;" id="term-status-badge">Stream Listening</span>
+                        <button class="btn btn-secondary btn-mini" style="font-size:0.7rem; padding: 2px 8px; margin: 0; display: inline-flex; align-items: center; gap: 4px;" id="terminal-toggle-btn">
+                            <i class="fa-solid fa-chevron-down" id="terminal-toggle-icon"></i>
+                            <span id="terminal-toggle-text">Show Details</span>
+                        </button>
+                    </div>
                 </h3>
-                <div class="terminal-container">
+                <div class="terminal-container" id="terminal-container-wrapper" style="display: none; margin-top: 1rem; transition: all 0.3s ease;">
                     <div class="terminal-header">
                         <div class="terminal-controls">
                             <span class="terminal-dot term-red"></span>
@@ -1509,52 +1848,11 @@
         </div>
     </div>
 
-    <!-- VIEW: WATCHDOG -->
-    <div id="view-watchdog" class="app-view" style="display: none;">
-        <div class="glass-panel" style="padding: 2rem;">
-            <h2 class="panel-title" style="display: flex; justify-content: space-between; align-items: center;">
-                <span><i class="fa-solid fa-eye" style="color: var(--cyan);"></i> Autopilot Channel Watchdog</span>
-                <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; color: var(--smoke);">
-                    <input type="checkbox" id="watchdog-toggle" onchange="toggleWatchdog(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
-                    <span>Watchdog Polling Active</span>
-                </label>
-            </h2>
-            <p style="color: var(--ghost); font-size: 0.85rem; margin-top: -0.5rem; margin-bottom: 1.5rem;">
-                Watchdog automatically scans the channels below for new uploads. When a new long-form video is detected, it triggers Autopilot to scout, crop, burn captions, and queue/publish drafts automatically.
-            </p>
-            
-            <!-- Add Channel Row -->
-            <div style="display: flex; gap: 1rem; margin-bottom: 2rem; background: rgba(255,255,255,0.01); border: 1px solid var(--wire); padding: 1rem; border-radius: 8px;">
-                <div style="flex: 1; display: flex; flex-direction: column; gap: 0.4rem;">
-                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--smoke);">Add YouTube Channel URL or Handle</label>
-                    <input type="text" id="watchdog-url-input" placeholder="e.g. https://www.youtube.com/@LexFridman or @joerogan" style="flex: 1; padding: 0.6rem 1rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 6px; color: var(--smoke); font-size: 0.88rem;">
-                </div>
-                <div style="display: flex; align-items: flex-end;">
-                    <button class="btn btn-cyan" onclick="addWatchdogChannel()" style="padding: 0.6rem 1.5rem; font-weight: 600;">
-                        <i class="fa-solid fa-plus"></i> Add Channel
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Monitored Channels Table -->
-            <h3 style="font-size: 1rem; color: var(--smoke); margin-bottom: 1rem; font-family: var(--font-display);">📺 Monitored Channels</h3>
-            <div style="overflow-x: auto;">
-                <table class="highlights-table" style="width: 100%; text-align: left; border-collapse: collapse;">
-                    <thead>
-                        <tr>
-                            <th>Channel Handle/Name</th>
-                            <th>YouTube URL</th>
-                            <th>Last Seen Video ID</th>
-                            <th style="text-align: right;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="watchdog-channels-list">
-                        <!-- Dynamically populated -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+    <!-- Unified Toast Notification System -->
+    <div id="toast-container" class="toast-container"></div>
+    <div class="sidebar-overlay" onclick="toggleMobileSidebar(false)"></div>
+
+
 
     <!-- Assistant Drawer -->
     <div id="assistant-drawer" class="assistant-drawer">
@@ -1599,6 +1897,94 @@
 
     <!-- Script Logic -->
     <script>
+        // Unified Toast Notification System
+        function showToast(message, type = 'info', duration = 4000) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            
+            let iconClass = 'fa-circle-info';
+            if (type === 'success') iconClass = 'fa-circle-check';
+            else if (type === 'error') iconClass = 'fa-circle-exclamation';
+            else if (type === 'warning') iconClass = 'fa-triangle-exclamation';
+            
+            toast.innerHTML = `
+                <div class="toast-icon"><i class="fa-solid ${iconClass}"></i></div>
+                <div class="toast-content">${message}</div>
+                <button class="toast-close" onclick="this.parentElement.classList.add('hide'); setTimeout(() => this.parentElement.remove(), 300);">&times;</button>
+            `;
+            
+            container.appendChild(toast);
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    if (toast.parentElement) {
+                        toast.classList.add('hide');
+                        setTimeout(() => {
+                            if (toast.parentElement) {
+                                toast.remove();
+                            }
+                        }, 300);
+                    }
+                }, duration);
+            }
+        }
+
+        // Terminal collapsing toggle
+        function toggleTerminalCollapsed(forcedState) {
+            const wrapper = document.getElementById('terminal-container-wrapper');
+            const toggleIcon = document.getElementById('terminal-toggle-icon');
+            const toggleText = document.getElementById('terminal-toggle-text');
+            if (!wrapper || !toggleIcon || !toggleText) return;
+
+            let isCollapsed = wrapper.style.display === 'none';
+            if (forcedState !== undefined) {
+                isCollapsed = !forcedState;
+            }
+
+            if (isCollapsed) {
+                wrapper.style.display = 'block';
+                toggleIcon.classList.remove('fa-chevron-down');
+                toggleIcon.classList.add('fa-chevron-up');
+                toggleText.textContent = 'Hide Details';
+                localStorage.setItem('terminal_collapsed', 'false');
+                const feed = document.getElementById('terminal-body-feed');
+                if (feed) feed.scrollTop = feed.scrollHeight;
+            } else {
+                wrapper.style.display = 'none';
+                toggleIcon.classList.remove('fa-chevron-up');
+                toggleIcon.classList.add('fa-chevron-down');
+                toggleText.textContent = 'Show Details';
+                localStorage.setItem('terminal_collapsed', 'true');
+            }
+        }
+
+        // Central activity message transition
+        function setActivityMessage(msg) {
+            const el = document.getElementById('activity-status-message');
+            if (!el) return;
+            if (el.textContent === msg) return;
+            
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(-4px)';
+            setTimeout(() => {
+                el.textContent = msg;
+                el.style.opacity = '1';
+                el.style.transform = 'translateY(0)';
+            }, 150);
+        }
+
+        // Mobile sidebar helper
+        function toggleMobileSidebar(state) {
+            if (state) {
+                document.body.classList.add('sidebar-mobile-open');
+            } else {
+                document.body.classList.remove('sidebar-mobile-open');
+            }
+        }
+
         let currentUrlTranscript = "";
         let currentSegments = [];
 
@@ -1698,6 +2084,7 @@
 
         // App page navigation router
         function switchView(viewId) {
+            toggleMobileSidebar(false);
             document.querySelectorAll('.app-view').forEach(view => {
                 view.classList.remove('active');
             });
@@ -1820,6 +2207,7 @@
                 container.style.display = 'none';
             }
             uploadStartTime = null;
+            setActivityMessage("Ready.");
         }
 
         // Set the active stage of the pipeline based on percentage
@@ -1867,6 +2255,7 @@
                 barRendering.className = 'pipeline-bar done';
                 stepPublishing.className = 'stage-step done';
                 barPublishing.className = 'pipeline-bar done';
+                setActivityMessage("Done.");
             } else if (currentProgressPct >= 95) {
                 stepIdle.className = 'stage-step done';
                 stepScouting.className = 'stage-step done';
@@ -1879,6 +2268,7 @@
                 barRendering.className = 'pipeline-bar done';
                 barPublishing.className = 'pipeline-bar active';
                 stepPublishing.className = 'stage-step active';
+                setActivityMessage("Preparing export...");
             } else if (currentProgressPct >= 70) {
                 stepIdle.className = 'stage-step done';
                 stepScouting.className = 'stage-step done';
@@ -1889,6 +2279,7 @@
                 barTranscribing.className = 'pipeline-bar done';
                 barRendering.className = 'pipeline-bar active';
                 stepRendering.className = 'stage-step active';
+                setActivityMessage("Crafting your clip...");
             } else if (currentProgressPct >= 50) {
                 stepIdle.className = 'stage-step done';
                 stepScouting.className = 'stage-step done';
@@ -1897,18 +2288,22 @@
                 barDownloading.className = 'pipeline-bar done';
                 barTranscribing.className = 'pipeline-bar active';
                 stepTranscribing.className = 'stage-step active';
+                setActivityMessage("Listening carefully...");
             } else if (currentProgressPct >= 30) {
                 stepIdle.className = 'stage-step done';
                 stepScouting.className = 'stage-step done';
                 barScouting.className = 'pipeline-bar done';
                 barDownloading.className = 'pipeline-bar active';
                 stepDownloading.className = 'stage-step active';
+                setActivityMessage("Preparing source material...");
             } else if (currentProgressPct >= 5) {
                 stepIdle.className = 'stage-step done';
                 barScouting.className = 'pipeline-bar active';
                 stepScouting.className = 'stage-step active';
+                setActivityMessage("Discovering opportunities...");
             } else {
                 stepIdle.className = 'stage-step active';
+                setActivityMessage("Ready.");
             }
         }
 
@@ -1916,16 +2311,29 @@
         function updatePipelineProgress(logLine) {
             if (logLine.includes('AUTOPILOT MODE: Scouting') || logLine.includes('🚀 ADVANCED VIRAL SCOUT')) {
                 setPipelineProgress(5);
+                setActivityMessage("Discovering opportunities...");
+            } else if (logLine.includes('ranking') || logLine.includes('score') || logLine.includes('leaderboard')) {
+                setActivityMessage("Comparing candidates...");
+            } else if (logLine.includes('filter') || logLine.includes('skip') || logLine.includes('rejection')) {
+                setActivityMessage("Finding standout moments...");
             } else if (logLine.includes('⬇ Downloading') || logLine.includes('DOWNLOADING') || logLine.includes('rough_audio.m4a')) {
                 setPipelineProgress(30);
+                setActivityMessage("Preparing source material...");
             } else if (logLine.includes('Running Whisper') || logLine.includes('🎙 Transcribing') || logLine.includes('Transcribing audio sample')) {
                 setPipelineProgress(50);
-            } else if (logLine.includes('VERTICAL CROP') || logLine.includes('BURNING SUBTITLES') || logLine.includes('Burning subtitles') || logLine.includes('Cropping to vertical')) {
+                setActivityMessage("Listening carefully...");
+            } else if (logLine.includes('VERTICAL CROP') || logLine.includes('Cropping to vertical')) {
                 setPipelineProgress(70);
+                setActivityMessage("Crafting your clip...");
+            } else if (logLine.includes('BURNING SUBTITLES') || logLine.includes('Burning subtitles')) {
+                setPipelineProgress(70);
+                setActivityMessage("Building subtitles...");
             } else if (logLine.includes('Uploading') || logLine.includes('Publishing') || logLine.includes('Uploading Clip')) {
                 setPipelineProgress(95);
+                setActivityMessage("Preparing export...");
             } else if (logLine.includes('SUCCESS —') || logLine.includes('READY') || logLine.includes('uploaded to YouTube successfully') || logLine.includes('✅ Custom rendered clip ready')) {
                 setPipelineProgress(100);
+                setActivityMessage("Done.");
                 
                 // Immediately refresh library to show the new clip
                 refreshLibrary();
@@ -2018,10 +2426,10 @@
                     body: JSON.stringify(body)
                 });
                 const data = await res.json();
-                alert(data.message);
+                showToast(data.message, "success");
                 fetchSettings();
             } catch (err) {
-                alert("Failed to save settings: " + err);
+                showToast("Failed to save settings: " + err, "error");
             }
         }
 
@@ -2057,9 +2465,9 @@
                 activeJobId = null;
                 document.getElementById('active-job-cancel-container').style.display = 'none';
                 resetPipelineProgress();
-                alert("Task cancellation triggered successfully.");
+                showToast("Task cancellation triggered successfully.", "success");
             } catch (err) {
-                alert("Failed to cancel job: " + err.message);
+                showToast("Failed to cancel job: " + err.message, "error");
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
@@ -2099,12 +2507,12 @@
                     body: JSON.stringify(body)
                 });
                 const data = await res.json();
-                alert(data.message);
+                showToast(data.message, "success");
                 if (data.job_id) {
                     trackJobProgress(data.job_id);
                 }
             } catch (err) {
-                alert("Failed to launch autopilot: " + err);
+                showToast("Failed to launch autopilot: " + err, "error");
             }
         }
 
@@ -2150,8 +2558,9 @@
                         document.getElementById('stat-autopilot-count').textContent = "Ready";
                         document.getElementById('stat-autopilot-count').style.color = "";
                         
-                        alert("Clipper Job failed: " + (job.error || "Unknown error"));
-                        resetPipelineProgress();
+                        showToast("Clipper Job failed: " + (job.error || "Unknown error"), "error");
+                        setActivityMessage("Task failed.");
+                        setTimeout(() => resetPipelineProgress(), 5000);
                     } else if (job.status === 'cancelled') {
                         clearInterval(activeJobPollInterval);
                         activeJobPollInterval = null;
@@ -2160,8 +2569,9 @@
                         document.getElementById('stat-autopilot-count').textContent = "Ready";
                         document.getElementById('stat-autopilot-count').style.color = "";
                         
-                        alert("Clipper Job was cancelled.");
-                        resetPipelineProgress();
+                        showToast("Clipper Job was cancelled.", "warning");
+                        setActivityMessage("Task cancelled.");
+                        setTimeout(() => resetPipelineProgress(), 5000);
                     }
                 } catch (e) {
                     console.error("Failed to poll job status:", e);
@@ -2209,14 +2619,14 @@
                 const res = await fetch('/api/youtube/connect');
                 if (!res.ok) {
                     const errData = await res.json();
-                    alert("Authentication Error: " + (errData.detail || "Make sure client_secret.json is in the project root."));
+                    showToast("Authentication Error: " + (errData.detail || "Make sure client_secret.json is in the project root."), "error");
                     return;
                 }
                 const data = await res.json();
                 
                 // Open auth page in new tab
                 window.open(data.auth_url, '_blank');
-                alert("Google Authorization window opened! Please sign in, authorize your channel, and return here when complete.");
+                showToast("Google Authorization window opened! Please sign in, authorize your channel, and return here when complete.", "info");
                 
                 // Poll connection status every 3 seconds
                 let attempts = 0;
@@ -2230,7 +2640,7 @@
                     }
                 }, 3000);
             } catch(e) {
-                alert("Error connecting YouTube: " + e);
+                showToast("Error connecting YouTube: " + e, "error");
             }
         }
 
@@ -2241,10 +2651,10 @@
             try {
                 const res = await fetch('/api/youtube/disconnect', { method: 'POST' });
                 const data = await res.json();
-                alert(data.message || "Disconnected successfully!");
+                showToast(data.message || "Disconnected successfully!", "success");
                 await checkYouTubeStatus();
             } catch(e) {
-                alert("Error disconnecting YouTube: " + e);
+                showToast("Error disconnecting YouTube: " + e, "error");
             }
         }
 
@@ -2300,7 +2710,7 @@
         async function analyzeVideoInteractive() {
             const url = document.getElementById('manual-url').value.trim();
             if (!url) {
-                alert("Please enter a valid YouTube URL first!");
+                showToast("Please enter a valid YouTube URL first!", "warning");
                 return;
             }
             
@@ -2470,7 +2880,7 @@
                     highlights: highlightsData.highlights
                 }));
             } catch (err) {
-                alert("Analysis failed: " + err.message);
+                showToast("Analysis failed: " + err.message, "error");
             } finally {
                 loadingPanel.style.display = 'none';
             }
@@ -2486,7 +2896,7 @@
                 }
             } catch (err) {
                 console.error("Failed to read clipboard:", err);
-                alert("Please allow clipboard permissions or paste manually.");
+                showToast("Please allow clipboard permissions or paste manually.", "warning");
             }
         }
 
@@ -2677,12 +3087,12 @@
                 }
                 
                 const data = await res.json();
-                alert("Manual clipping task triggered. Track it in the progress bar!");
+                showToast("Manual clipping task triggered. Track it in the progress bar!", "success");
                 if (data.job_id) {
                     trackJobProgress(data.job_id);
                 }
             } catch (err) {
-                alert("Failed to render highlight: " + err.message);
+                showToast("Failed to render highlight: " + err.message, "error");
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
@@ -2927,10 +3337,10 @@
             try {
                 const res = await fetch('/api/clips/' + encodeURIComponent(clipName) + '/publish?privacy=' + privacy, { method: 'POST' });
                 const data = await res.json();
-                alert(data.message);
+                showToast(data.message, "success");
                 // Refresh library to reveal "UPLOADING" badge immediately
                 setTimeout(refreshLibrary, 500);
-            } catch(e) { alert('Error: ' + e); }
+            } catch(e) { showToast('Error publishing clip: ' + e, 'error'); }
         }
 
         async function deleteClip(clipName) {
@@ -2939,10 +3349,11 @@
                 const res = await fetch('/api/clips/' + encodeURIComponent(clipName), { method: 'DELETE' });
                 if (res.ok) {
                     refreshLibrary();
+                    showToast('Clip deleted successfully.', 'success');
                 } else {
-                    alert('Delete failed.');
+                    showToast('Delete failed.', 'error');
                 }
-            } catch(e) { alert('Error: ' + e); }
+            } catch(e) { showToast('Error deleting clip: ' + e, 'error'); }
         }
 
         async function autoGenTitle(clipName, btn) {
@@ -2960,12 +3371,13 @@
                     // Color pop feedback!
                     input.style.borderColor = 'var(--cyan)';
                     setTimeout(() => { input.style.borderColor = 'var(--wire)'; }, 1000);
+                    showToast("Title auto-generated successfully!", "success");
                 } else {
                     const data = await res.json();
-                    alert("Title Auto-Generation failed: " + (data.detail || "Make sure Gemini API key is configured."));
+                    showToast("Title Auto-Generation failed: " + (data.detail || "Make sure Gemini API key is configured."), "error");
                 }
             } catch(e) {
-                alert("Error generating title: " + e);
+                showToast("Error generating title: " + e, "error");
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
@@ -2985,7 +3397,7 @@
         function openYoutubePreviewModal(name, videoUrl, start, end, index) {
             const videoId = getYoutubeId(videoUrl);
             if (!videoId) {
-                alert("Could not parse YouTube video ID.");
+                showToast("Could not parse YouTube video ID.", "warning");
                 return;
             }
             
@@ -3157,6 +3569,7 @@
             const drawer = document.getElementById('assistant-drawer');
             if (!drawer) return;
             if (show) {
+                toggleMobileSidebar(false);
                 drawer.classList.add('active');
                 // Highlight Co-Writer Nav Item
                 document.getElementById('nav-item-cowriter').classList.add('active');
@@ -3268,10 +3681,10 @@
                 // Clipboard fallback
                 try {
                     await navigator.clipboard.writeText(text);
-                    alert("Text copied to clipboard successfully!");
+                    showToast("Text copied to clipboard successfully!", "success");
                 } catch (err) {
                     console.error("Clipboard copy failed:", err);
-                    alert("Copy content directly:\n\n" + text);
+                    showToast("Copy content directly: " + text, "info");
                 }
             }
         }
@@ -3329,11 +3742,12 @@
                 
                 if (res.ok) {
                     console.log("Watchdog polling status set to", checked);
+                    showToast("Watchdog polling state updated.", "success");
                 } else {
-                    alert("Failed to update watchdog polling state.");
+                    showToast("Failed to update watchdog polling state.", "error");
                 }
             } catch (err) {
-                alert("Error toggling watchdog: " + err.message);
+                showToast("Error toggling watchdog: " + err.message, "error");
             }
         }
 
@@ -3341,7 +3755,7 @@
             const inputEl = document.getElementById('watchdog-url-input');
             const inputVal = inputEl.value.trim();
             if (!inputVal) {
-                alert("Please enter a YouTube channel URL or handle.");
+                showToast("Please enter a YouTube channel URL or handle.", "warning");
                 return;
             }
             
@@ -3365,7 +3779,7 @@
                 const config = await resConfig.json();
                 
                 if (config.channels.some(ch => ch.name.toLowerCase() === name.toLowerCase())) {
-                    alert("This channel is already being monitored.");
+                    showToast("This channel is already being monitored.", "warning");
                     return;
                 }
                 
@@ -3387,11 +3801,12 @@
                 if (res.ok) {
                     inputEl.value = '';
                     fetchWatchdog();
+                    showToast(`Channel added to Watchdog successfully.`, "success");
                 } else {
-                    alert("Failed to add channel to Watchdog.");
+                    showToast("Failed to add channel to Watchdog.", "error");
                 }
             } catch (err) {
-                alert("Error adding channel: " + err.message);
+                showToast("Error adding channel: " + err.message, "error");
             }
         }
 
@@ -3403,11 +3818,12 @@
                 });
                 if (res.ok) {
                     fetchWatchdog();
+                    showToast(`Channel '${channelName}' removed from Watchdog.`, "success");
                 } else {
-                    alert("Failed to remove channel from watchdog.");
+                    showToast("Failed to remove channel from watchdog.", "error");
                 }
             } catch (err) {
-                alert("Error removing channel: " + err.message);
+                showToast("Error removing channel: " + err.message, "error");
             }
         }
 
@@ -3418,6 +3834,13 @@
                 document.body.classList.add('sidebar-collapsed');
                 const icon = document.getElementById('toggle-icon');
                 if (icon) icon.className = 'fa-solid fa-angle-right';
+            }
+            
+            // Restore terminal collapsed state
+            if (localStorage.getItem('terminal_collapsed') === 'false') {
+                toggleTerminalCollapsed(true);
+            } else {
+                toggleTerminalCollapsed(false);
             }
             
             initLogStream();
