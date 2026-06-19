@@ -1267,6 +1267,17 @@
                 height: 320px !important;
             }
         }
+
+        .settings-section-title {
+            font-size: 0.85rem;
+            color: var(--gold);
+            font-family: var(--font-display);
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            padding-bottom: 0.25rem;
+        }
     </style>
 </head>
 <body>
@@ -1289,25 +1300,25 @@
             </div>
             
             <div class="nav-menu">
-                <div class="nav-item active" onclick="switchView('view-autopilot')" id="nav-item-autopilot" title="Autopilot Launchpad">
+                <div class="nav-item active" onclick="switchView('view-autopilot')" id="nav-item-autopilot" title="Autopilot">
                     <i class="fa-solid fa-rocket"></i>
-                    <span>Autopilot Launchpad</span>
+                    <span>Autopilot</span>
                 </div>
-                <div class="nav-item" onclick="switchView('view-clipper')" id="nav-item-clipper" title="Interactive Clipper">
+                <div class="nav-item" onclick="switchView('view-clipper')" id="nav-item-clipper" title="Clipper">
                     <i class="fa-solid fa-scissors"></i>
-                    <span>Interactive Clipper</span>
+                    <span>Clipper</span>
                 </div>
-                <div class="nav-item" onclick="switchView('view-library')" id="nav-item-library" title="Clips Library">
+                <div class="nav-item" onclick="switchView('view-library')" id="nav-item-library" title="Library">
                     <i class="fa-solid fa-video"></i>
-                    <span>Clips Library</span>
+                    <span>Library</span>
                 </div>
-                <div class="nav-item" onclick="switchView('view-watchdog')" id="nav-item-watchdog" title="Channel Watchdog">
+                <div class="nav-item" onclick="switchView('view-watchdog')" id="nav-item-watchdog" title="Watchdog">
                     <i class="fa-solid fa-eye"></i>
-                    <span>Channel Watchdog</span>
+                    <span>Watchdog</span>
                 </div>
-                <div class="nav-item" onclick="toggleAssistantDrawer(true)" id="nav-item-cowriter" title="Gemini Co-Writer">
+                <div class="nav-item" onclick="toggleAssistantDrawer(true)" id="nav-item-cowriter" title="Co-Writer">
                     <i class="fa-solid fa-brain"></i>
-                    <span>Gemini Co-Writer</span>
+                    <span>Co-Writer</span>
                 </div>
             </div>
 
@@ -1318,16 +1329,10 @@
                     <!-- Populated dynamically -->
                 </div>
 
-                <!-- Console Settings -->
-                <div class="nav-item nav-settings-btn" id="nav-item-settings" onclick="switchView('view-settings')" title="Console Settings" style="margin: 0; display: flex; align-items: center;">
+                <!-- Settings Button -->
+                <div class="nav-item nav-settings-btn" id="nav-item-settings" onclick="switchView('view-settings')" title="Settings" style="margin: 0; display: flex; align-items: center;">
                     <i class="fa-solid fa-gear"></i>
-                    <span>Console Settings</span>
-                </div>
-
-                <!-- FastAPI Status Row -->
-                <div id="sidebar-fastapi-status">
-                    <span class="status-dot" style="background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); margin: 0; flex-shrink: 0;" title="FastAPI Online"></span>
-                    <span class="fastapi-text" style="font-size: 0.75rem; font-weight: 600; color: var(--smoke);">FastAPI Online</span>
+                    <span>Settings</span>
                 </div>
             </div>
         </div>
@@ -1357,14 +1362,6 @@
                 <div class="stat-card">
                     <span class="stat-label">Clips:</span>
                     <span class="stat-value" id="stat-total-clips">0</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">Whisper:</span>
-                    <span class="stat-value" id="stat-whisper-device">CPU</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">Gemini:</span>
-                    <span class="stat-value">2.5 Flash</span>
                 </div>
             </div>
             
@@ -1427,11 +1424,11 @@
             <!-- VIEW: AUTOPILOT -->
             <div id="view-autopilot" class="app-view active">
                 <div class="glass-panel">
-                    <h2 class="panel-title">Autopilot Clipper Launchpad</h2>
+                    <h2 class="panel-title">Autopilot</h2>
                     
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="auto-niche">Target Niche / Topic</label>
+                            <label for="auto-niche">Niche</label>
                             <select id="auto-niche" onchange="toggleCustomNicheInput(this.value)">
                                 <option value="">Rotate Trending Pools</option>
                                 <option value="drama">Drama & Podcast Debates</option>
@@ -1441,27 +1438,27 @@
                                 <option value="tech">Tech news, Space & AI breakthroughs</option>
                                 <option value="finance">Crypto, Finance debates & Wealth hacks</option>
                                 <option value="comedy">Standup crowdwork & Funny failures</option>
-                                <option value="custom_option">-- Enter Custom Topic Yourself --</option>
+                                <option value="custom_option">Enter Custom Topic</option>
                             </select>
                         </div>
                         <div class="form-group" id="custom-niche-container" style="display: none;">
-                            <label for="auto-niche-custom" style="color: var(--gold);"><i class="fa-solid fa-sparkles"></i> Enter Custom Niche / Topic</label>
+                            <label for="auto-niche-custom" style="color: var(--gold);"><i class="fa-solid fa-sparkles"></i> Custom Niche</label>
                             <input type="text" id="auto-niche-custom" placeholder="e.g. quantum physics, space travel, street food">
                         </div>
                         <div class="form-group">
-                            <label for="auto-count">Clip Counts per Video</label>
+                            <label for="auto-count">Clips per Video</label>
                             <input type="number" id="auto-count" min="1" max="10" value="3">
                         </div>
                         <div class="form-group">
-                            <label for="auto-keyword">Specific Query Keyword (Optional)</label>
+                            <label for="auto-keyword">Keyword (Optional)</label>
                             <input type="text" id="auto-keyword" placeholder="e.g. standing on business, crashout">
                         </div>
                         <div class="form-group">
-                            <label for="auto-channel">Target Specific Channel (Optional)</label>
+                            <label for="auto-channel">Channel (Optional)</label>
                             <input type="text" id="auto-channel" placeholder="e.g. @joe_rogan, podcast_channel">
                         </div>
                         <div class="form-group">
-                            <label for="auto-duration">Scout Time Window</label>
+                            <label for="auto-duration">Time Window</label>
                             <select id="auto-duration">
                                 <option value="all" selected>Any Time</option>
                                 <option value="today">Today (Last 24 hours)</option>
@@ -1472,10 +1469,10 @@
                         <div class="form-group-full" style="flex-direction: row; align-items: center; gap: 1rem; margin-top: 0.5rem; background: var(--ink); padding: 1rem; border: 1px solid var(--wire); flex-wrap: wrap; display: flex;">
                             <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--smoke); font-weight: 500; margin: 0; user-select: none;">
                                 <input type="checkbox" id="auto-upload" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span>Enable Auto-Upload to YouTube Shorts</span>
+                                <span>Auto-upload to YouTube Shorts</span>
                             </label>
                             <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
-                                <label for="auto-privacy" style="font-size: 0.8rem; color: var(--ghost); font-weight: 600;">Privacy:</label>
+                                <label style="font-size: 0.8rem; color: var(--ghost); font-weight: 600;">Privacy:</label>
                                 <select id="auto-privacy" style="padding: 0.35rem 0.5rem; font-size: 0.78rem; border-radius: 4px; border: 1px solid var(--wire); background: var(--ink); color: var(--smoke); cursor: pointer;">
                                     <option value="private" selected>🔒 Private</option>
                                     <option value="unlisted">🔗 Unlisted</option>
@@ -1485,14 +1482,14 @@
                         </div>
                     </div>
                     
-                    <button class="btn btn-cyan" onclick="launchAutopilot()">LAUNCH AUTOPILOT PIPELINE</button>
+                    <button class="btn btn-cyan" onclick="launchAutopilot()">Launch Autopilot</button>
                 </div>
             </div>
             
             <!-- VIEW: CLIPPER STUDIO -->
             <div id="view-clipper" class="app-view">
                 <div class="glass-panel">
-                    <h2 class="panel-title">Interactive Manual Clipper Studio</h2>
+                    <h2 class="panel-title">Clipper</h2>
                     
                     <div class="form-grid" style="margin-bottom: 2rem;">
                         <div class="form-group-full">
@@ -1511,7 +1508,7 @@
                                         </button>
                                     </div>
                                 </div>
-                                <button class="btn btn-cyan" id="btn-manual-analyze" onclick="analyzeVideoInteractive()">ANALYZE VIDEO</button>
+                                <button class="btn btn-cyan" id="btn-manual-analyze" onclick="analyzeVideoInteractive()">Analyze</button>
                             </div>
                         </div>
                     </div>
@@ -1528,13 +1525,13 @@
                     <!-- Analysis Progress Status -->
                     <div id="clipper-loading-panel" style="display:none; text-align:center; padding: 3rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 12px; margin-bottom: 2rem;">
                         <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2.5rem; color: var(--gold); margin-bottom: 1.5rem;"></i>
-                        <h3 id="clipper-loading-text" style="font-size: 1.15rem; color: var(--smoke);">Analyzing video transcript & generating viral clips...</h3>
+                        <h3 id="clipper-loading-text" style="font-size: 1.15rem; color: var(--smoke);">Analyzing video...</h3>
                     </div>
 
                     <!-- Clipper Results Panel -->
                     <div id="clipper-results-panel" style="display:none;">
                         <h3 style="margin-bottom: 1.25rem; font-size:1.15rem; color: var(--smoke); display:flex; align-items:center; gap:8px;">
-                            <i class="fa-solid fa-sparkles" style="color:var(--gold);"></i> AI-Scored Clip Highlights (Max 5)
+                            <i class="fa-solid fa-sparkles" style="color:var(--gold);"></i> Recommended Highlights
                         </h3>
 
                         <!-- Highlights Recommendations Grid -->
@@ -1549,8 +1546,8 @@
             <div id="view-library" class="app-view">
                 <div class="glass-panel">
                     <h2 class="panel-title" style="justify-content: space-between;">
-                        <span>Rendered Clip Library</span>
-                        <button class="btn btn-secondary btn-mini" onclick="refreshLibrary()">REFRESH</button>
+                        <span>Library</span>
+                        <button class="btn btn-secondary btn-mini" onclick="refreshLibrary()">Refresh</button>
                     </h2>
                     
                     <!-- Library Tabs -->
@@ -1575,111 +1572,153 @@
             <!-- VIEW: SETTINGS -->
             <div id="view-settings" class="app-view">
                 <div class="glass-panel">
-                    <h2 class="panel-title">Vanguard Console Settings</h2>
+                    <h2 class="panel-title">Settings</h2>
                     
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="set-gemini-key">Gemini API Key</label>
-                            <input type="text" id="set-gemini-key" placeholder="AI-analysis authentication token">
-                        </div>
-                        <div class="form-group">
-                            <label for="set-whisper-model">Local Whisper Model</label>
-                            <select id="set-whisper-model">
-                                <option value="tiny.en">tiny.en (Fastest tests)</option>
-                                <option value="base.en">base.en (Optimized)</option>
-                                <option value="small.en">small.en (Accurate)</option>
-                                <option value="large-v3">large-v3 (Production/Precise)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="set-whisper-device">Whisper Compute Device</label>
-                            <select id="set-whisper-device">
-                                <option value="cpu">CPU (Standard)</option>
-                                <option value="cuda">CUDA (NVIDIA GPU Accelerated)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="set-whisper-compute">Whisper Quantisation Type</label>
-                            <select id="set-whisper-compute">
-                                <option value="int8">int8 (Lightweight CPU)</option>
-                                <option value="float16">float16 (Fast GPU)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="set-video-codec">FFmpeg Video Encoder Codec</label>
-                            <select id="set-video-codec">
-                                <option value="libx264">libx264 (H.264 CPU)</option>
-                                <option value="h264_nvenc">h264_nvenc (NVIDIA GPU Accelerated)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="set-video-preset">FFmpeg Video Preset</label>
-                            <select id="set-video-preset">
-                                <option value="ultrafast">ultrafast (Fastest render)</option>
-                                <option value="veryfast">veryfast</option>
-                                <option value="fast">fast</option>
-                                <option value="medium">medium (Best size/quality)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="set-age-days">Max Search Video Age (Days)</label>
-                            <input type="number" id="set-age-days" value="90">
-                        </div>
-                        <div class="form-group">
-                            <label for="set-subtitle-style">Burnt-In Subtitle Style Preset</label>
-                            <select id="set-subtitle-style" onchange="toggleCustomStylePanel(this.value)">
-                                <option value="default">Default (Clean Cyberpunk Neon)</option>
-                                <option value="mrbeast">MrBeast Pop (Bold Impact Yellow)</option>
-                                <option value="hormozi">Hormozi Glow (Montserrat Green Border)</option>
-                                <option value="clean">Minimal Clean (Arial Gray Outline)</option>
-                                <option value="gold">Gold Premium (Outfit ExtraBold Gold)</option>
-                                <option value="minimal">Minimalist Capsule (Solid White Boxed)</option>
-                                <option value="custom">Custom Theme Studio</option>
-                            </select>
-                        </div>
-                        
-                        <div id="custom-style-panel" class="glass-panel" style="display: none; grid-column: span 2; gap: 1.25rem; padding: 1.25rem; margin-top: 0.5rem; border-color: rgba(0, 210, 255, 0.2); background: rgba(255, 255, 255, 0.005); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
-                            <h4 style="grid-column: span 100%; color: var(--gold); font-size: 0.95rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-                                <i class="fa-solid fa-palette"></i> Custom Typography Theme Studio
-                            </h4>
-                            <div class="form-group" style="margin: 0;">
-                                <label for="cust-font-name" style="font-size: 0.78rem;">Font Name</label>
-                                <input type="text" id="cust-font-name" value="Inter Bold" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                    <!-- Essentials Section -->
+                    <div class="settings-section">
+                        <h3 class="settings-section-title">Essentials</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="set-gemini-key">Gemini API Key</label>
+                                <input type="text" id="set-gemini-key" placeholder="AI-analysis authentication token">
                             </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label for="cust-font-size" style="font-size: 0.78rem;">Font Size</label>
-                                <input type="number" id="cust-font-size" value="58" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                            <div class="form-group">
+                                <label for="set-age-days">Max Video Age (Days)</label>
+                                <input type="number" id="set-age-days" value="90">
                             </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label for="cust-pri-color" style="font-size: 0.78rem;">Primary Color</label>
-                                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                    <input type="color" id="cust-pri-color-picker" value="#F2F2F2" style="width: 32px; height: 32px; border: none; border-radius: 4px; cursor: pointer; padding: 0; background: none;" oninput="document.getElementById('cust-pri-color').value = this.value">
-                                    <input type="text" id="cust-pri-color" value="#F2F2F2" style="flex: 1; padding: 0.4rem 0.75rem; font-size: 0.82rem;" oninput="document.getElementById('cust-pri-color-picker').value = this.value">
-                                </div>
-                            </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label for="cust-out-color" style="font-size: 0.78rem;">Outline Color</label>
-                                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                    <input type="color" id="cust-out-color-picker" value="#000000" style="width: 32px; height: 32px; border: none; border-radius: 4px; cursor: pointer; padding: 0; background: none;" oninput="document.getElementById('cust-out-color').value = this.value">
-                                    <input type="text" id="cust-out-color" value="#000000" style="flex: 1; padding: 0.4rem 0.75rem; font-size: 0.82rem;" oninput="document.getElementById('cust-out-color-picker').value = this.value">
-                                </div>
-                            </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label for="cust-out-val" style="font-size: 0.78rem;">Outline Width</label>
-                                <input type="number" id="cust-out-val" value="2.5" step="0.5" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
-                            </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label for="cust-shd-val" style="font-size: 0.78rem;">Shadow Depth</label>
-                                <input type="number" id="cust-shd-val" value="1.0" step="0.5" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
-                            </div>
-                        </div>
-                        <div class="form-group" style="flex-direction:row; align-items:center; gap:1rem; padding-top:1.5rem;">
-                            <input type="checkbox" id="set-enable-gpu" style="width:20px; height:20px;">
-                            <label for="set-enable-gpu">Enable GPU Acceleration (NVENC/CUDA)</label>
                         </div>
                     </div>
                     
-                    <button class="btn btn-cyan" onclick="saveSettings()">SAVE CONFIGURATION</button>
+                    <!-- Quality & Styling Section -->
+                    <div class="settings-section" style="margin-top: 1.5rem;">
+                        <h3 class="settings-section-title">Quality & Styling</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="set-whisper-model">Speech Recognition Model</label>
+                                <select id="set-whisper-model">
+                                    <option value="tiny.en">Tiny (Fastest)</option>
+                                    <option value="base.en">Base (Balanced)</option>
+                                    <option value="small.en">Small (Accurate)</option>
+                                    <option value="large-v3">Large-v3 (Precise)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="set-subtitle-style">Burnt-In Subtitles</label>
+                                <select id="set-subtitle-style" onchange="toggleCustomStylePanel(this.value)">
+                                    <option value="default">Default Cyberpunk</option>
+                                    <option value="mrbeast">MrBeast Pop</option>
+                                    <option value="hormozi">Hormozi Glow</option>
+                                    <option value="clean">Minimal Clean</option>
+                                    <option value="gold">Gold Premium</option>
+                                    <option value="minimal">Minimalist Capsule</option>
+                                    <option value="custom">Custom Typography Theme</option>
+                                </select>
+                            </div>
+                            
+                            <div id="custom-style-panel" class="glass-panel" style="display: none; grid-column: span 2; gap: 1.25rem; padding: 1.25rem; margin-top: 0.5rem; border-color: rgba(0, 210, 255, 0.2); background: rgba(255, 255, 255, 0.005); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                                <h4 style="grid-column: span 100%; color: var(--gold); font-size: 0.95rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                    <i class="fa-solid fa-palette"></i> Custom Subtitle Theme
+                                </h4>
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="cust-font-name" style="font-size: 0.78rem;">Font Family</label>
+                                    <input type="text" id="cust-font-name" value="Inter Bold" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="cust-font-size" style="font-size: 0.78rem;">Font Size</label>
+                                    <input type="number" id="cust-font-size" value="58" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="cust-pri-color" style="font-size: 0.78rem;">Primary Color</label>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <input type="color" id="cust-pri-color-picker" value="#F2F2F2" style="width: 32px; height: 32px; border: none; border-radius: 4px; cursor: pointer; padding: 0; background: none;" oninput="document.getElementById('cust-pri-color').value = this.value">
+                                        <input type="text" id="cust-pri-color" value="#F2F2F2" style="flex: 1; padding: 0.4rem 0.75rem; font-size: 0.82rem;" oninput="document.getElementById('cust-pri-color-picker').value = this.value">
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="cust-out-color" style="font-size: 0.78rem;">Outline Color</label>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <input type="color" id="cust-out-color-picker" value="#000000" style="width: 32px; height: 32px; border: none; border-radius: 4px; cursor: pointer; padding: 0; background: none;" oninput="document.getElementById('cust-out-color').value = this.value">
+                                        <input type="text" id="cust-out-color" value="#000000" style="flex: 1; padding: 0.4rem 0.75rem; font-size: 0.82rem;" oninput="document.getElementById('cust-out-color-picker').value = this.value">
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="cust-out-val" style="font-size: 0.78rem;">Outline Width</label>
+                                    <input type="number" id="cust-out-val" value="2.5" step="0.5" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="cust-shd-val" style="font-size: 0.78rem;">Shadow Depth</label>
+                                    <input type="number" id="cust-shd-val" value="1.0" step="0.5" style="padding: 0.4rem 0.75rem; font-size: 0.82rem;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced & Hardware Section (Collapsible) -->
+                    <div class="settings-section" style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 1.25rem;">
+                        <h3 class="settings-section-title" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleAdvancedSettings()">
+                            <span>Advanced & Hardware</span>
+                            <span id="adv-settings-toggle-btn" class="btn btn-secondary btn-mini" style="font-size: 0.7rem; padding: 2px 8px; margin: 0;">Show</span>
+                        </h3>
+                        <div id="advanced-settings-container" style="display: none; margin-top: 1.25rem;">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="set-whisper-device">Whisper Compute Device</label>
+                                    <select id="set-whisper-device">
+                                        <option value="cpu">CPU (Standard)</option>
+                                        <option value="cuda">CUDA (NVIDIA GPU)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="set-whisper-compute">Whisper Quantization</label>
+                                    <select id="set-whisper-compute">
+                                        <option value="int8">int8 (Standard)</option>
+                                        <option value="float16">float16 (High Performance)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="set-video-codec">FFmpeg Video Codec</label>
+                                    <select id="set-video-codec">
+                                        <option value="libx264">libx264 (CPU)</option>
+                                        <option value="h264_nvenc">h264_nvenc (NVIDIA GPU)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="set-video-preset">FFmpeg Preset</label>
+                                    <select id="set-video-preset">
+                                        <option value="ultrafast">ultrafast</option>
+                                        <option value="veryfast">veryfast</option>
+                                        <option value="fast">fast</option>
+                                        <option value="medium">medium</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex-direction:row; align-items:center; gap:1rem; padding-top:1rem; grid-column: span 2;">
+                                    <input type="checkbox" id="set-enable-gpu" style="width:20px; height:20px;">
+                                    <label for="set-enable-gpu" style="margin: 0;">Enable GPU Acceleration</label>
+                                </div>
+                            </div>
+                            
+                            <!-- Hardware Diagnostics Panel -->
+                            <div style="margin-top: 1.5rem; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--wire); padding: 1rem; border-radius: 8px;">
+                                <h4 style="font-size: 0.8rem; font-family: var(--font-display); color: var(--ash); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">System Diagnostics</h4>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem;">
+                                    <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+                                        <span style="font-size: 0.65rem; color: var(--ghost); font-weight: 700; text-transform: uppercase;">Whisper Device</span>
+                                        <span id="stat-whisper-device" style="font-size: 0.8rem; font-weight: 600; color: var(--smoke);">CPU</span>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+                                        <span style="font-size: 0.65rem; color: var(--ghost); font-weight: 700; text-transform: uppercase;">Whisper Configuration</span>
+                                        <span id="status-whisper" style="font-size: 0.8rem; font-weight: 600; color: var(--smoke);">CPU</span>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+                                        <span style="font-size: 0.65rem; color: var(--ghost); font-weight: 700; text-transform: uppercase;">GPU Encoding</span>
+                                        <span id="status-gpu" style="font-size: 0.8rem; font-weight: 600; color: var(--smoke);">Disabled</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-cyan" onclick="saveSettings()" style="margin-top: 1.5rem;">SAVE CONFIGURATION</button>
                 </div>
             </div>
 
@@ -1687,20 +1726,20 @@
             <div id="view-watchdog" class="app-view" style="display: none;">
                 <div class="glass-panel" style="padding: 2rem;">
                     <h2 class="panel-title" style="display: flex; justify-content: space-between; align-items: center;">
-                        <span><i class="fa-solid fa-eye" style="color: var(--cyan);"></i> Autopilot Channel Watchdog</span>
+                        <span><i class="fa-solid fa-eye" style="color: var(--cyan);"></i> Watchdog</span>
                         <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; color: var(--smoke);">
                             <input type="checkbox" id="watchdog-toggle" onchange="toggleWatchdog(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
-                            <span>Watchdog Polling Active</span>
+                            <span>Active</span>
                         </label>
                     </h2>
                     <p style="color: var(--ghost); font-size: 0.85rem; margin-top: -0.5rem; margin-bottom: 1.5rem;">
-                        Watchdog automatically scans the channels below for new uploads. When a new long-form video is detected, it triggers Autopilot to scout, crop, burn captions, and queue/publish drafts automatically.
+                        Watchdog scans monitored channels for new long-form uploads and automatically drafts or publishes cropped, captioned short clips.
                     </p>
                     
                     <!-- Add Channel Row -->
                     <div style="display: flex; gap: 1rem; margin-bottom: 2rem; background: rgba(255,255,255,0.01); border: 1px solid var(--wire); padding: 1rem; border-radius: 8px;">
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 0.4rem;">
-                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--smoke);">Add YouTube Channel URL or Handle</label>
+                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--smoke);">Channel URL or Handle</label>
                             <input type="text" id="watchdog-url-input" placeholder="e.g. https://www.youtube.com/@LexFridman or @joerogan" style="flex: 1; padding: 0.6rem 1rem; background: var(--ink); border: 1px solid var(--wire); border-radius: 6px; color: var(--smoke); font-size: 0.88rem;">
                         </div>
                         <div style="display: flex; align-items: flex-end;">
@@ -1711,7 +1750,7 @@
                     </div>
                     
                     <!-- Monitored Channels Table -->
-                    <h3 style="font-size: 1rem; color: var(--smoke); margin-bottom: 1rem; font-family: var(--font-display);">📺 Monitored Channels</h3>
+                    <h3 style="font-size: 1rem; color: var(--smoke); margin-bottom: 1rem; font-family: var(--font-display);">Monitored Channels</h3>
                     <div style="overflow-x: auto;">
                         <table class="highlights-table" style="width: 100%; text-align: left; border-collapse: collapse;">
                             <thead>
@@ -1733,7 +1772,7 @@
             <!-- Live scrolling console terminal -->
             <div class="glass-panel" style="padding: 1.5rem;" id="terminal-panel">
                 <h3 style="font-size:1.05rem; margin-bottom:0px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleTerminalCollapsed()">
-                    <span style="display:flex; align-items:center; gap:0.5rem;"><i class="fa-solid fa-terminal" style="color:var(--accent-green)"></i> Real-Time Processing Console</span>
+                    <span style="display:flex; align-items:center; gap:0.5rem;"><i class="fa-solid fa-terminal" style="color:var(--accent-green)"></i> Console</span>
                     <div style="display:flex; align-items:center; gap:0.75rem;">
                         <span style="font-size:0.75rem; background:rgba(16,185,129,0.15); padding:2px 8px; border-radius:4px;" id="term-status-badge">Stream Listening</span>
                         <button class="btn btn-secondary btn-mini" style="font-size:0.7rem; padding: 2px 8px; margin: 0; display: inline-flex; align-items: center; gap: 4px;" id="terminal-toggle-btn">
@@ -1897,6 +1936,20 @@
 
     <!-- Script Logic -->
     <script>
+        // Progressive Disclosure Advanced Settings Toggle
+        function toggleAdvancedSettings() {
+            const container = document.getElementById('advanced-settings-container');
+            const btn = document.getElementById('adv-settings-toggle-btn');
+            if (!container || !btn) return;
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                btn.textContent = 'Hide';
+            } else {
+                container.style.display = 'none';
+                btn.textContent = 'Show';
+            }
+        }
+
         // Unified Toast Notification System
         function showToast(message, type = 'info', duration = 4000) {
             const container = document.getElementById('toast-container');
@@ -2818,7 +2871,7 @@
                                     </div>` : ''}
                                     
                                     <div style="font-size:0.8rem; color: var(--ghost); line-height: 1.4;">
-                                        <strong>Engagement Rationale:</strong> ${hl.reason}
+                                        <strong>Why it works:</strong> ${hl.reason}
                                     </div>
 
                                     <!-- Dynamic Crop Customizer -->
@@ -2999,7 +3052,7 @@
                                         </div>` : ''}
                                         
                                         <div style="font-size:0.8rem; color: var(--ghost); line-height: 1.4;">
-                                            <strong>Engagement Rationale:</strong> ${hl.reason}
+                                            <strong>Why it works:</strong> ${hl.reason}
                                         </div>
 
                                         <!-- Dynamic Crop Customizer -->
