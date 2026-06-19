@@ -943,26 +943,9 @@ def get_video_details(payload: TranscriptRequest) -> dict[str, str]:
     """Get video title and thumbnail URL via yt-dlp."""
     logger.info("📺 Fetching video details for: %s", payload.url)
     try:
-        import os
-        import random
+        from shorts_clipper.downloader.yt_dlp import get_base_yt_dlp_cmd
 
-        cmd = [
-            "yt-dlp",
-            "--extractor-args",
-            "youtube:player_client=default,-android_sdkless",
-        ]
-        try:
-            import curl_cffi  # noqa: F401
-
-            cmd.extend(["--impersonate", "Chrome"])
-        except ImportError:
-            pass
-        proxy_str = os.environ.get("SHORTS_PROXY")
-        if proxy_str:
-            proxies = [p.strip() for p in proxy_str.split(",") if p.strip()]
-            if proxies:
-                cmd.extend(["--proxy", random.choice(proxies)])
-
+        cmd = get_base_yt_dlp_cmd()
         cmd.extend(["--skip-download", "--print", "%(title)s\n%(thumbnail)s", payload.url])
         res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=15)
         lines = res.stdout.strip().split("\n")

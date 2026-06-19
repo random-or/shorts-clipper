@@ -78,7 +78,7 @@ def upload_short(
         },
     }
 
-    media = MediaFileUpload(str(video_path), chunksize=1024 * 1024, resumable=True)
+    media = MediaFileUpload(str(video_path), chunksize=8 * 1024 * 1024, resumable=True)
     request = youtube.videos().insert(
         part="snippet,status",
         body=body,

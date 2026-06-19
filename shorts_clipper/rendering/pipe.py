@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -17,32 +16,9 @@ from pathlib import Path
 from shorts_clipper.captions.generator import generate_ass_file
 from shorts_clipper.core.models import TranscriptSegment
 from shorts_clipper.cropping.geometry import CropBox
+from shorts_clipper.downloader.yt_dlp import get_base_yt_dlp_cmd
 
 log = logging.getLogger(__name__)
-
-
-def _get_base_yt_dlp_cmd() -> list[str]:
-    import random
-
-    cmd = [
-        "yt-dlp",
-        "--extractor-args",
-        "youtube:player_client=default,-android_sdkless",
-    ]
-    # Check if curl-cffi is available for impersonation
-    try:
-        import curl_cffi  # noqa: F401
-
-        cmd.extend(["--impersonate", "Chrome"])
-    except ImportError:
-        pass
-
-    proxy_str = os.environ.get("SHORTS_PROXY")
-    if proxy_str:
-        proxies = [p.strip() for p in proxy_str.split(",") if p.strip()]
-        if proxies:
-            cmd.extend(["--proxy", random.choice(proxies)])
-    return cmd
 
 
 _TARGET_W = 1080
@@ -52,7 +28,7 @@ _TARGET_H = 1920
 def get_url_dimensions(url: str) -> tuple[int, int]:
     """Fetch video width and height from YouTube URL using yt-dlp without downloading."""
     log.info("🔍 Probing video dimensions for %s...", url)
-    cmd = _get_base_yt_dlp_cmd()
+    cmd = get_base_yt_dlp_cmd()
     cmd.extend(
         [
             "--skip-download",
@@ -90,7 +66,7 @@ def run_face_detection(url: str, start_time: float, end_time: float) -> int | No
         sample_path = tmp_path / "sample.mp4"
 
         # Download 3s low-res clip
-        cmd = _get_base_yt_dlp_cmd()
+        cmd = get_base_yt_dlp_cmd()
         cmd.extend(
             [
                 "-f",
@@ -176,7 +152,7 @@ def run_dynamic_face_tracking(
         sample_path = tmp_path / "sample.mp4"
 
         # Download low-res segment
-        cmd = _get_base_yt_dlp_cmd()
+        cmd = get_base_yt_dlp_cmd()
         cmd.extend(
             [
                 "-f",
@@ -387,7 +363,7 @@ def stream_render_pipeline(
 
         # Construct yt-dlp stream command
         fmt = "bestvideo[ext=mp4][height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-        yt_cmd = _get_base_yt_dlp_cmd()
+        yt_cmd = get_base_yt_dlp_cmd()
         yt_cmd.extend(
             [
                 "--retries",
@@ -436,7 +412,12 @@ def stream_render_pipeline(
         log.info("yt-dlp: %s", " ".join(yt_cmd))
         log.info("ffmpeg: %s", " ".join(ffmpeg_cmd))
 
-        yt_proc = subprocess.Popen(yt_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        # Capture yt-dlp stderr so we can report meaningful downloader errors
+        yt_proc = subprocess.Popen(
+            yt_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
         ffmpeg_proc = subprocess.Popen(
             ffmpeg_cmd,
             stdin=yt_proc.stdout,
@@ -447,15 +428,35 @@ def stream_render_pipeline(
         if yt_proc.stdout:
             yt_proc.stdout.close()
 
-        _, errs = ffmpeg_proc.communicate()
-        yt_proc.wait()
+        ffmpeg_out, ffmpeg_errs = ffmpeg_proc.communicate()
+        yt_out, yt_errs = yt_proc.communicate()
+
+        if yt_proc.returncode != 0:
+            yt_err_msg = yt_errs.decode(errors="ignore").strip()
+            log.error(
+                "yt-dlp download pipeline failed (exit %d): %s", yt_proc.returncode, yt_err_msg
+            )
+            raise RuntimeError(
+                f"Stream downloader (yt-dlp) failed: {yt_err_msg or 'Unknown error'}"
+            )
 
         if ffmpeg_proc.returncode != 0:
+            ffmpeg_err_msg = ffmpeg_errs.decode(errors="ignore").strip()
             log.error(
-                "FFmpeg stream rendering failed: %s",
-                errs.decode(errors="ignore")[-2000:],
+                "FFmpeg stream rendering failed (exit %d): %s",
+                ffmpeg_proc.returncode,
+                ffmpeg_err_msg[-2000:],
             )
-            raise RuntimeError(f"FFmpeg stream render failed (exit {ffmpeg_proc.returncode})")
+            if (
+                "Invalid data found when processing input" in ffmpeg_err_msg
+                or "pipe:0" in ffmpeg_err_msg
+            ):
+                raise RuntimeError(
+                    f"FFmpeg received invalid/empty stream input. The video download stream might have failed. Error details: {ffmpeg_err_msg}"
+                )
+            raise RuntimeError(
+                f"FFmpeg stream render failed (exit {ffmpeg_proc.returncode}): {ffmpeg_err_msg}"
+            )
 
     log.info("✅ Pipelined stream render successfully output to %s", output_path)
     return output_path

@@ -13,7 +13,7 @@ from shorts_clipper.core.models import TranscriptSegment
 log = logging.getLogger(__name__)
 
 
-def _get_base_yt_dlp_cmd() -> list[str]:
+def get_base_yt_dlp_cmd() -> list[str]:
     import random
     import sys
 
@@ -59,7 +59,7 @@ def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
     """
     log.info("\n--- FETCHING NATIVE ENGLISH SUBTITLES ---")
     output_base = work_dir / "subs"
-    cmd = _get_base_yt_dlp_cmd()
+    cmd = get_base_yt_dlp_cmd()
     cmd.extend(
         [
             "--write-auto-subs",
@@ -131,7 +131,7 @@ def download_audio(
     else:
         log.info("⬇ Downloading full audio from %s", url)
 
-    cmd = _get_base_yt_dlp_cmd()
+    cmd = get_base_yt_dlp_cmd()
     cmd.extend(
         [
             "--retries",
@@ -201,7 +201,7 @@ def download_clip(
         f"bestvideo[ext=mp4][height<={max_height}][vcodec^=avc1]"
         f"+bestaudio[ext=m4a]/best[ext=mp4]/best"
     )
-    cmd = _get_base_yt_dlp_cmd()
+    cmd = get_base_yt_dlp_cmd()
     cmd.extend(
         [
             "--retries",

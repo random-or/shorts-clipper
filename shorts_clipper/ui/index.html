@@ -587,7 +587,7 @@
         /* Active Pipeline Stage */
         .stage-step.active .stage-label {
             color: var(--cyan);
-            text-shadow: 0 0 10px var(--cyan-glow);
+            text-shadow: none;
         }
 
         .stage-step.active .stage-icon {
@@ -619,7 +619,7 @@
             color: var(--accent-green);
             border-color: var(--accent-green);
             background: rgba(5, 218, 138, 0.08);
-            box-shadow: 0 0 12px var(--green-glow);
+            box-shadow: none;
         }
 
         .pipeline-bar {
@@ -640,13 +640,13 @@
 
         .pipeline-bar.done {
             background: var(--accent-green);
-            box-shadow: 0 0 8px var(--green-glow);
+            box-shadow: none;
         }
 
         @keyframes pulseGlow {
-            0% { box-shadow: 0 0 5px var(--cyan-glow), inset 0 0 5px rgba(0, 210, 255, 0.1); transform: scale(1); }
-            50% { box-shadow: 0 0 18px var(--cyan-glow), inset 0 0 12px rgba(0, 210, 255, 0.3); transform: scale(1.06); }
-            100% { box-shadow: 0 0 5px var(--cyan-glow), inset 0 0 5px rgba(0, 210, 255, 0.1); transform: scale(1); }
+            0% { box-shadow: 0 0 4px rgba(0, 210, 255, 0.2), inset 0 0 4px rgba(0, 210, 255, 0.05); }
+            50% { box-shadow: 0 0 10px rgba(0, 210, 255, 0.4), inset 0 0 8px rgba(0, 210, 255, 0.15); }
+            100% { box-shadow: 0 0 4px rgba(0, 210, 255, 0.2), inset 0 0 4px rgba(0, 210, 255, 0.05); }
         }
 
         @keyframes laserFlow {
@@ -1367,7 +1367,7 @@
             
             <!-- Central Activity Status -->
             <div id="activity-status-container" style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1.25rem; text-align: center;">
-                <span id="activity-status-message" style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; color: var(--cyan); text-shadow: 0 0 10px var(--cyan-glow); min-height: 1.75rem; transition: opacity 0.15s ease, transform 0.15s ease; opacity: 1; transform: translateY(0);">Ready.</span>
+                <span id="activity-status-message" style="font-family: var(--font-display); font-size: 0.95rem; font-weight: 600; color: var(--ghost); min-height: 1.75rem; transition: opacity 0.15s ease, transform 0.15s ease; opacity: 1; transform: translateY(0);">Ready.</span>
             </div>
 
             <!-- Pipeline Stage Badges -->
@@ -1404,14 +1404,14 @@
             </div>
             
             <!-- Active Task Cancel Container -->
-            <div id="active-job-cancel-container" style="display: none; justify-content: flex-end; margin-top: -1.75rem; margin-bottom: 2rem;">
+            <div id="active-job-cancel-container" style="display: none; justify-content: flex-end; margin-top: 0.75rem; margin-bottom: 1.25rem;">
                 <button class="btn btn-red btn-mini" id="btn-cancel-job" onclick="cancelCurrentJob()" style="display: inline-flex; align-items: center; gap: 6px;">
                     <i class="fa-solid fa-circle-stop"></i> Cancel Active Task
                 </button>
             </div>
             
             <!-- Uploading Detail Bar Container (Thin and Classic) -->
-            <div id="active-upload-progress-container" style="display: none; flex-direction: column; gap: 0.35rem; margin-top: -1.25rem; margin-bottom: 1.25rem; background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.04); padding: 0.5rem 0.75rem; border-radius: 6px;">
+            <div id="active-upload-progress-container" style="display: none; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; margin-bottom: 1.25rem; background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.04); padding: 0.5rem 0.75rem; border-radius: 6px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.7rem;">
                     <span style="color:var(--ghost); font-weight:600; display:flex; align-items:center; gap:5px;"><i class="fa-solid fa-cloud-arrow-up" style="color:var(--cyan); font-size: 0.75rem;"></i> Uploading to YouTube...</span>
                     <span id="active-upload-stats" style="color:var(--smoke); font-family:monospace; font-weight:500;">0% | Speed: Calculating... | ETA: Calculating...</span>
@@ -2024,6 +2024,13 @@
             el.style.transform = 'translateY(-4px)';
             setTimeout(() => {
                 el.textContent = msg;
+                if (msg === "Ready." || msg === "Done.") {
+                    el.style.color = "var(--ghost)";
+                } else if (msg === "Task failed." || msg === "Task cancelled.") {
+                    el.style.color = "var(--ash)";
+                } else {
+                    el.style.color = "var(--cyan)";
+                }
                 el.style.opacity = '1';
                 el.style.transform = 'translateY(0)';
             }, 150);
@@ -2243,9 +2250,11 @@
         }
 
         let currentProgressPct = 0;
+        let isLocalWhisperActive = false;
 
         function resetPipelineProgress() {
             currentProgressPct = 0;
+            isLocalWhisperActive = false;
             document.querySelectorAll('.stage-step').forEach(step => {
                 step.className = 'stage-step';
             });
@@ -2282,19 +2291,9 @@
             const barRendering = document.getElementById('bar-rendering');
             const barPublishing = document.getElementById('bar-publishing');
 
-            // Reset classes
-            stepIdle.className = 'stage-step';
-            stepScouting.className = 'stage-step';
-            stepDownloading.className = 'stage-step';
-            stepTranscribing.className = 'stage-step';
-            stepRendering.className = 'stage-step';
-            stepPublishing.className = 'stage-step';
-
-            barScouting.className = 'pipeline-bar';
-            barDownloading.className = 'pipeline-bar';
-            barTranscribing.className = 'pipeline-bar';
-            barRendering.className = 'pipeline-bar';
-            barPublishing.className = 'pipeline-bar';
+            // Reset active states
+            document.querySelectorAll('.stage-step').forEach(step => step.classList.remove('active'));
+            document.querySelectorAll('.pipeline-bar').forEach(bar => bar.classList.remove('active'));
 
             if (currentProgressPct >= 100) {
                 stepIdle.className = 'stage-step done';
@@ -2341,7 +2340,11 @@
                 barDownloading.className = 'pipeline-bar done';
                 barTranscribing.className = 'pipeline-bar active';
                 stepTranscribing.className = 'stage-step active';
-                setActivityMessage("Listening carefully...");
+                if (isLocalWhisperActive) {
+                    setActivityMessage("Continuing locally...");
+                } else {
+                    setActivityMessage("Listening carefully...");
+                }
             } else if (currentProgressPct >= 30) {
                 stepIdle.className = 'stage-step done';
                 stepScouting.className = 'stage-step done';
@@ -2362,6 +2365,10 @@
 
         // Parse logs in real-time to update the pipeline status visually
         function updatePipelineProgress(logLine) {
+            if (logLine.includes('Falling back to local Whisper') || logLine.includes('with Whisper') || logLine.includes('Transcribing audio sample')) {
+                isLocalWhisperActive = true;
+            }
+
             if (logLine.includes('AUTOPILOT MODE: Scouting') || logLine.includes('🚀 ADVANCED VIRAL SCOUT')) {
                 setPipelineProgress(5);
                 setActivityMessage("Discovering opportunities...");
@@ -2374,7 +2381,11 @@
                 setActivityMessage("Preparing source material...");
             } else if (logLine.includes('Running Whisper') || logLine.includes('🎙 Transcribing') || logLine.includes('Transcribing audio sample')) {
                 setPipelineProgress(50);
-                setActivityMessage("Listening carefully...");
+                if (isLocalWhisperActive) {
+                    setActivityMessage("Local transcription active...");
+                } else {
+                    setActivityMessage("Listening carefully...");
+                }
             } else if (logLine.includes('VERTICAL CROP') || logLine.includes('Cropping to vertical')) {
                 setPipelineProgress(70);
                 setActivityMessage("Crafting your clip...");

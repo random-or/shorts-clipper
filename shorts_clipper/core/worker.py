@@ -114,25 +114,9 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
                 continue
 
             # Fetch latest video id via yt-dlp
-            import os
-            import random
+            from shorts_clipper.downloader.yt_dlp import get_base_yt_dlp_cmd
 
-            cmd = [
-                "yt-dlp",
-                "--extractor-args",
-                "youtube:player_client=default,-android_sdkless",
-            ]
-            try:
-                import curl_cffi  # noqa: F401
-
-                cmd.extend(["--impersonate", "Chrome"])
-            except ImportError:
-                pass
-            proxy_str = os.environ.get("SHORTS_PROXY")
-            if proxy_str:
-                proxies = [p.strip() for p in proxy_str.split(",") if p.strip()]
-                if proxies:
-                    cmd.extend(["--proxy", random.choice(proxies)])
+            cmd = get_base_yt_dlp_cmd()
 
             cmd.extend(
                 [
