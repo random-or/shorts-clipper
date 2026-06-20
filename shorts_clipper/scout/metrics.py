@@ -36,6 +36,7 @@ class ScoutMetrics:
     rejected_low_views: int = 0
     rejected_no_subtitles: int = 0
     rejected_timeout: int = 0
+    rejected_low_quality: int = 0
 
     # Cache
     cache_hits: int = 0
@@ -55,6 +56,16 @@ class ScoutMetrics:
     total_duration_s: float = 0.0
     succeeded: bool = False
     failure_reason: str = ""
+
+    # Evaluation performance
+    avg_eval_time_s: float = 0.0
+    slowest_eval_time_s: float = 0.0
+    fastest_eval_time_s: float = 0.0
+
+    # Subtitle fetch metrics
+    subtitle_fetch_success: int = 0
+    subtitle_fetch_failure: int = 0
+    subtitle_429_count: int = 0
 
     def finish(self, winner: dict | None, failure_reason: str = "") -> None:
         self.total_duration_s = round(time.time() - self.started_at, 2)

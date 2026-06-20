@@ -1,134 +1,169 @@
 # Shorts Clipper
 
-## Overview
-AI-powered video clipping pipeline that automatically extracts, processes, subtitles, and prepares short-form content for TikTok, Reels, and YouTube Shorts. 
+Autonomous attention-ranking engine for discovering, evaluating, and clipping high-potential content.
 
-Content creators and media agencies face a massive time sink when attempting to repurpose long-form videos (podcasts, streams, webinars) into highly engaging vertical short-form content. Manual editing requires hours of scrubbing, transcription, layout reframing, and subtitle synchronization.
+## Why This Exists
 
-**Shorts Clipper** solves this by fully automating the pipeline. It intelligently scouts trending topics, securely bypasses bot detection to ingest the raw footage, utilizes Gemini AI to locate emotionally resonant hooks, and leverages FFmpeg to reframe and burn stylized subtitles in a highly optimized single-pass render.
+Most clipping tools assume humans already know what to clip. They wait for you to choose a video, scrub through it, and manually select the interesting part.
 
-It is built for developers, agencies, and creators who need a scalable, API-first, self-healing pipeline capable of running completely on autopilot.
+**Shorts Clipper inverts this.** It starts from the question most tools ignore:
 
-## Features
-* **AI-powered trending video discovery**: Auto-discovers viral videos based on targeted niches with a self-healing parallel scout engine.
-* **YouTube Data API integration**: Employs rapid discovery over the official YouTube v3 API, safely falling back to advanced scraper methods on quotas.
-* **Intelligent virality scoring**: Ranks candidates in real-time based on views, likes, comments velocity, and recency.
-* **Automatic subtitle detection**: Validates candidate video subtitle existence and formats proactively before ingestion.
-* **Multi-stage filtering pipeline**: Rigorously weeds out invalid videos using customizable thresholds (duration, minimum views, age).
-* **Whisper fallback transcription**: Employs `faster-whisper` for offline precision transcription with selectable models (`tiny.en` to `large-v3`) and hardware acceleration support.
-* **Learning system**: Adapts topic and query discoveries dynamically.
-* **Web UI**: Offers a complete dashboard to trigger and manage background tasks.
-* **Automated shorts generation**: Renders the 9:16 vertical crop, applies pacing, and burns word-level `.ass` animated subtitles all within a single FFmpeg execution.
+> Which content deserves attention in the first place?
+
+Scout — the core engine — autonomously searches, filters, scores, and ranks video candidates. It evaluates multiple finalists against each other before committing to a single winner. The clipping pipeline then executes on Scout's decision.
+
+The result: a system that goes from zero input to a published vertical short, without human intervention.
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    A[Web UI / CLI Client] -->|Triggers Job| B[FastAPI Backend]
-    B -->|Writes State| C[(SQLite Job Queue)]
-    
-    subgraph Background Worker Pipeline
-        D[Scout Engine] --> E[Metadata & Subtitle Validation]
-        E --> F[Anti-Ban Downloader yt-dlp]
-        F --> G[Transcriber faster-whisper]
-        G --> H[Highlight AI Gemini 2.5]
-        H --> I[FFmpeg Single-Pass Render crop + ASS burn + pacing]
-        I --> J[YouTube OAuth Uploader]
-    end
-    C -.->|Heartbeat/Sync| D
+```
+SCOUT ENGINE
+  │
+  ├── Discovery ─────── YouTube API / yt-dlp search
+  │
+  ├── Filtering ─────── Duration, age, views, language
+  │
+  ├── Scoring ──────── Multi-dimensional virality ranking
+  │
+  ├── Evaluation ────── Transcript analysis + Gemini AI
+  │
+  ├── Selection ─────── Compare finalists, pick winner
+  │
+  └── Clip Pipeline
+        ├── Download ── yt-dlp with anti-ban
+        ├── Transcribe ─ Whisper (fallback if no subs)
+        ├── Highlight ── Gemini 2.5 attention detection
+        ├── Render ──── FFmpeg 9:16 crop + subtitle burn
+        └── Publish ─── YouTube OAuth upload
 ```
 
-## Installation
+## Scout V2
 
-**Linux Setup Instructions**
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/random-or/shorts-clipper.git
-   cd shorts-clipper
-   ```
-2. Create and activate a virtual environment:
-   ```bash
-   python3 -m venv env
-   source env/bin/activate
-   ```
-3. Install the dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Install system dependencies (ffmpeg is required for rendering):
-   ```bash
-   sudo apt-get update && sudo apt-get install ffmpeg
-   ```
+Scout V2 is a multi-stage attention-ranking engine. It does not accept the first passing video — it evaluates multiple finalists and selects the strongest.
 
-## Configuration
+**How it works:**
 
-Copy `.env.example` to `.env` and fill in the required variables:
+1. **Discovery** — Generates targeted search queries from niche and keyword inputs. Uses the YouTube Data API when available, falls back to yt-dlp flat search when quota is exhausted.
+
+2. **Filtering** — Rejects candidates that are too short (<60s), too long (>20min), too old, or below a minimum view threshold. Deduplicates across queries.
+
+3. **Intermediate Scoring** — Ranks survivors using a capped multi-dimensional score: view velocity, engagement ratio (likes + comments), recency decay, and channel history bonus from prior successful runs.
+
+4. **Finalist Selection** — Takes the top N candidates (configurable, default 15) into a deep evaluation pool.
+
+5. **Transcript Acquisition** — For each finalist, fetches native YouTube subtitles. If unavailable, downloads a 90-second audio sample and runs Whisper transcription in a sandboxed subprocess with a configurable timeout.
+
+6. **Highlight Analysis** — Scores each transcript using a rule-based scorer (hook detection, emotional language, caption density). Then queries Gemini 2.5 for AI-assisted highlight selection with virality scoring.
+
+7. **Winner Selection** — Computes a weighted final score combining AI highlights (40%), rule-based signals, view velocity, engagement ratio, subtitle confidence, and channel history bonus. Compares all passing candidates and selects the highest-scoring one.
+
+**Fallback behavior:** If Gemini quota is exhausted, Scout switches to metadata-only scoring for remaining candidates. If no candidate scores above the quality bar, Scout aborts cleanly rather than producing a poor clip.
+
+## Production Hardening
+
+Scout V2 includes significant reliability work:
+
+- **Keyword propagation** — Niche and keyword parameters correctly flow through the full discovery → query → filter → evaluation pipeline.
+- **Multi-candidate ranking** — Scout evaluates and compares multiple finalists instead of accepting the first passing video.
+- **Quota handling** — Gemini quota exhaustion triggers automatic fallback to rule-based scoring. YouTube API quota exhaustion falls back to yt-dlp.
+- **Timeout protection** — Whisper transcription runs in a separate process with a configurable timeout (`SCOUT_MAX_TRANSCRIPTION_SECONDS`). Hung processes are terminated.
+- **Subtitle recovery** — Three-tier subtitle confidence scoring (native > whisper > none). Native subtitles are preferred, Whisper is a fallback, missing subtitles cause rejection.
+- **yt-dlp resilience** — Circuit breaker pattern for repeated yt-dlp failures. Browser TLS fingerprint impersonation via curl-cffi.
+- **Cache improvements** — Metadata and transcript caching with configurable TTL. Cache hits skip expensive subtitle fetching and transcription.
+- **Resource leak fixes** — Temporary directories for evaluation are cleaned up via context managers. Subprocess transcription prevents orphaned Whisper processes.
+- **Evaluation budget** — Configurable limit on how many candidates are deeply evaluated (`SCOUT_EVALUATION_BUDGET`), preventing runaway API costs.
+
+## Features
+
+- Autonomous content discovery via YouTube Data API and yt-dlp
+- Multi-stage candidate ranking with intermediate scoring
+- Configurable filtering (duration, views, age, language)
+- Gemini 2.5 highlight detection with virality scoring
+- Rule-based fallback scoring (hooks, emotion, caption density)
+- Whisper transcription fallback with timeout protection
+- Native subtitle detection and validation
+- Channel history feedback loop (learning from successful picks)
+- 9:16 vertical crop with animated word-level `.ass` subtitles
+- Single-pass FFmpeg rendering (crop + subtitle burn + pacing)
+- YouTube OAuth upload
+- Web dashboard (FastAPI + background worker)
+- CLI with `scout`, `clip`, `autopilot`, and `web` commands
+- Scout explainability reports (`outputs/scout_report.json`)
+
+## Quick Start
+
+### Installation
+
+```bash
+git clone https://github.com/random-or/shorts-clipper.git
+cd shorts-clipper
+python3 -m venv env
+source env/bin/activate
+pip install -r requirements.txt
+sudo apt-get install ffmpeg  # required for rendering
+```
+
+### Configuration
 
 ```bash
 cp .env.example .env
 ```
 
-**Required API Keys:**
-* `YOUTUBE_API_KEY`: Required for fast trending topic discovery and quota optimization. Get this from the Google Cloud Console.
-* `GEMINI_API_KEY`: Required for intelligent highlighting. Retrieves emotional peaks from transcripts.
-* `OPENAI_API_KEY`: (Optional) Can be used if switching the highlighting provider to OpenAI.
+**Required:**
+- `GEMINI_API_KEY` — Get from [Google AI Studio](https://aistudio.google.com/). Used for highlight detection.
+- `YOUTUBE_API_KEY` — Get from [Google Cloud Console](https://console.cloud.google.com/). Used for fast discovery (optional but recommended).
 
-**Additional Settings (Optional):**
-* `SHORTS_WHISPER_MODEL`: Default is `tiny.en`. Change to `base.en` or `small.en` for more accuracy.
-* `SHORTS_SCOUT_MAX_AGE_DAYS`: Default is `90`. Sets the window for trending video discovery.
-* `SHORTS_ENABLE_GPU`: Set to `true` to enable hardware acceleration for Whisper transcription and FFmpeg.
+**Optional:**
+- `SHORTS_WHISPER_MODEL` — Transcription model (`tiny.en`, `base.en`, `small.en`). Default: `tiny.en`.
+- `SHORTS_SCOUT_MAX_AGE_DAYS` — Discovery time window. Default: `90`.
+- `SHORTS_ENABLE_GPU` — Enable CUDA for Whisper and NVENC for FFmpeg. Default: `false`.
 
-## Usage
+### Commands
 
-**Start the Web UI & Background Worker:**
 ```bash
+# Scout: find the best video for a niche
+python -m shorts_clipper scout --niche "tech" --keyword "AI"
+
+# Autopilot: scout + clip + render in one step
+python -m shorts_clipper autopilot --niche "football" --count 1
+
+# Clip a specific video
+python -m shorts_clipper clip https://youtu.be/VIDEO_ID
+
+# Launch the web dashboard
 python -m shorts_clipper web
 ```
-This spawns the FastAPI server on `http://127.0.0.1:8000` and automatically starts a background worker. From the Web UI, you can seamlessly fire off "Autopilot" scouts or manage your queue.
 
-**Start the CLI Worker manually (if running separated):**
+### Example Workflow
+
 ```bash
-python -m shorts_clipper worker
+# 1. Scout discovers and evaluates candidates
+python -m shorts_clipper scout --niche "science" --keyword "space"
+# Output: https://www.youtube.com/watch?v=...
+
+# 2. Autopilot runs the full pipeline
+python -m shorts_clipper autopilot --niche "science" --keyword "space"
+# Output: outputs/clip_20260620_123456.mp4
+
+# 3. Review the scout decision
+cat outputs/scout_report.json
 ```
 
-**Trigger an Autopilot job programmatically:**
-```bash
-curl -X POST http://127.0.0.1:8000/api/autopilot \
-     -H "Content-Type: application/json" \
-     -d '{"niche": "tech", "count": 1, "scout_duration": "month"}'
-```
+## Current Status
 
-## How Scout Works
+Scout V2 is stable and undergoing manual ranking-quality validation.
 
-The Scout engine runs on autopilot to find the best videos autonomously:
+The core pipeline — discovery, filtering, scoring, evaluation, clipping, and rendering — is functional in production. Current focus is on attention selection quality: ensuring Scout consistently picks videos that produce engaging shorts.
 
-1. **Discovery:** Generates dynamic search queries based on the niche (e.g., "tech") and fetches candidates rapidly using the YouTube Data API.
-2. **Filtering:** Rejects videos that are too long, too short, too old, or have insufficient views.
-3. **Scoring:** Ranks surviving videos using a sophisticated virality metric that weighs view velocity, engagement (likes/comments), and recency.
-4. **Validation:** Sequentially verifies candidates for the existence of English subtitles, eliminating videos that require costly offline transcriptions unnecessarily.
-5. **Winner Selection:** Selects the highest-scored valid video, updates the internal memory to adapt future searches, and forwards the video to the clipping pipeline.
-
-## Performance Improvements
-
-Recent system upgrades ensure production reliability and unmatched speed:
-
-* **API discovery path:** Replaced slow `--dump-json` queries with lightning-fast YouTube Data API requests. Discovery time dropped from ~45 seconds to near-zero.
-* **Queue fixes:** Patched global initialization artifacts in the persistent SQLite queue. Eliminates erroneous startup-failure conditions for jobs pending in highly concurrent setups.
-* **Heartbeat fixes:** Engineered persistent heartbeats during highly-intensive offline processing blocks (Whisper/FFmpeg). Eliminates "dead worker" misidentifications and phantom restarts.
-* **Caption API optimization:** Directly interrogates YouTube API captions endpoint instead of falling back to payload dumps, radically shifting subtitle validation times to microseconds.
-
-## Troubleshooting
-
-* **Interrupted by server restart error:** This typically happens if the worker process is explicitly killed without draining the queue. Ensure you use graceful shutdowns (`SIGTERM`) or rely on the self-healing worker heartbeat to cleanly resume.
-* **yt-dlp rate limits (429 errors):** If yt-dlp starts timing out, try rotating your `SHORTS_PROXY` environment variable or confirm `curl-cffi` is actively impersonating browser TLS fingerprints.
-* **FFmpeg missing codec errors:** If you enabled `SHORTS_ENABLE_GPU=true`, verify that you have `h264_nvenc` available in your system's FFmpeg build. If not, revert to `libx264`.
+Automated tests cover scoring logic, filtering rules, Gemini integration, subtitle handling, cache behavior, and rendering geometry. Integration testing with live YouTube data is manual.
 
 ## Roadmap
 
-* Add multi-platform publisher integration (TikTok, Instagram Reels).
-* Implement Ken Burns effect auto-zoom & pan.
-* Enhanced B-Roll generation using external APIs.
+**Scout V3** (planned):
+- Historical learning from clip performance feedback
+- Attention prediction from thumbnail and title signals
+- Adaptive scoring weights based on niche-specific patterns
 
 ## License
 
-MIT License. See `LICENSE` for more information.
+MIT License. See [LICENSE](file:///home/random/shorts-clipper/LICENSE) for details.

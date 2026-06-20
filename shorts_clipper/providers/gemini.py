@@ -20,6 +20,13 @@ from shorts_clipper.transcription.formatting import format_transcript
 
 log = logging.getLogger(__name__)
 
+
+class GeminiQuotaExhaustedError(Exception):
+    """Exception raised when Gemini API quota is exhausted."""
+
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Prompt
 # ---------------------------------------------------------------------------
@@ -168,6 +175,18 @@ class GeminiProvider(HighlightProvider):
                     contents=prompt,
                 )
             except Exception as exc:
+                exc_str = str(exc)
+                is_quota_exhausted = (
+                    "429" in exc_str
+                    or "RESOURCE_EXHAUSTED" in exc_str
+                    or "quota" in exc_str.lower()
+                    or getattr(exc, "code", None) == 429
+                    or getattr(exc, "status_code", None) == 429
+                )
+                if is_quota_exhausted:
+                    log.error("GEMINI QUOTA EXHAUSTED\nSWITCHING TO FALLBACK")
+                    raise GeminiQuotaExhaustedError(exc_str) from exc
+
                 if attempt == max_retries:
                     log.error(
                         "Gemini generate_content failed after %d attempts: %s",
@@ -185,7 +204,9 @@ class GeminiProvider(HighlightProvider):
                 time.sleep(delay)
                 delay *= 2
 
-    def select_clip(self, segments: Sequence[TranscriptSegment]) -> ClipWindow:
+    def select_clip(
+        self, segments: Sequence[TranscriptSegment], allow_fallback: bool = True
+    ) -> ClipWindow:
         """Return the best clip window. Falls back gracefully on any failure."""
         transcript_text = format_transcript(segments)
         prompt = _PROMPT_TEMPLATE.format(transcript=transcript_text)
@@ -249,6 +270,8 @@ class GeminiProvider(HighlightProvider):
             return window, layout  # type: ignore[return-value]
 
         except Exception as exc:  # noqa: BLE001
+            if not allow_fallback:
+                raise
             fb_start, fb_end = self._fallback_window
             log.warning(
                 "Gemini failed (%s). Using fallback %.1fs→%.1fs [%s]",
@@ -259,19 +282,21 @@ class GeminiProvider(HighlightProvider):
             )
             return ClipWindow(start=fb_start, end=fb_end), self._fallback_layout  # type: ignore[return-value]
 
-    def select_clip_raw(self, segments: Sequence[TranscriptSegment]) -> tuple[ClipWindow, str]:
+    def select_clip_raw(
+        self, segments: Sequence[TranscriptSegment], allow_fallback: bool = True
+    ) -> tuple[ClipWindow, str]:
         """Same as select_clip but always returns (ClipWindow, layout_str)."""
-        result = self.select_clip(segments)
+        result = self.select_clip(segments, allow_fallback=allow_fallback)
         if isinstance(result, tuple):
             return result
         return result, self._fallback_layout
 
     def select_multiple_clips(
-        self, segments: Sequence[TranscriptSegment], count: int = 1
+        self, segments: Sequence[TranscriptSegment], count: int = 1, allow_fallback: bool = True
     ) -> list[tuple[ClipWindow, str]]:
         """Return the best clip windows (up to count) from the transcript."""
         if count <= 1:
-            win, lay = self.select_clip_raw(segments)
+            win, lay = self.select_clip_raw(segments, allow_fallback=allow_fallback)
             return [(win, lay)]
 
         transcript_text = format_transcript(segments)
@@ -333,8 +358,10 @@ class GeminiProvider(HighlightProvider):
             return results
 
         except Exception as exc:
+            if not allow_fallback:
+                raise
             log.warning("Gemini multi-clip selection failed (%s). Using fallback.", exc)
-            win, lay = self.select_clip_raw(segments)
+            win, lay = self.select_clip_raw(segments, allow_fallback=allow_fallback)
             return [(win, lay)]
 
     def select_multiple_clips_detailed(
@@ -388,6 +415,8 @@ class GeminiProvider(HighlightProvider):
                 )
             return sanitized
         except Exception as e:
+            if isinstance(e, GeminiQuotaExhaustedError):
+                raise
             log.warning("Detailed Gemini highlights fetch failed: %s. Using simple fallback.", e)
             try:
                 simple_clips = self.select_multiple_clips(segments, count=count)

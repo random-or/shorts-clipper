@@ -886,6 +886,7 @@ def trigger_autopilot(payload: AutopilotRequest) -> dict[str, Any]:
     """Trigger Autopilot mode with job tracking."""
     ensure_worker_running()
     job = _job_queue.create("autopilot", payload.model_dump())
+    logger.info(f"JOB CREATED:\nniche={payload.niche}\nkeyword={payload.keyword}")
     return {
         "status": "started",
         "job_id": job.id,

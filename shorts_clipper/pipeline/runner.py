@@ -85,27 +85,62 @@ def run(
         work_path = Path(work_dir)
 
         try:
-            # ── PASS 1: ROUGH TRANSCRIPT FOR AI SELECTION ────────────────
-            log.info("\n--- PASS 1: ROUGH TRANSCRIPT FOR AI SELECTION ---")
-            if progress_callback:
-                progress_callback(10)
-            rough_segments = fetch_subtitles(url, work_path)
+            # Check Scout V2 Cache first to bypass PASS 1 if already evaluated (Phase 2 Integration)
+            from shorts_clipper.core.cache import get_cached
+            from shorts_clipper.core.models import ClipWindow
 
-            if not rough_segments:
-                log.warning(
-                    "⚠️  No native subtitles. Downloading 5-min audio sample for rough transcript..."
-                )
-                audio_path = work_path / "rough_audio.m4a"
-                download_audio(url, audio_path, start_time=0.0, end_time=300.0)
-                rough_segments = transcribe_clip(
-                    audio_path,
-                    model_size="tiny.en",
-                    device=settings.whisper_device,
-                    compute_type=settings.whisper_compute_type,
-                )
+            vid = url.split("watch?v=")[-1] if "watch?v=" in url else url
+            cached_data = get_cached(vid)
 
-            provider = GeminiProvider(api_key=settings.gemini_api_key)
-            clips = provider.select_multiple_clips(rough_segments, count=count)
+            clips = None
+            if cached_data and "selected_clips" in cached_data:
+                clips_data = cached_data["selected_clips"]
+                if len(clips_data) >= count:
+                    clips = [
+                        (ClipWindow(start=c["start"], end=c["end"]), c["layout"])
+                        for c in clips_data[:count]
+                    ]
+                    log.info(
+                        "🔥 Scout V2 Cache Hit: Loaded selected highlights directly! Bypassing Pass 1."
+                    )
+
+            if not clips:
+                # ── PASS 1: ROUGH TRANSCRIPT FOR AI SELECTION ────────────────
+                log.info("\n--- PASS 1: ROUGH TRANSCRIPT FOR AI SELECTION ---")
+                if progress_callback:
+                    progress_callback(10)
+                rough_segments = fetch_subtitles(url, work_path)
+
+                if not rough_segments:
+                    log.warning(
+                        "⚠️  No native subtitles. Downloading 5-min audio sample for rough transcript..."
+                    )
+                    audio_path = work_path / "rough_audio.m4a"
+                    download_audio(url, audio_path, start_time=0.0, end_time=300.0)
+                    rough_segments = transcribe_clip(
+                        audio_path,
+                        model_size="tiny.en",
+                        device=settings.whisper_device,
+                        compute_type=settings.whisper_compute_type,
+                    )
+
+                provider = GeminiProvider(api_key=settings.gemini_api_key)
+                try:
+                    # Enforce highlight quality validation (Phase 1: Remove Blind Fallback)
+                    clips = provider.select_multiple_clips(
+                        rough_segments, count=count, allow_fallback=False
+                    )
+                except Exception as exc:
+                    from shorts_clipper.providers.gemini import GeminiQuotaExhaustedError
+
+                    if isinstance(exc, GeminiQuotaExhaustedError):
+                        log.warning("GEMINI QUOTA EXHAUSTED - SWITCHING TO FALLBACK")
+                        clips = provider.select_multiple_clips(
+                            rough_segments, count=count, allow_fallback=True
+                        )
+                    else:
+                        log.error("AI highlight selection failed: %s", exc)
+                        raise MediaProcessingError("No high-quality highlights found.") from exc
 
             output_paths: list[Path] = []
 
@@ -303,6 +338,7 @@ def run_autopilot(
     if settings is None:
         settings = Settings.from_env()
 
+    log.info(f"RUNNER RECEIVED:\nniche={niche}\nkeyword={keyword}")
     log.info("🤖 AUTOPILOT MODE: Scouting trending content...")
     if progress_callback:
         progress_callback(5)
@@ -350,19 +386,22 @@ def run_autopilot(
 
                 duration = time.time() - start_time
                 quota = last_m.get("queries_fired", 0) * 100
-                rejected = max(0, last_m.get("video_ids_discovered", 0) - 1)
+                discovered = last_m.get("video_ids_discovered", 0)
+                rejected_low_quality = last_m.get("rejected_low_quality", 0)
+                filtered_out = max(0, discovered - rejected_low_quality - 1)
                 log.info(
                     "\n========== AUTOPILOT REPORT ==========\n"
                     f"Query: {query_str}\n"
                     f"Window: {age_days} days\n"
-                    f"Candidates Found: {last_m.get('video_ids_discovered', 0)}\n"
-                    f"Candidates Rejected: {rejected}\n"
+                    f"Candidates Found: {discovered}\n"
+                    f"Candidates Filtered Out: {filtered_out}\n"
+                    f"Candidates Rejected (Low Quality): {rejected_low_quality}\n"
                     f"Top Candidate: {last_m.get('winner_title', 'N/A')}\n"
                     f"Final Winner: {url}\n"
                     f"Processing Time: {duration:.2f}s\n"
                     f"API Calls: {last_m.get('queries_fired', 0)}\n"
                     f"Quota Cost: {quota}\n"
-                    f"Reason Winner Was Selected: Highest Virality Score ({virality})\n"
+                    f"Reason Winner Was Selected: Highest Scout V2 Score ({virality})\n"
                     "======================================"
                 )
         except Exception as e:

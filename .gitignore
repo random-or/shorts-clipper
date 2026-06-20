@@ -21,3 +21,5 @@ client_secret.json
 scratch/
 *.db
 *.sqlite
+*.mkv
+*.pdf

@@ -6,11 +6,36 @@ import logging
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 
 from shorts_clipper.core.models import TranscriptSegment
 
 log = logging.getLogger(__name__)
+
+# Subtitle fetch metrics (module-level counters)
+_subtitle_metrics = {
+    "fetch_success": 0,
+    "fetch_failure": 0,
+    "rate_limit_429": 0,
+    "forbidden_403": 0,
+    "timeout": 0,
+}
+
+
+def get_subtitle_metrics() -> dict:
+    """Return a copy of subtitle fetch metrics."""
+    total = _subtitle_metrics["fetch_success"] + _subtitle_metrics["fetch_failure"]
+    return {
+        **_subtitle_metrics,
+        "total": total,
+        "success_pct": round(_subtitle_metrics["fetch_success"] / total * 100, 1)
+        if total > 0
+        else 0.0,
+        "failure_pct": round(_subtitle_metrics["fetch_failure"] / total * 100, 1)
+        if total > 0
+        else 0.0,
+    }
 
 
 def get_base_yt_dlp_cmd() -> list[str]:
@@ -51,63 +76,114 @@ def _srt_time_to_seconds(t: str) -> float:
     return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
 
 
-def fetch_subtitles(url: str, work_dir: Path) -> list[TranscriptSegment]:
+def fetch_subtitles(url: str, work_dir: Path, max_retries: int = 3) -> list[TranscriptSegment]:
     """
     Download English subtitles (auto or manual) from YouTube.
 
+    Retries with exponential backoff on rate-limit (429) errors.
     Returns parsed TranscriptSegment list, or empty list if unavailable.
     """
     log.info("\n--- FETCHING NATIVE ENGLISH SUBTITLES ---")
     output_base = work_dir / "subs"
-    cmd = get_base_yt_dlp_cmd()
-    cmd.extend(
-        [
-            "--write-auto-subs",
-            "--write-subs",
-            "--sub-lang",
-            "en,en-orig",
-            "--sub-format",
-            "srt",
-            "--skip-download",
-            "--socket-timeout",
-            "15",
-            "--retries",
-            "3",
-            "-o",
-            str(output_base),
-            url,
-        ]
-    )
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, timeout=120)
-    except subprocess.TimeoutExpired:
-        log.warning("Subtitle fetch timed out for %s — will rely on Whisper", url)
-        return []
-    except subprocess.CalledProcessError:
-        log.warning("No English auto-subtitles found for %s", url)
-        return []
 
-    srt_files = list(work_dir.glob("subs.en*.srt"))
-    if not srt_files:
-        return []
+    last_err_str = ""
+    for attempt in range(1, max_retries + 1):
+        # Clean previous subtitle files for retry
+        for old_srt in work_dir.glob("subs.en*.srt"):
+            old_srt.unlink(missing_ok=True)
 
-    srt_path = srt_files[0]
-    content = srt_path.read_text(encoding="utf-8")
+        cmd = get_base_yt_dlp_cmd()
+        cmd.extend(
+            [
+                "--write-auto-subs",
+                "--write-subs",
+                "--sub-lang",
+                "en,en-orig,en-US,en-GB,en-CA,en-AU,en-NZ,en-IE,en-ZA",
+                "--sub-format",
+                "srt",
+                "--skip-download",
+                "--socket-timeout",
+                "15",
+                "--retries",
+                "3",
+                "-o",
+                str(output_base),
+                url,
+            ]
+        )
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            log.warning(
+                "Subtitle fetch timed out for %s (attempt %d/%d)", url, attempt, max_retries
+            )
+            _subtitle_metrics["timeout"] += 1
+            if attempt < max_retries:
+                time.sleep(2**attempt)
+                continue
+            _subtitle_metrics["fetch_failure"] += 1
+            return []
+        except subprocess.CalledProcessError as err:
+            last_err_str = err.stderr.decode(errors="ignore") if err.stderr else ""
+            is_rate_limit = "429" in last_err_str or "too many requests" in last_err_str.lower()
+            is_forbidden = "403" in last_err_str
 
-    blocks = re.split(r"\n\s*\n", content.strip())
-    segments: list[TranscriptSegment] = []
-    for block in blocks:
-        lines = block.split("\n")
-        if len(lines) >= 3:
-            times = re.findall(r"(\d+:\d+:\d+,\d+)", lines[1])
-            if len(times) == 2:
-                start = _srt_time_to_seconds(times[0])
-                end = _srt_time_to_seconds(times[1])
-                text = " ".join(lines[2:]).strip()
-                segments.append(TranscriptSegment(start=start, end=end, text=text))
+            if is_rate_limit:
+                _subtitle_metrics["rate_limit_429"] += 1
+                log.warning(
+                    "YouTube 429 rate limit during subtitle fetch (attempt %d/%d)",
+                    attempt,
+                    max_retries,
+                )
+                if attempt < max_retries:
+                    backoff = 2**attempt
+                    log.info("Retrying subtitle fetch in %ds...", backoff)
+                    time.sleep(backoff)
+                    continue
+            elif is_forbidden:
+                _subtitle_metrics["forbidden_403"] += 1
+                log.warning("YouTube 403 forbidden during subtitle fetch for %s", url)
 
-    log.info("✅ Loaded %d English subtitle segments.", len(segments))
-    return segments
+            log.error(
+                "Subtitle fetch failed for %s (attempt %d/%d): %s",
+                url,
+                attempt,
+                max_retries,
+                last_err_str[:200],
+            )
+            if attempt < max_retries and is_rate_limit:
+                continue
+            _subtitle_metrics["fetch_failure"] += 1
+            return []
+
+        # Success — parse the SRT
+        srt_files = list(work_dir.glob("subs.en*.srt"))
+        if not srt_files:
+            _subtitle_metrics["fetch_failure"] += 1
+            return []
+
+        srt_path = srt_files[0]
+        content = srt_path.read_text(encoding="utf-8")
+
+        blocks = re.split(r"\n\s*\n", content.strip())
+        segments: list[TranscriptSegment] = []
+        for block in blocks:
+            lines = block.split("\n")
+            if len(lines) >= 3:
+                times = re.findall(r"(\d+:\d+:\d+,\d+)", lines[1])
+                if len(times) == 2:
+                    start = _srt_time_to_seconds(times[0])
+                    end = _srt_time_to_seconds(times[1])
+                    text = " ".join(lines[2:]).strip()
+                    segments.append(TranscriptSegment(start=start, end=end, text=text))
+
+        log.info("✅ Loaded %d English subtitle segments.", len(segments))
+        _subtitle_metrics["fetch_success"] += 1
+        return segments
+
+    # Exhausted retries
+    _subtitle_metrics["fetch_failure"] += 1
+    return []
 
 
 def download_audio(
@@ -150,7 +226,16 @@ def download_audio(
         cmd.extend(["--download-sections", f"*{start_time}-{end_time}"])
 
     cmd.append(url)
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as err:
+        err_str = err.stderr.decode(errors="ignore") if err.stderr else ""
+        log.error("Audio download failed via yt-dlp: %s. Stderr: %s", err, err_str)
+        if "429" in err_str or "too many requests" in err_str.lower():
+            log.warning("YouTube THROTTLING/RATE LIMIT (429) detected during audio download!")
+        elif "403" in err_str:
+            log.warning("YouTube Access Forbidden (403) detected during audio download!")
+        raise
     log.info("✅ Audio download complete: %s", output_path)
     return output_path
 
@@ -224,6 +309,15 @@ def download_clip(
         cmd.extend(["--download-sections", f"*{start_time}-{end_time}"])
 
     cmd.append(url)
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as err:
+        err_str = err.stderr.decode(errors="ignore") if err.stderr else ""
+        log.error("Video clip download failed via yt-dlp: %s. Stderr: %s", err, err_str)
+        if "429" in err_str or "too many requests" in err_str.lower():
+            log.warning("YouTube THROTTROUTLING/RATE LIMIT (429) detected during video download!")
+        elif "403" in err_str:
+            log.warning("YouTube Access Forbidden (403) detected during video download!")
+        raise
     log.info("✅ Download complete: %s", output_path)
     return output_path

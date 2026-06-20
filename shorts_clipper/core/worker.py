@@ -220,6 +220,9 @@ def run_worker() -> None:
             payload = job.payload
 
             if job.kind == "autopilot":
+                logger.info(
+                    f"JOB LOADED:\nniche={payload.get('niche')}\nkeyword={payload.get('keyword')}"
+                )
                 scout_duration = payload.get("scout_duration", "all")
                 max_age_days = settings.scout_max_age_days
                 if scout_duration == "today":
