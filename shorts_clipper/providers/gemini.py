@@ -901,7 +901,9 @@ class GeminiProvider(HighlightProvider):
             log.debug("Gemini raw response: %r", raw)
 
             if "NO_CLIP_FOUND" in raw:
-                raise ProviderError("Gemini returned NO_CLIP_FOUND. No candidates reached the threshold.")
+                raise ProviderError(
+                    "Gemini returned NO_CLIP_FOUND. No candidates reached the threshold."
+                )
 
             # Strip markdown code fences if present
             json_str = raw
@@ -949,7 +951,11 @@ class GeminiProvider(HighlightProvider):
                 score,
                 data.get("curiosity_level", "?"),
             )
-            log.info("   Tension: %s | Payoff: %s", data.get("tension_level", "?"), data.get("payoff_level", "?"))
+            log.info(
+                "   Tension: %s | Payoff: %s",
+                data.get("tension_level", "?"),
+                data.get("payoff_level", "?"),
+            )
             log.info("   Why:  %s", data.get("reason", ""))
 
             window = ClipWindow(start=start, end=end)
@@ -995,7 +1001,9 @@ class GeminiProvider(HighlightProvider):
             log.debug("Gemini raw response: %r", raw)
 
             if "NO_CLIP_FOUND" in raw:
-                raise ProviderError("Gemini returned NO_CLIP_FOUND. No high-quality clips selected.")
+                raise ProviderError(
+                    "Gemini returned NO_CLIP_FOUND. No high-quality clips selected."
+                )
 
             json_str = raw
             json_match = re.search(r"```(?:json)?(.*?)```", raw, re.DOTALL)
@@ -1062,10 +1070,10 @@ class GeminiProvider(HighlightProvider):
         try:
             response = self._generate_content_with_retry(prompt)
             raw = response.text.strip()
-            
+
             if "NO_CLIP_FOUND" in raw:
                 return []
-                
+
             json_str = raw
             json_match = re.search(r"```(?:json)?(.*?)```", raw, re.DOTALL)
             if json_match:
@@ -1081,8 +1089,12 @@ class GeminiProvider(HighlightProvider):
                 end = float(item.get("timestamp_end", item.get("end", 0.0)))
                 layout = str(item.get("layout", self._fallback_layout)).strip()
                 score = int(item.get("final_score", item.get("virality_score", 85)))
-                reason = str(item.get("reasoning", item.get("reason", "Highly engaging interaction segment.")))
-                
+                reason = str(
+                    item.get(
+                        "reasoning", item.get("reason", "Highly engaging interaction segment.")
+                    )
+                )
+
                 # New keys
                 hook = int(item.get("hook_score", 0))
                 curiosity = int(item.get("curiosity_gap", item.get("curiosity_level", 0)))
