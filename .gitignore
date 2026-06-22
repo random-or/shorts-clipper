@@ -34,3 +34,4 @@ scratch/
 .coverage
 htmlcov/
 coverage.xml
+audit_report.md
