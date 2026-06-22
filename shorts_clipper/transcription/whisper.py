@@ -130,33 +130,36 @@ _global_model = None
 _model_lock = threading.Lock()
 _transcription_semaphore = threading.Semaphore(1)
 
+
 def get_whisper_model():
     """Load the Whisper model (singleton pattern)."""
     global _global_model
     if _global_model is not None:
         log.info("[WHISPER] reusing existing model")
         return _global_model
-        
+
     with _model_lock:
         if _global_model is not None:
             log.info("[WHISPER] reusing existing model")
             return _global_model
-            
+
         from faster_whisper import WhisperModel
 
         from shorts_clipper.core.settings import Settings
-        
+
         settings = Settings.from_env()
         t_start = time.time()
-        log.info("Loading Whisper model '%s' on %s...", settings.whisper_model, settings.whisper_device)
-        
+        log.info(
+            "Loading Whisper model '%s' on %s...", settings.whisper_model, settings.whisper_device
+        )
+
         # Explicitly configure cpu_threads=2 to match our 2-core machine size.
         # This prevents runaway CPU oversubscription and OpenMP thread contention.
         _global_model = WhisperModel(
             settings.whisper_model,
             device=settings.whisper_device,
             compute_type=settings.whisper_compute_type,
-            cpu_threads=2
+            cpu_threads=2,
         )
         t_end = time.time()
         log.info(f"[WHISPER] model_load_time: {t_end - t_start:.1f}s")
@@ -201,7 +204,7 @@ def transcribe_clip(
         # Convert generator to list to force execution
         raw_segments = list(raw_segments)
         t_inference_end = time.time()
-    
+
     log.info("[WHISPER] transcription complete")
     log.info(f"[WHISPER] inference_time: {t_inference_end - t_inference_start:.1f}s")
 

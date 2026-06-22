@@ -233,20 +233,24 @@ def run(
                     meta["tags"] = ai_meta["tags"]
                     log.info("🧠 Generated metadata — Title: %s", meta["title"])
                 except Exception as meta_err:
-                    log.warning("❌ GEMINI METADATA GENERATION FAILED for clip %d: %s. Using Local Fallback Generator.", idx, meta_err)
+                    log.warning(
+                        "❌ GEMINI METADATA GENERATION FAILED for clip %d: %s. Using Local Fallback Generator.",
+                        idx,
+                        meta_err,
+                    )
                     from shorts_clipper.core.cache import get_cached
                     from shorts_clipper.metadata.fallback import generate_fallback_metadata
-                    
+
                     vid_for_meta = url.split("watch?v=")[-1] if "watch?v=" in url else url
                     c_data = get_cached(vid_for_meta) or {}
                     s_title = c_data.get("title", "")
                     s_channel = c_data.get("uploader", "") or c_data.get("channel_title", "")
-                    
+
                     fallback_meta = generate_fallback_metadata(
                         segments=precision_segments,
                         source_title=s_title,
                         source_channel=s_channel,
-                        niche="tech" # Settings object might not have niche directly, safe default
+                        niche="tech",  # Settings object might not have niche directly, safe default
                     )
                     meta["title"] = fallback_meta["title"]
                     meta["description"] = fallback_meta["description"]

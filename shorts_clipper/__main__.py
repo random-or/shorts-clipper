@@ -109,7 +109,9 @@ def _cmd_web(args: argparse.Namespace, settings: Settings) -> int:
 
 def _cmd_repair_metadata(args: argparse.Namespace, settings: Settings) -> int:
     from shorts_clipper.cli.repair_metadata import run_repair
+
     return run_repair()
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -222,7 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ── repair-metadata ───────────────────────────────────────────────────────────────
     sub.add_parser("repair-metadata", help="Repair clips missing metadata.")
-    
+
     return parser
 
 

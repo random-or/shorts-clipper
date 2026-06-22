@@ -139,6 +139,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"success": False, "error": str(exc)},
     )
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(

@@ -95,34 +95,61 @@ class RuleBasedHighlightScorer:
 
 class LocalTranscriptScorer:
     """Lightweight scorer that operates directly on subtitle text. Returns 0-100 score and best segment."""
-    
+
     def __init__(self):
         self.signals = [
-            "?", "disagree", "shock", "i was wrong", "i couldn't believe", 
-            "fail", "success", "controvers", "never", "always", "money", 
-            "$", "percent", "%", "million", "billion", "secret", "truth"
+            "?",
+            "disagree",
+            "shock",
+            "i was wrong",
+            "i couldn't believe",
+            "fail",
+            "success",
+            "controvers",
+            "never",
+            "always",
+            "money",
+            "$",
+            "percent",
+            "%",
+            "million",
+            "billion",
+            "secret",
+            "truth",
         ]
         self.penalties = [
-            "sponsor", "nordvpn", "skillshare", "welcome back", "hey guys", 
-            "subscribe", "like and subscribe", "link in description",
-            "outro", "music", "♪", "lyrics", "thanks for watching"
+            "sponsor",
+            "nordvpn",
+            "skillshare",
+            "welcome back",
+            "hey guys",
+            "subscribe",
+            "like and subscribe",
+            "link in description",
+            "outro",
+            "music",
+            "♪",
+            "lyrics",
+            "thanks for watching",
         ]
 
-    def score_transcript(self, segments: list[TranscriptSegment]) -> tuple[float, list[TranscriptSegment]]:
+    def score_transcript(
+        self, segments: list[TranscriptSegment]
+    ) -> tuple[float, list[TranscriptSegment]]:
         """Scores entire transcript, returns (0-100 score, list of segments for best window)"""
         if not segments:
             return 0.0, []
 
         best_window = []
         best_window_score = -1.0
-        
+
         # We will scan through windows of ~60 seconds to find the best local clip
         window_duration = 60.0
-        
+
         for i, start_seg in enumerate(segments):
             window_segs = []
             current_dur = 0.0
-            
+
             curiosity = 0.0
             conflict = 0.0
             surprise = 0.0
@@ -130,14 +157,14 @@ class LocalTranscriptScorer:
             stakes = 0.0
             specificity = 0.0
             penalty = 0.0
-            
+
             for j in range(i, len(segments)):
                 seg = segments[j]
                 window_segs.append(seg)
                 current_dur = seg.end - start_seg.start
-                
+
                 text = seg.text.lower()
-                
+
                 # Signals
                 if "?" in text:
                     curiosity += 5.0
@@ -149,25 +176,41 @@ class LocalTranscriptScorer:
                     emotion += 5.0
                 if any(w in text for w in ["money", "$", "fail", "success", "life"]):
                     stakes += 5.0
-                if any(w in text for w in ["%", "percent", "million", "billion", "1", "2", "3", "4", "5", "6", "7", "8", "9"]):
+                if any(
+                    w in text
+                    for w in [
+                        "%",
+                        "percent",
+                        "million",
+                        "billion",
+                        "1",
+                        "2",
+                        "3",
+                        "4",
+                        "5",
+                        "6",
+                        "7",
+                        "8",
+                        "9",
+                    ]
+                ):
                     specificity += 5.0
-                
+
                 # Penalties
                 if any(w in text for w in self.penalties):
                     penalty += 15.0
-                    
+
                 if current_dur >= window_duration:
                     break
-                    
+
             # Combine into 0-100 score for this window
             base_score = curiosity + conflict + surprise + emotion + stakes + specificity
             window_score = max(0.0, min(100.0, base_score - penalty))
-            
+
             if window_score > best_window_score and 30.0 <= current_dur <= 75.0:
                 best_window_score = window_score
                 best_window = window_segs
-                
+
         # Overall transcript score can be the max window score found
         final_score = max(0.0, min(100.0, best_window_score))
         return final_score, best_window
-

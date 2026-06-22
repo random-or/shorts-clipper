@@ -8,6 +8,7 @@ from shorts_clipper.pipeline.runner import run
 
 MockSegment = namedtuple("MockSegment", ["start", "end", "text"])
 
+
 class FallbackMetadataTests(unittest.TestCase):
     @patch("shorts_clipper.pipeline.runner.download_clip")
     @patch("shorts_clipper.pipeline.runner.process_to_vertical")
@@ -17,61 +18,73 @@ class FallbackMetadataTests(unittest.TestCase):
     @patch("shorts_clipper.pipeline.runner.GeminiProvider")
     @patch("shorts_clipper.core.cache.get_cached")
     @patch("shorts_clipper.pipeline.runner.fetch_subtitles")
-    def test_gemini_fallback_success(self, mock_fetch_subs, mock_get_cached, mock_gemini_cls, mock_upload, mock_transcribe, mock_burn, mock_process, mock_download):
+    def test_gemini_fallback_success(
+        self,
+        mock_fetch_subs,
+        mock_get_cached,
+        mock_gemini_cls,
+        mock_upload,
+        mock_transcribe,
+        mock_burn,
+        mock_process,
+        mock_download,
+    ):
         # Setup mock cache
         mock_get_cached.return_value = {
             "title": "A Great Source Video",
-            "channel_title": "Source Channel"
+            "channel_title": "Source Channel",
         }
-        
+
         # Setup mock transcript
         segments = [
             MockSegment(0, 5, "What an incredible day to test things!"),
             MockSegment(5, 10, "I couldn't believe it when the money failed."),
-            MockSegment(10, 15, "Stop doing this wrong right now.")
+            MockSegment(10, 15, "Stop doing this wrong right now."),
         ]
         mock_transcribe.return_value = segments
-        
+
         # Scenario 1: Gemini Provider throws Exception (429 or Timeout)
         mock_provider = MagicMock()
         # For Pass 1 highlight selection
         from shorts_clipper.core.models import ClipWindow
+
         mock_provider.select_multiple_clips.return_value = [(ClipWindow(0, 15), "crop_center")]
-        
+
         # For Pass 2 metadata generation
         mock_provider.generate_clip_metadata.side_effect = Exception("429 RESOURCE_EXHAUSTED")
         mock_gemini_cls.return_value = mock_provider
-        
+
         settings = Settings.from_env()
-        
+
         # Mock upload success
         mock_upload.return_value = "fake_yt_id"
-        
+
         # Run pipeline
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}):
             output = run(
                 url="https://www.youtube.com/watch?v=fallback123",
                 settings=settings,
                 count=1,
-                upload=True
+                upload=True,
             )
-            
+
         # Verify Fallback was used
         json_path = output.with_suffix(".json")
         self.assertTrue(json_path.exists())
-        
+
         with open(json_path, encoding="utf-8") as f:
             meta = json.load(f)
-            
+
         self.assertIsNotNone(meta["title"])
         self.assertIsNotNone(meta["description"])
         self.assertTrue(len(meta["tags"]) > 0)
         self.assertEqual(meta["publish_status"], "success")
         self.assertEqual(meta["youtube_video_id"], "fake_yt_id")
-        
+
         print("Generated Title:", meta["title"])
         print("Generated Description:", meta["description"])
         print("Generated Tags:", meta["tags"])
-        
+
+
 if __name__ == "__main__":
     unittest.main()
