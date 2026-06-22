@@ -23,3 +23,14 @@ scratch/
 *.sqlite
 *.mkv
 *.pdf
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Testing and Coverage
+.coverage
+htmlcov/
+coverage.xml
