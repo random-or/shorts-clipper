@@ -801,6 +801,8 @@
             font-size: 12px;
             line-height: 1.6;
             white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: anywhere;
             display: flex;
             flex-direction: column;
             gap: 0.35rem;
@@ -2223,6 +2225,11 @@
                         }
                         
                         term.appendChild(row);
+                        
+                        // Prevent infinite DOM growth and memory leak UI lag
+                        if (term.childElementCount > 400) {
+                            term.removeChild(term.firstChild);
+                        }
                         
                         // Track upload statistics in real-time
                         handleUploadProgress(line);
