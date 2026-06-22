@@ -1079,9 +1079,43 @@ class GeminiProvider(HighlightProvider):
             if json_match:
                 json_str = json_match.group(1).strip()
 
-            items = json.loads(json_str)
-            if not isinstance(items, list):
-                return []
+            try:
+                items = json.loads(json_str)
+                if not isinstance(items, list):
+                    items = []
+            except json.JSONDecodeError as exc:
+                log.info("[GEMINI] JSON parse failed, attempting timestamp extraction")
+                start, end = None, None
+                
+                start_match = re.search(r'"start":\s*(\d+\.?\d*)', raw)
+                end_match = re.search(r'"end":\s*(\d+\.?\d*)', raw)
+                if start_match and end_match:
+                    start = float(start_match.group(1))
+                    end = float(end_match.group(1))
+                else:
+                    start_match = re.search(r'"timestamp_start":\s*(\d+\.?\d*)', raw)
+                    end_match = re.search(r'"timestamp_end":\s*(\d+\.?\d*)', raw)
+                    if start_match and end_match:
+                        start = float(start_match.group(1))
+                        end = float(end_match.group(1))
+                    else:
+                        range_match = re.search(r'(\d+\.?\d*)\s*(?:→|-|to)\s*(\d+\.?\d*)', raw)
+                        if range_match:
+                            start = float(range_match.group(1))
+                            end = float(range_match.group(2))
+                            
+                if start is not None and end is not None and start < end:
+                    log.info("[GEMINI] Extracted timestamps: start=%s end=%s (saved second call)", start, end)
+                    items = [{
+                        "timestamp_start": start,
+                        "timestamp_end": end,
+                        "layout": self._fallback_layout,
+                        "final_score": 85,
+                        "reasoning": "Extracted via regex fallback"
+                    }]
+                else:
+                    log.info("[GEMINI] Extraction failed, falling back to second call")
+                    raise exc
 
             sanitized = []
             for item in items[:count]:

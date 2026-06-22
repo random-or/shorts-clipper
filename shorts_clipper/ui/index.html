@@ -3446,10 +3446,13 @@
             try {
                 const res = await fetch('/api/clips/' + encodeURIComponent(clipName) + '/publish?privacy=' + privacy, { method: 'POST' });
                 const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.detail || data.message || "Upload failed");
+                }
                 showToast(data.message, "success");
                 // Refresh library to reveal "UPLOADING" badge immediately
                 setTimeout(refreshLibrary, 500);
-            } catch(e) { showToast('Error publishing clip: ' + e, 'error'); }
+            } catch(e) { showToast('Error publishing clip: ' + (e.message || e), 'error'); }
         }
 
         async function deleteClip(clipName) {

@@ -8,7 +8,8 @@ import os
 import re
 import subprocess
 import tempfile
-from functools import lru_cache
+import threading
+import time
 from pathlib import Path
 
 from shorts_clipper.core.models import TranscriptSegment, TranscriptWord
@@ -125,34 +126,54 @@ def _transcribe_with_gemini(
         return None
 
 
-@lru_cache(maxsize=1)
-def _get_model(model_size: str, device: str, compute_type: str):
-    """Load and cache the Whisper model (loaded once, reused across calls)."""
-    from faster_whisper import WhisperModel  # lazy import — heavy dependency
+_global_model = None
+_model_lock = threading.Lock()
+_transcription_semaphore = threading.Semaphore(1)
 
-    log.info("Loading Whisper model '%s' on %s...", model_size, device)
-    return WhisperModel(model_size, device=device, compute_type=compute_type)
+def get_whisper_model():
+    """Load the Whisper model (singleton pattern)."""
+    global _global_model
+    if _global_model is not None:
+        log.info("[WHISPER] reusing existing model")
+        return _global_model
+        
+    with _model_lock:
+        if _global_model is not None:
+            log.info("[WHISPER] reusing existing model")
+            return _global_model
+            
+        from faster_whisper import WhisperModel
+
+        from shorts_clipper.core.settings import Settings
+        
+        settings = Settings.from_env()
+        t_start = time.time()
+        log.info("Loading Whisper model '%s' on %s...", settings.whisper_model, settings.whisper_device)
+        
+        # Explicitly configure cpu_threads=2 to match our 2-core machine size.
+        # This prevents runaway CPU oversubscription and OpenMP thread contention.
+        _global_model = WhisperModel(
+            settings.whisper_model,
+            device=settings.whisper_device,
+            compute_type=settings.whisper_compute_type,
+            cpu_threads=2
+        )
+        t_end = time.time()
+        log.info(f"[WHISPER] model_load_time: {t_end - t_start:.1f}s")
+        log.info("[WHISPER] global model initialized")
+        return _global_model
 
 
 def transcribe_clip(
     video_path: str | Path,
     *,
-    model_size: str = "tiny.en",
-    device: str = "cpu",
-    compute_type: str = "int8",
     beam_size: int = 5,
 ) -> list[TranscriptSegment]:
     """
     Transcribe a video/audio file locally with faster-whisper.
 
-    The model is cached after the first load so repeated calls
-    within the same process pay no cold-start penalty.
-
     Args:
         video_path: Path to the video or audio file.
-        model_size: Whisper model variant (tiny, base, small, medium, large-v3).
-        device: 'cpu' or 'cuda'.
-        compute_type: Quantisation type (int8, float16, float32).
         beam_size: Beam search width (higher = more accurate, slower).
 
     Returns:
@@ -165,14 +186,24 @@ def transcribe_clip(
     if gemini_segments is not None:
         return gemini_segments
 
-    log.info("🎙 Transcribing %s with Whisper (%s)...", video_path.name, model_size)
+    log.info("🎙 Transcribing %s with Whisper...", video_path.name)
 
-    model = _get_model(model_size, device, compute_type)
-    raw_segments, info = model.transcribe(
-        str(video_path),
-        beam_size=beam_size,
-        word_timestamps=True,
-    )
+    log.info("[WHISPER] waiting for transcription slot")
+    with _transcription_semaphore:
+        log.info("[WHISPER] transcription slot acquired")
+        model = get_whisper_model()
+        t_inference_start = time.time()
+        raw_segments, info = model.transcribe(
+            str(video_path),
+            beam_size=beam_size,
+            word_timestamps=True,
+        )
+        # Convert generator to list to force execution
+        raw_segments = list(raw_segments)
+        t_inference_end = time.time()
+    
+    log.info("[WHISPER] transcription complete")
+    log.info(f"[WHISPER] inference_time: {t_inference_end - t_inference_start:.1f}s")
 
     if info.language != "en":
         log.warning(

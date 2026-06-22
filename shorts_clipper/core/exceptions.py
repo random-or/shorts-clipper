@@ -15,3 +15,23 @@ class ProviderError(ShortsClipperError):
 
 class MediaProcessingError(ShortsClipperError):
     """Raised when ffmpeg/movie processing fails."""
+
+
+class SUBTITLE_NOT_AVAILABLE(ShortsClipperError):
+    """video has no English subtitles"""
+
+
+class YOUTUBE_RATE_LIMIT_429(ShortsClipperError):
+    """yt-dlp blocked, infrastructure issue"""
+
+
+class GEMINI_UNAVAILABLE_503(ShortsClipperError):
+    """Gemini overloaded, infrastructure issue"""
+
+
+class WHISPER_TIMEOUT(ShortsClipperError):
+    """transcription took too long"""
+
+
+class TRANSCRIPT_EMPTY(ShortsClipperError):
+    """transcription returned nothing"""

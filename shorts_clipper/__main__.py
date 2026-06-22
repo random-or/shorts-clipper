@@ -107,6 +107,10 @@ def _cmd_web(args: argparse.Namespace, settings: Settings) -> int:
         return 1
 
 
+def _cmd_repair_metadata(args: argparse.Namespace, settings: Settings) -> int:
+    from shorts_clipper.cli.repair_metadata import run_repair
+    return run_repair()
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m shorts_clipper",
@@ -216,6 +220,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Port to listen on (default: 8000)",
     )
 
+    # ── repair-metadata ───────────────────────────────────────────────────────────────
+    sub.add_parser("repair-metadata", help="Repair clips missing metadata.")
+    
     return parser
 
 
@@ -231,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
         "autopilot": _cmd_autopilot,
         "scout": _cmd_scout,
         "web": _cmd_web,
+        "repair-metadata": _cmd_repair_metadata,
     }
     return dispatch[args.command](args, settings)
 

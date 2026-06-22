@@ -117,12 +117,7 @@ def run(
                     )
                     audio_path = work_path / "rough_audio.m4a"
                     download_audio(url, audio_path, start_time=0.0, end_time=300.0)
-                    rough_segments = transcribe_clip(
-                        audio_path,
-                        model_size="tiny.en",
-                        device=settings.whisper_device,
-                        compute_type=settings.whisper_compute_type,
-                    )
+                    rough_segments = transcribe_clip(audio_path)
 
                 provider = GeminiProvider(api_key=settings.gemini_api_key)
                 try:
@@ -185,12 +180,7 @@ def run(
                 )
                 if progress_callback:
                     progress_callback(50)
-                precision_segments = transcribe_clip(
-                    micro_path,
-                    model_size=settings.whisper_model,
-                    device=settings.whisper_device,
-                    compute_type=settings.whisper_compute_type,
-                )
+                precision_segments = transcribe_clip(micro_path)
 
                 # ── Step 3: Vertical crop ─────────────────────────────────────
                 log.info("\n--- VERTICAL CROP ---")
@@ -243,10 +233,26 @@ def run(
                     meta["tags"] = ai_meta["tags"]
                     log.info("🧠 Generated metadata — Title: %s", meta["title"])
                 except Exception as meta_err:
-                    log.error("❌ METADATA GENERATION FAILED for clip %d: %s", idx, meta_err)
-                    meta["title"] = None
-                    meta["description"] = None
-                    meta["publish_error"] = f"Metadata generation failed: {meta_err}"
+                    log.warning("❌ GEMINI METADATA GENERATION FAILED for clip %d: %s. Using Local Fallback Generator.", idx, meta_err)
+                    from shorts_clipper.core.cache import get_cached
+                    from shorts_clipper.metadata.fallback import generate_fallback_metadata
+                    
+                    vid_for_meta = url.split("watch?v=")[-1] if "watch?v=" in url else url
+                    c_data = get_cached(vid_for_meta) or {}
+                    s_title = c_data.get("title", "")
+                    s_channel = c_data.get("uploader", "") or c_data.get("channel_title", "")
+                    
+                    fallback_meta = generate_fallback_metadata(
+                        segments=precision_segments,
+                        source_title=s_title,
+                        source_channel=s_channel,
+                        niche="tech" # Settings object might not have niche directly, safe default
+                    )
+                    meta["title"] = fallback_meta["title"]
+                    meta["description"] = fallback_meta["description"]
+                    meta["tags"] = fallback_meta["tags"]
+                    meta["publish_error"] = None
+                    log.info("[FALLBACK] title generated: %s", meta["title"])
 
                 # Ensure segments are preserved in the metadata sidecar
                 meta["segments"] = [
@@ -371,6 +377,7 @@ def run_autopilot(
         max_age_days=age_days,
         job_id=job_id,
     )
+    log.info("RUNNER RECEIVED: %s", repr(url))
     if not url:
         log.error("Scout returned no suitable video. Aborting.")
         return None

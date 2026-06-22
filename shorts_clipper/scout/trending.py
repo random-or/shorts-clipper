@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import multiprocessing as mp
 import os
 import random
 import subprocess
@@ -107,6 +106,7 @@ _AGE_RELAXATION_ALLOWED = str(os.getenv("SCOUT_ALLOW_AGE_RELAXATION", "true")).l
 _failure_lock = threading.Lock()
 _consecutive_yt_failures = 0
 _yt_paused_until: float = 0.0
+_quarantine_queue: dict[str, dict] = {}
 
 
 def _yt_circuit_breaker_check() -> bool:
@@ -398,26 +398,7 @@ def _discover_via_ytdlp(query: str, max_age_days: int, metrics: ScoutMetrics) ->
         return []
 
 
-def _transcribe_mp_worker(
-    vid: str, audio_path: str, model_size: str, device: str, compute_type: str, q: mp.Queue
-) -> None:
-    try:
-        from shorts_clipper.downloader.yt_dlp import download_audio
-        from shorts_clipper.transcription.whisper import transcribe_clip
-
-        download_audio(
-            f"https://www.youtube.com/watch?v={vid}", audio_path, start_time=0.0, end_time=90.0
-        )
-        segments = transcribe_clip(
-            audio_path,
-            model_size=model_size,
-            device=device,
-            compute_type=compute_type,
-        )
-        q.put(segments)
-    except Exception as e:
-        log.error("Whisper fallback transcription failed for candidate %s: %s", vid, e)
-        q.put([])
+# removed _transcribe_mp_worker
 
 
 def get_trending_link(
@@ -439,6 +420,9 @@ def get_trending_link(
     api_key = os.getenv("YOUTUBE_API_KEY", "")
     client = YouTubeAPIClient(api_key) if api_key else None
     now = datetime.now(UTC)
+
+    settings = Settings.from_env()
+
 
     # Load channel history for feedback ranking bonus (Bug #1 Fix: filter by niche)
     channel_history = {}
@@ -528,6 +512,23 @@ def get_trending_link(
                 if not vid or get_cached(vid):
                     continue
 
+                title_lower = video.get("title", "").lower()
+                
+                # ── PHASE 3: HARD FILTERS ─────────────────────────────
+                if niche and niche.lower() == "ai":
+                    music_terms = ["music video", "official music video", "lyrics", "remix", "song", "audio", "live performance"]
+                    if any(term in title_lower for term in music_terms):
+                        log.info("Rejected video %s: music content in AI niche", vid)
+                        continue
+                        
+                # Reject non-English titles unless explicitly allowed
+                strict_ascii = str(os.getenv("SCOUT_STRICT_ASCII", "true")).lower() == "true"
+                if strict_ascii and any(ord(c) > 127 for c in title_lower if c.isalpha()):
+                    log.info("Rejected video %s: non-English title", vid)
+                    metrics.rejected_low_quality += 1
+                    continue
+                # ──────────────────────────────────────────────────────
+
                 if video.get("_source") == "youtube_api":
                     try:
                         pub = datetime.fromisoformat(video["published_at"].replace("Z", "+00:00"))
@@ -565,91 +566,72 @@ def get_trending_link(
                 v["_score"] = compute_scout_v2_intermediate_score(v, now, channel_history)
             survivors.sort(key=lambda x: x["_score"], reverse=True)
 
-            # Phase 3: Finalist pool expansion (dynamic, using 15 candidates)
+            # ══════════════════════════════════════════════════════════════
+            # STAGE A: Cheap metadata-only ranking (no transcription)
+            # Score ALL survivors using only: views, velocity, age,
+            # engagement, virality score, channel history, metadata.
+            # Keep only top N candidates for expensive evaluation.
+            # ══════════════════════════════════════════════════════════════
             finalist_pool_limit = int(os.getenv("SCOUT_FINALIST_LIMIT", "15"))
-            finalists = survivors[:finalist_pool_limit]
+            all_finalists = survivors[:finalist_pool_limit]
 
-            if finalists:
-                log.info("\n========== SCOUT V2 FINALISTS ==========")
+            if all_finalists:
+                log.info("\n========== SCOUT STAGE A: METADATA RANKING ==========")
                 log.info(f"{'Rank':<5} | {'Video ID':<11} | {'Views':<10} | {'Score':<8} | Title")
-                for idx, v in enumerate(finalists, 1):
+                for idx, v in enumerate(all_finalists, 1):
                     log.info(
                         f"{idx:<5} | {v.get('id', ''):<11} | {v.get('view_count', 0):<10} | {v.get('_score', 0):<8} | {v.get('title', '')[:50]}"
                     )
-                log.info("========================================")
+                log.info("=====================================================")
 
-            # Stages 5, 6, 7: Self-Healing Pre-Evaluation Loop
+            # Stage A gate: keep only top 3 for expensive evaluation
+            stage_b_limit = int(os.getenv("SCOUT_STAGE_B_LIMIT", "3"))
+            finalists = all_finalists[:stage_b_limit]
+
+            if len(all_finalists) > stage_b_limit:
+                log.info(
+                    "[SCOUT] Stage A complete: %d candidates ranked, top %d promoted to Stage B. "
+                    "%d candidates eliminated without transcription.",
+                    len(all_finalists),
+                    len(finalists),
+                    len(all_finalists) - len(finalists),
+                )
+
+            # ══════════════════════════════════════════════════════════════
+            # STAGE B: Expensive evaluation (subtitle fetch + Gemini)
+            # Only for the top N candidates from Stage A.
+            # NO Whisper. NO audio download. Subtitle-first filter.
+            # Local Transcript Scorer selects the single best finalist BEFORE Gemini.
+            # ══════════════════════════════════════════════════════════════
             winner = None
-            eval_budget = int(os.getenv("SCOUT_EVALUATION_BUDGET", "5"))
             evaluated_count = 0
-            passing_candidates = []
-            gemini_unavailable = False
+            winning_threshold = float(os.getenv("SCOUT_WINNING_THRESHOLD", "75"))
 
             settings = Settings.from_env()
 
             import tempfile
             from pathlib import Path
 
+            from shorts_clipper.highlight_detection.scoring import LocalTranscriptScorer
+
             with tempfile.TemporaryDirectory(prefix="scout_eval_") as temp_dir:
                 temp_path = Path(temp_dir)
 
-                # Pre-filter: remove candidates with zero engagement before expensive evaluation
-                pre_filter_count = len(finalists)
-                finalists = [
-                    f for f in finalists if f.get("view_count", 0) > 0 or f.get("like_count", 0) > 0
-                ] or finalists  # Keep all if filter would remove everything
-                if len(finalists) < pre_filter_count:
-                    log.info(
-                        "Pre-filter: Removed %d candidates with zero engagement",
-                        pre_filter_count - len(finalists),
-                    )
+                candidates_to_eval = finalists.copy()
+                local_scored_candidates = []
 
-                # Pre-filter: skip candidates below configurable score threshold
-                min_eval_score = float(os.getenv("SCOUT_MIN_EVAL_SCORE", "0"))
-                if min_eval_score > 0 and len(finalists) > eval_budget:
-                    pre_filtered = [f for f in finalists if f.get("_score", 0) >= min_eval_score]
-                    if len(pre_filtered) >= eval_budget:
-                        skipped = len(finalists) - len(pre_filtered)
-                        if skipped > 0:
-                            log.info(
-                                "Pre-filter: Skipped %d candidates below score threshold %.1f",
-                                skipped,
-                                min_eval_score,
-                            )
-                        finalists = pre_filtered
-
-                for idx, v in enumerate(finalists, 1):
-                    if _is_cancelled(job_id):
-                        return None
-
-                    if evaluated_count >= eval_budget:
-                        log.warning(
-                            "Scout evaluation budget exhausted (%d). Stopping loop.", eval_budget
-                        )
-                        break
-
+                # PHASE 1 & 2: Evaluate top 3 using LocalTranscriptScorer
+                for v in candidates_to_eval:
                     vid = v.get("id")
                     candidate_start_time = time.time()
-                    timing = {
-                        "subtitle_fetch_s": 0.0,
-                        "transcript_s": 0.0,
-                        "gemini_s": 0.0,
-                        "total_s": 0.0,
-                    }
-                    log.info(
-                        "Evaluating candidate %d/%d (Video ID: %s): %s",
-                        idx,
-                        len(finalists),
-                        vid,
-                        v.get("title"),
-                    )
+                    timing = {"subtitle_fetch_s": 0.0, "transcript_s": 0.0, "gemini_s": 0.0, "total_s": 0.0}
+                    log.info("Fetching subtitles for candidate (Video ID: %s): %s", vid, v.get("title"))
 
-                    # 1. Obtain transcript
+                    # ── PHASE 4: SUBTITLE-FIRST FILTER ──────────────────
                     has_native_subs = False
                     segments = []
                     transcript_source = "none"
 
-                    # Check cache first
                     cached_data = get_cached(vid)
                     if cached_data and "transcript_segments" in cached_data:
                         segments_data = cached_data["transcript_segments"]
@@ -669,60 +651,32 @@ def get_trending_link(
                         has_native_subs = cached_data.get("has_native_subs", True)
                     else:
                         metrics.cache_misses += 1
-
-                        # Try fetch subtitles
                         t_sub_start = time.time()
-                        segments = fetch_subtitles(
-                            f"https://www.youtube.com/watch?v={vid}", temp_path
+                        from shorts_clipper.core.exceptions import (
+                            SUBTITLE_NOT_AVAILABLE,
+                            YOUTUBE_RATE_LIMIT_429,
                         )
-                        if segments:
+                        from shorts_clipper.scout.subtitle_cache import get_status, set_status
+                        
+                        cache_status = get_status(vid)
+                        if cache_status == "RATE_LIMITED":
+                            log.warning("[429 CACHED] %s queued, score=%.2f, retry in 60s", vid, v.get("_score", 0))
+                            continue
+
+                        try:
+                            segments = fetch_subtitles(f"https://www.youtube.com/watch?v={vid}", temp_path)
+                            set_status(vid, "AVAILABLE")
                             has_native_subs = True
                             transcript_source = "native"
-                        else:
-                            # Whisper fallback
-                            log.warning(
-                                "No native subtitles for %s. Downloading 90s audio for Whisper fallback...",
-                                vid,
-                            )
-                            audio_path = str(temp_path / f"eval_audio_{vid}.m4a")
-                            max_transcription_s = int(
-                                os.getenv("SCOUT_MAX_TRANSCRIPTION_SECONDS", "120")
-                            )
-
-                            ctx = mp.get_context("spawn")
-                            q = ctx.Queue()
-                            p = ctx.Process(
-                                target=_transcribe_mp_worker,
-                                args=(
-                                    vid,
-                                    audio_path,
-                                    settings.whisper_model,
-                                    settings.whisper_device,
-                                    settings.whisper_compute_type,
-                                    q,
-                                ),
-                            )
-                            p.start()
-                            p.join(timeout=max_transcription_s)
-
-                            if p.is_alive():
-                                log.error(
-                                    "⏱ Transcription timeout (%ds) for candidate %s. Killing process...",
-                                    max_transcription_s,
-                                    vid,
-                                )
-                                p.terminate()
-                                p.join()
-                                metrics.rejected_timeout += 1
-                                segments = []
-                            else:
-                                try:
-                                    segments = q.get_nowait()
-                                except Exception:
-                                    segments = []
-
-                            if segments:
-                                transcript_source = "whisper"
+                        except YOUTUBE_RATE_LIMIT_429:
+                            set_status(vid, "RATE_LIMITED")
+                            log.warning("[429 QUARANTINE] %s queued, score=%.2f, retry in 60s", vid, v.get("_score", 0))
+                            continue
+                        except SUBTITLE_NOT_AVAILABLE:
+                            set_status(vid, "MISSING")
+                            log.info("[SCOUT] skipped: no subtitles for %s — TRANSCRIPT_UNAVAILABLE", vid)
+                            metrics.rejected_no_subtitles += 1
+                            continue
                         timing["subtitle_fetch_s"] = round(time.time() - t_sub_start, 2)
 
                         if segments:
@@ -733,15 +687,7 @@ def get_trending_link(
                                     "start": s.start,
                                     "end": s.end,
                                     "text": s.text,
-                                    "words": [
-                                        {
-                                            "start": w.start,
-                                            "end": w.end,
-                                            "word": w.word,
-                                            "probability": w.probability,
-                                        }
-                                        for w in s.words
-                                    ],
+                                    "words": [{"start": w.start, "end": w.end, "word": w.word, "probability": w.probability} for w in s.words],
                                     "speaker": s.speaker,
                                 }
                                 for s in segments
@@ -753,74 +699,87 @@ def get_trending_link(
                         metrics.rejected_low_quality += 1
                         continue
 
-                    # 2. Analyze transcript using activated RuleBasedHighlightScorer
-                    scorer = RuleBasedHighlightScorer()
-                    max_rule_hook = 0.0
-                    max_rule_emotion = 0.0
-                    max_rule_virality = 0.0
-                    total_caption_density = 0.0
+                    # Score transcript locally
+                    evaluated_count += 1
+                    local_scorer = LocalTranscriptScorer()
+                    local_score, best_local_window = local_scorer.score_transcript(segments)
+                    log.info("Candidate %s local transcript score: %.2f", vid, local_score)
 
+                    local_scored_candidates.append({
+                        "video": v,
+                        "local_score": local_score,
+                        "segments": segments,
+                        "transcript_source": transcript_source,
+                        "has_native_subs": has_native_subs,
+                        "best_local_window": best_local_window,
+                        "timing": timing,
+                        "candidate_start_time": candidate_start_time
+                    })
+
+                # PHASE 2: Gemini ONLY on highest scoring local candidate
+                passing_candidates = []
+                if local_scored_candidates:
+                    local_scored_candidates.sort(key=lambda x: x["local_score"], reverse=True)
+                    top_candidate = local_scored_candidates[0]
+                    
+                    v = top_candidate["video"]
+                    vid = v.get("id")
+                    segments = top_candidate["segments"]
+                    local_score = top_candidate["local_score"]
+                    best_local_window = top_candidate["best_local_window"]
+                    timing = top_candidate["timing"]
+                    candidate_start_time = top_candidate["candidate_start_time"]
+                    transcript_source = top_candidate["transcript_source"]
+                    has_native_subs = top_candidate["has_native_subs"]
+                    
+                    log.info("\n========== FINALIST SELECTED ==========")
+                    log.info("Video %s selected as finalist with Local Score: %.2f", vid, local_score)
+                    log.info("Calling Gemini ONCE for timestamp extraction...")
+                    
+                    t_gemini_start = time.time()
+                    highlights = []
+                    provider = GeminiProvider(api_key=settings.gemini_api_key)
+                    gemini_failed = False
+                    try:
+                        highlights = provider.select_multiple_clips_detailed(segments, count=1)
+                    except Exception as gemini_err:
+                        log.warning("[SCOUT] Gemini unavailable or failed for %s: %s", vid, gemini_err)
+                        gemini_failed = True
+                        
+                    valid_highlights = [h for h in highlights if h.get("virality_score", 0) >= 85]
+                    timing["gemini_s"] = round(time.time() - t_gemini_start, 2)
+
+                    # PHASE 4: FALLBACK MODE
+                    if not valid_highlights:
+                        if gemini_failed:
+                            log.warning("[FALLBACK] Local transcript scorer selected clip.")
+                            start_t = best_local_window[0].start if best_local_window else 0.0
+                            end_t = best_local_window[-1].end if best_local_window else 60.0
+                            if end_t - start_t < 15.0:
+                                end_t = start_t + 45.0
+                            
+                            valid_highlights = [{
+                                "start": start_t,
+                                "end": end_t,
+                                "layout": "crop_center",
+                                "virality_score": max(85, int(local_score)),
+                                "reason": "[FALLBACK] Selected by Local Transcript Scorer due to Gemini unavailability."
+                            }]
+                        else:
+                            log.info("Top candidate %s rejected: Gemini virality score too low", vid)
+                    # Calculate final components for reporting
+                    max_ai_score = max(h.get("virality_score", 0) for h in valid_highlights)
+                    ai_points = max_ai_score * 0.4
+
+                    scorer = RuleBasedHighlightScorer()
+                    max_rule_hook, max_rule_emotion, max_rule_virality, total_caption_density = 0.0, 0.0, 0.0, 0.0
                     for seg in segments:
                         seg_score = scorer.score_segment(seg)
                         max_rule_hook = max(max_rule_hook, seg_score.hook)
                         max_rule_emotion = max(max_rule_emotion, seg_score.emotion)
                         max_rule_virality = max(max_rule_virality, seg_score.virality)
                         total_caption_density += seg_score.caption_density
-
                     avg_caption_density = total_caption_density / len(segments) if segments else 0.0
-
-                    # 3. Generate & Score highlights via Gemini
-                    t_gemini_start = time.time()
-                    evaluated_count += 1
-                    highlights = []
-
-                    if not gemini_unavailable:
-                        provider = GeminiProvider(api_key=settings.gemini_api_key)
-                        log.info("Querying Gemini highlight selection for video %s...", vid)
-                        try:
-                            highlights = provider.select_multiple_clips_detailed(segments, count=1)
-                        except Exception as gemini_err:
-                            from shorts_clipper.providers.gemini import GeminiQuotaExhaustedError
-
-                            if isinstance(gemini_err, GeminiQuotaExhaustedError):
-                                log.error("GEMINI QUOTA EXHAUSTED\nSWITCHING TO FALLBACK SCORING")
-                                gemini_unavailable = True
-                                highlights = []
-                            else:
-                                log.warning(
-                                    "Gemini highlight selection failed for candidate %s: %s",
-                                    vid,
-                                    gemini_err,
-                                )
-                                highlights = []
-                    else:
-                        log.info("Gemini unavailable — using fallback scoring for video %s", vid)
-
-                    valid_highlights = [h for h in highlights if h.get("virality_score", 0) >= 85]
-
-                    if not valid_highlights:
-                        if gemini_unavailable:
-                            # Fallback: score using metadata + rule-based signals only (no AI)
-                            log.info("Fallback evaluation for %s (no AI highlights available)", vid)
-                            valid_highlights = [
-                                {
-                                    "start": 60.0,
-                                    "end": 95.0,
-                                    "layout": "crop_center",
-                                    "virality_score": 0,
-                                    "reason": "Fallback: Gemini unavailable, scored by metadata and rule signals only.",
-                                }
-                            ]
-                        else:
-                            log.warning("Candidate %s rejected: No highlights scored >= 85.", vid)
-                            metrics.rejected_low_quality += 1
-                            continue
-
-                    timing["gemini_s"] = round(time.time() - t_gemini_start, 2)
-
-                    # 4. Success! Candidate contains highlights. Compute final balanced score.
-                    max_ai_score = max(h.get("virality_score", 0) for h in valid_highlights)
-                    ai_points = max_ai_score * 0.4
 
                     rule_hook_points = min(10.0, max_rule_hook * 5.0)
                     rule_emotion_points = min(10.0, max_rule_emotion * 5.0)
@@ -829,96 +788,38 @@ def get_trending_link(
                     views = max(v.get("view_count", 0), 1)
                     likes = v.get("like_count", 0)
                     comments = v.get("comment_count", 0)
-
                     pub_str = v.get("published_at") or v.get("upload_date") or ""
                     try:
-                        if pub_str and len(pub_str) == 8 and pub_str.isdigit():
-                            pub_dt = datetime.strptime(pub_str, "%Y%m%d").replace(tzinfo=UTC)
-                        elif pub_str:
-                            pub_dt = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                        else:
-                            pub_dt = now
+                        pub_dt = datetime.strptime(pub_str, "%Y%m%d").replace(tzinfo=UTC) if len(pub_str) == 8 and pub_str.isdigit() else datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
                     except Exception:
                         pub_dt = now
 
-                    hours_live = max(
-                        (now.replace(tzinfo=UTC) - pub_dt.replace(tzinfo=UTC)).total_seconds()
-                        / 3600,
-                        1,
-                    )
+                    hours_live = max((now.replace(tzinfo=UTC) - pub_dt.replace(tzinfo=UTC)).total_seconds() / 3600, 1)
                     views_velocity = views / hours_live
-
                     velocity_points = min(10.0, math.log1p(views_velocity) * 1.0)
-
                     engagement_ratio = (likes + (comments * 2)) / views
                     engagement_points = min(10.0, engagement_ratio * 100)
 
-                    # Subtitle confidence penalty (3-tier)
-                    if transcript_source in ("native", "cache"):
-                        subtitle_quality = 10.0
-                    elif transcript_source == "whisper":
-                        subtitle_quality = 2.0
-                    else:
-                        subtitle_quality = 0.0
+                    subtitle_quality = 10.0 if transcript_source in ("native", "cache") else 0.0
 
                     channel_id = v.get("channel_id", "")
                     channel_bonus = 0.0
                     if channel_id in channel_history:
                         stats = channel_history[channel_id]
-                        channel_bonus = min(
-                            15.0,
-                            stats.get("success_count", 0) * 2.5
-                            + stats.get("avg_virality", 0.0) * 0.1,
-                        )
+                        channel_bonus = min(15.0, stats.get("success_count", 0) * 2.5 + stats.get("avg_virality", 0.0) * 0.1)
 
-                    final_score = (
-                        ai_points
-                        + rule_hook_points
-                        + rule_emotion_points
-                        + rule_virality_points
-                        + velocity_points
-                        + engagement_points
-                        + channel_bonus
-                        + subtitle_quality
-                    )
-                    final_score = round(final_score, 2)
-
-                    log.info(
-                        "✅ Candidate %s passed evaluation! Final Score: %.2f (AI: %.1f, Hook: %.1f, Emotion: %.1f)",
-                        vid,
-                        final_score,
-                        ai_points,
-                        rule_hook_points,
-                        rule_emotion_points,
-                    )
-
+                    final_score = round(ai_points + rule_hook_points + rule_emotion_points + rule_virality_points + velocity_points + engagement_points + channel_bonus + subtitle_quality, 2)
                     timing["total_s"] = round(time.time() - candidate_start_time, 2)
-                    log.info(
-                        "Candidate %s timing: subtitle=%.1fs, gemini=%.1fs, total=%.1fs",
-                        vid,
-                        timing["subtitle_fetch_s"],
-                        timing["gemini_s"],
-                        timing["total_s"],
-                    )
 
-                    passing_candidates.append(
-                        {
-                            "video": v,
-                            "final_score": final_score,
-                            "valid_highlights": valid_highlights,
-                            "rule_virality_points": rule_virality_points,
-                            "rule_hook_points": rule_hook_points,
-                            "rule_emotion_points": rule_emotion_points,
-                            "avg_caption_density": avg_caption_density,
-                            "subtitle_quality": subtitle_quality,
-                            "momentum_score": min(5.0, math.log1p(likes) / math.log1p(10_000) * 5),
-                            "likes": likes,
-                            "has_native_subs": has_native_subs,
-                            "timing": timing,
-                        }
-                    )
+                    if valid_highlights:
+                        passing_candidates.append({
+                            "video": v, "final_score": final_score, "valid_highlights": valid_highlights,
+                            "rule_virality_points": rule_virality_points, "rule_hook_points": rule_hook_points,
+                            "rule_emotion_points": rule_emotion_points, "avg_caption_density": avg_caption_density,
+                            "subtitle_quality": subtitle_quality, "momentum_score": min(5.0, math.log1p(likes) / math.log1p(10_000) * 5),
+                            "likes": likes, "has_native_subs": has_native_subs, "timing": timing
+                        })
 
-                # Select the strongest candidate (Bug #2 Minimal Fix: Compare candidates)
                 if passing_candidates:
                     passing_candidates.sort(key=lambda x: x["final_score"], reverse=True)
                     best = passing_candidates[0]
@@ -1019,11 +920,15 @@ def get_trending_link(
                     f"- Finalists evaluated: {evaluated_count}\n"
                     f"- Winner: {vid} ({winner.get('title')})"
                 )
-                return f"https://www.youtube.com/watch?v={vid}"
+                result_url = f"https://www.youtube.com/watch?v={vid}"
+                log.info("SCOUT RETURNING: %s", repr(result_url))
+                return result_url
 
         metrics.finish(None, "No high-quality highlights found")
         log.error("❌ Scout V2: No candidate met the quality bar. Aborting cleanly.")
+        log.info("SCOUT RETURNING: %s", repr(None))
         return None
     except Exception as exc:
         metrics.finish(None, f"Error: {exc}")
+        log.info("SCOUT RETURNING: %s", repr(None))
         return None

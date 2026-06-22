@@ -311,12 +311,7 @@ def run_worker() -> None:
                     worker_progress(30)
 
                     logger.info("🎙 Transcribing audio segment for word-level captions...")
-                    precision_segments = transcribe_clip(
-                        audio_path,
-                        model_size=settings.whisper_model,
-                        device=settings.whisper_device,
-                        compute_type=settings.whisper_compute_type,
-                    )
+                    precision_segments = transcribe_clip(audio_path)
                     worker_progress(50)
 
                     logger.info(

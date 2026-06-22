@@ -9,6 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from shorts_clipper.core.exceptions import SUBTITLE_NOT_AVAILABLE, YOUTUBE_RATE_LIMIT_429
 from shorts_clipper.core.models import TranscriptSegment
 
 log = logging.getLogger(__name__)
@@ -122,7 +123,7 @@ def fetch_subtitles(url: str, work_dir: Path, max_retries: int = 3) -> list[Tran
                 time.sleep(2**attempt)
                 continue
             _subtitle_metrics["fetch_failure"] += 1
-            return []
+            raise SUBTITLE_NOT_AVAILABLE("Timeout fetching subtitles") from None
         except subprocess.CalledProcessError as err:
             last_err_str = err.stderr.decode(errors="ignore") if err.stderr else ""
             is_rate_limit = "429" in last_err_str or "too many requests" in last_err_str.lower()
@@ -154,13 +155,15 @@ def fetch_subtitles(url: str, work_dir: Path, max_retries: int = 3) -> list[Tran
             if attempt < max_retries and is_rate_limit:
                 continue
             _subtitle_metrics["fetch_failure"] += 1
-            return []
+            if is_rate_limit:
+                raise YOUTUBE_RATE_LIMIT_429("Rate limited after retries") from None
+            raise SUBTITLE_NOT_AVAILABLE(f"Fetch failed: {last_err_str[:100]}") from None
 
         # Success — parse the SRT
         srt_files = list(work_dir.glob("subs.en*.srt"))
         if not srt_files:
             _subtitle_metrics["fetch_failure"] += 1
-            return []
+            raise SUBTITLE_NOT_AVAILABLE("No SRT files found after successful download")
 
         srt_path = srt_files[0]
         content = srt_path.read_text(encoding="utf-8")
@@ -183,7 +186,7 @@ def fetch_subtitles(url: str, work_dir: Path, max_retries: int = 3) -> list[Tran
 
     # Exhausted retries
     _subtitle_metrics["fetch_failure"] += 1
-    return []
+    raise SUBTITLE_NOT_AVAILABLE("Exhausted retries fetching subtitles")
 
 
 def download_audio(

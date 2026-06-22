@@ -20,7 +20,7 @@ from typing import Any
 import anyio
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -130,6 +130,21 @@ def startup_event():
     settings = Settings.from_env()
     configure_logging(settings.log_level)
     ensure_worker_running()
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "error": str(exc)},
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "error": str(exc.detail)},
+    )
 
 
 def cancel_job(job_id: str) -> None:
@@ -441,8 +456,8 @@ def publish_clip(
         except Exception:
             pass
 
-    title = meta.get("title", "").strip()
-    desc = meta.get("description", "").strip()
+    title = (meta.get("title") or "").strip()
+    desc = (meta.get("description") or "").strip()
     tags = meta.get("tags", ["shorts"])
 
     if not title or not desc:
@@ -543,12 +558,7 @@ def autogen_clip_title(clip_name: str) -> dict[str, Any]:
             from shorts_clipper.transcription.whisper import transcribe_clip
 
             logger.info("Transcribing clip %s for AI title generation...", clip_name)
-            precision_segments = transcribe_clip(
-                path,
-                model_size="tiny.en",
-                device=settings.whisper_device,
-                compute_type=settings.whisper_compute_type,
-            )
+            precision_segments = transcribe_clip(path)
             segments_raw = [
                 {"start": s.start, "end": s.end, "text": s.text} for s in precision_segments
             ]
@@ -916,7 +926,6 @@ def trigger_scout_transcript(payload: TranscriptRequest) -> dict[str, Any]:
     """Fetch native subtitles or transcribe a 5-min rough audio sample to return rough transcript."""
     logger.info("🔍 Fetching rough transcript for: %s", payload.url)
     try:
-        settings = Settings.from_env()
         with tempfile.TemporaryDirectory(prefix="vanguard_scout_") as temp_dir:
             work_path = Path(temp_dir)
             rough_segments = fetch_subtitles(payload.url, work_path)
@@ -926,12 +935,7 @@ def trigger_scout_transcript(payload: TranscriptRequest) -> dict[str, Any]:
                 audio_path = work_path / "rough_audio.m4a"
                 download_audio(payload.url, audio_path, start_time=0.0, end_time=300.0)
                 logger.info("Transcribing audio sample with fast Whisper...")
-                rough_segments = transcribe_clip(
-                    audio_path,
-                    model_size="tiny.en",
-                    device=settings.whisper_device,
-                    compute_type=settings.whisper_compute_type,
-                )
+                rough_segments = transcribe_clip(audio_path)
 
             return {
                 "url": payload.url,
