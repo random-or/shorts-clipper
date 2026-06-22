@@ -35,3 +35,4 @@ scratch/
 htmlcov/
 coverage.xml
 audit_report.md
+metadata_audit_report.md
