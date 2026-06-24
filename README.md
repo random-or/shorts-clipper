@@ -1,107 +1,174 @@
-# Shorts Clipper (Experimental)
+# Shorts Clipper ✂️
 
-An automated pipeline for discovering YouTube videos, downloading them, and rendering 9:16 vertical shorts with burned-in subtitles.
+> AI-powered pipeline that scouts YouTube for viral moments and renders them as 9:16 Shorts — fully automated.
 
-> **⚠️ EXPERIMENTAL WARNING:** The core infrastructure (downloading, cropping, rendering, API integrations) is fully functional. However, the **Attention Engine and Highlight Selection are fundamentally broken**. The system currently struggles to select the most engaging or viral moments from source videos. Do not expect production-ready highlight curation.
+![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![CI](https://github.com/random-or/shorts-clipper/actions/workflows/ci.yml/badge.svg)
+![Last Commit](https://img.shields.io/github/last-commit/random-or/shorts-clipper)
 
-## What It Does
-Shorts Clipper automates the mechanical process of creating short-form content. It can accept a YouTube keyword, locate a video, transcribe the audio, extract a 20-60 second clip, crop it to a vertical aspect ratio, and burn dynamic word-level subtitles onto the video using FFmpeg.
+## What it does
+Shorts Clipper completely automates the extraction of viral short-form content from long-form YouTube videos. It handles the entire lifecycle: discovering trending videos based on niche keywords, downloading audio, generating precision word-level transcripts, and using AI to isolate high-retention moments. Finally, it uses FFmpeg to crop the segment to a 9:16 vertical format and burns in dynamic, animated ASS subtitles without requiring manual video editing.
 
-## Architecture
+---
 
+## How it works
+
+```mermaid
+flowchart LR
+    A[Scout] --> B[Transcribe]
+    B --> C[Score]
+    C --> D[Download]
+    D --> E[Render]
+    E --> F[Output]
 ```
-SCOUT ENGINE
-  │
-  ├── Discovery ─────── YouTube API / yt-dlp search
-  ├── Filtering ─────── Duration, age, views, language
-  ├── Selection ─────── Evaluates candidates (Currently inaccurate)
-  │
-  └── Clip Pipeline
-        ├── Download ── yt-dlp with anti-ban
-        ├── Transcribe ─ Whisper (fallback if no subs)
-        ├── Render ──── FFmpeg 9:16 crop + subtitle burn
-        └── Publish ─── YouTube OAuth upload
-```
 
-## Verified Features
+- **Scout:** Uses the YouTube Data API and yt-dlp to discover trending videos within specific niches while respecting age and view thresholds.
+- **Transcribe:** Fetches native English subtitles or falls back to a fast local Whisper transcription (with Gemini Flash acceleration) to generate precise word-level timings.
+- **Score:** Evaluates the transcript using Gemini Pro as an Attention Prediction Engine to locate the most emotionally intense, high-retention highlight windows.
+- **Download:** Employs yt-dlp to extract only the required video segment, saving bandwidth and processing time.
+- **Render:** Scales, crops to 1080x1920, and burns in custom, animated `.ass` subtitles in a single GPU-accelerated FFmpeg pass.
+- **Output:** Generates a ready-to-publish MP4 along with metadata (title, description, tags) and can automatically upload it to YouTube Shorts.
 
-- Automated content discovery via YouTube Data API and yt-dlp.
-- Configurable hard-filtering (duration, views, age, language).
-- Subtitle extraction and local Whisper transcription fallback.
-- 9:16 vertical video cropping.
-- Single-pass FFmpeg rendering with animated word-level `.ass` subtitles.
-- Basic YouTube OAuth upload capability.
-- CLI and Web UI dashboard.
+---
 
-## Installation
+## Tech Stack
+- Python + FastAPI
+- yt-dlp
+- Whisper (local) + subtitle fallback
+- Google Gemini (free tier, 20 req/day limit)
+- FFmpeg
+- YouTube Data API v3
+- Webshare proxy
+
+---
+
+## Prerequisites
+- Python 3.11+
+- `ffmpeg` installed and on your PATH
+- `yt-dlp` installed
+- API keys: `GEMINI_API_KEY` (required), `YOUTUBE_API_KEY` (optional but recommended), Webshare proxy (optional)
+
+---
+
+## Quick Start
 
 ```bash
 git clone https://github.com/random-or/shorts-clipper.git
 cd shorts-clipper
-python3 -m venv env
-source env/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+# edit .env and add your GEMINI_API_KEY
+python -m shorts_clipper autopilot --niche "tech"
 ```
 
-**System Dependencies:**
-FFmpeg is required for video rendering.
-- Ubuntu/Debian: `sudo apt-get install ffmpeg`
-- macOS: `brew install ffmpeg`
+---
 
 ## Configuration
 
-1. Copy the environment template:
-   ```bash
-   cp .env.example .env
-   ```
-2. Add your **Gemini API Key** from Google AI Studio.
-3. Add your **YouTube Data API v3 Key** from Google Cloud Console.
-4. Set up an OAuth 2.0 Client ID in Google Cloud Console and download the `client_secret.json` file into the root directory (Required for YouTube uploads).
+| Variable | Required | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | **Yes** | Google Gemini API key used for AI highlight scoring and metadata generation. |
+| `YOUTUBE_API_KEY` | No | YouTube Data API v3 key for faster, reliable video discovery (10,000 quota/day). |
+| `SHORTS_PROXY` | No | Proxy string (e.g., Webshare credentials) to bypass YouTube scraping blocks. |
+| `SHORTS_WHISPER_MODEL` | No | Whisper model size for transcription fallback (default: `tiny.en`). |
+| `SHORTS_WHISPER_DEVICE` | No | Device to run Whisper on: `cpu` or `cuda` (default: `cpu`). |
+| `SHORTS_WHISPER_COMPUTE_TYPE` | No | Compute type for Whisper: `int8` or `float16` (default: `int8`). |
+| `SHORTS_VIDEO_CODEC` | No | FFmpeg video codec for rendering (default: `libx264` or `h264_nvenc`). |
+| `SHORTS_VIDEO_PRESET` | No | FFmpeg encoding preset (default: `ultrafast`). |
+| `SHORTS_SCOUT_MAX_AGE_DAYS`| No | Maximum age of trending videos to scout (default: `90`). |
+| `SHORTS_ENABLE_GPU` | No | Set to `true` to enable CUDA Whisper and NVENC hardware encoding. |
+| `SHORTS_OUTPUT_DIR` | No | Directory to store generated clips and metadata (default: `outputs`). |
+| `SHORTS_LOG_LEVEL` | No | Application logging level (default: `INFO`). |
 
-## Running Locally
-
-**CLI Commands:**
-```bash
-# Scout: Search for a video based on a niche
-python -m shorts_clipper scout --niche "tech" --keyword "AI"
-
-# Clip: Process a specific YouTube URL
-python -m shorts_clipper clip https://youtu.be/VIDEO_ID
-
-# Autopilot: Search, clip, and render in one step
-python -m shorts_clipper autopilot --niche "science" --count 1
-```
-
-**Web UI:**
-Launch the background FastAPI dashboard:
-```bash
-python -m shorts_clipper web
-```
-
-## Example Workflow
-
-```bash
-# 1. Start an autopilot job
-python -m shorts_clipper autopilot --niche "history" --keyword "rome"
-
-# 2. Wait for downloading, transcription, and FFmpeg rendering.
-# Output will be generated in the outputs/ directory:
-# outputs/clip_YYYYMMDD_HHMMSS.mp4
-```
+---
 
 ## Project Structure
-* `shorts_clipper/` - Core Python application module.
-* `tests/` - Unit and integration tests.
-* `outputs/` - Generated `.mp4` clips, thumbnails, and SQLite cache databases.
-* `docs/` - System documentation.
 
-## Known Limitations
+```text
+shorts-clipper/
+├── pipeline.py                       # Root wrapper for backward compatibility
+├── shorts_clipper/
+│   ├── __main__.py                   # CLI entry point for scout, clip, and autopilot commands
+│   ├── analyze/
+│   │   └── feedback.py               # Evaluates performance metrics of generated clips
+│   ├── api/
+│   │   └── server.py                 # FastAPI web console and background job server
+│   ├── captions/
+│   │   └── generator.py              # Generates animated ASS subtitle files for FFmpeg
+│   ├── cli/
+│   │   └── repair_metadata.py        # CLI tool to fix missing metadata in existing clips
+│   ├── core/
+│   │   ├── cache.py                  # SQLite-based caching for API responses
+│   │   ├── exceptions.py             # Custom exceptions (e.g., Rate Limits, Missing Subs)
+│   │   ├── logging.py                # Console and file logger configuration
+│   │   ├── models.py                 # Dataclasses for transcripts, highlight scores, and jobs
+│   │   ├── queue.py                  # SQLite-backed background job queue management
+│   │   ├── settings.py               # Environment variables and configuration loader
+│   │   └── worker.py                 # Background worker process for asynchronous jobs
+│   ├── cropping/
+│   │   └── geometry.py               # Calculates dimensions for center and edge crops
+│   ├── downloader/
+│   │   └── yt_dlp.py                 # Fetches video, audio, and YouTube subtitles safely
+│   ├── highlight_detection/
+│   │   └── scoring.py                # Deterministic scoring heuristics for backup evaluation
+│   ├── metadata/
+│   │   └── fallback.py               # Local metadata generation when AI APIs are unavailable
+│   ├── pipeline/
+│   │   └── runner.py                 # Main orchestration flow from scout to final render
+│   ├── providers/
+│   │   ├── base.py                   # Abstract base class for AI prompt providers
+│   │   └── gemini.py                 # Gemini implementation for Attention Prediction scoring
+│   ├── publish/
+│   │   └── *                         # Future multi-platform publish modules
+│   ├── render/
+│   │   └── thumbnailer.py            # Extracts frame thumbnails for generated clips
+│   ├── rendering/
+│   │   ├── crop.py                   # FFmpeg video cropping and 9:16 vertical scaling
+│   │   ├── ffmpeg.py                 # Safe FFmpeg subprocess command builders
+│   │   └── pipe.py                   # Handles streaming I/O for media processing
+│   ├── scout/
+│   │   ├── keywords.py               # Niche-to-keyword mapping and dynamic AI expansion
+│   │   ├── memory.py                 # SQLite storage for successful channel tracking
+│   │   ├── metrics.py                # Tracks scout performance and API quota usage
+│   │   ├── relevance.py              # Semantic filtering for candidate videos
+│   │   ├── subtitle_cache.py         # Subtitle availability caching to avoid 429s
+│   │   ├── trending.py               # Multi-stage parallel video discovery and ranking
+│   │   └── youtube_api.py            # Official YouTube Data API v3 client implementation
+│   ├── social/
+│   │   └── youtube.py                # YouTube OAuth authentication and Shorts upload logic
+│   ├── transcription/
+│   │   ├── formatting.py             # Formats transcript segments for AI context
+│   │   └── whisper.py                # Faster-whisper local transcription logic
+│   └── utils/
+│       └── video.py                  # Helper functions for FFprobe media probing
+```
 
-1. **Highlight Selection:** The system routinely fails to pick the climax or most engaging segment of a video. It will often select setups without payoffs.
-2. **Quota Exhaustion:** The pipeline is heavily reliant on Gemini API free tiers, which frequently exhaust and cause the system to fall back to less reliable local scoring.
-3. **Secret Management:** OAuth configuration requires manual setup of `client_secret.json` which is complex for new users.
+---
 
-## Roadmap
-- Fix the core Attention Engine to reliably identify story peaks and emotional climaxes.
-- Reduce dependency on remote LLM APIs for rapid candidate evaluation.
-- Improve OAuth onboarding flow.
+## Known Limitations / Current Status
+
+- YouTube bot detection frequently blocks the pipeline on cloud platforms (Railway, Oracle, HuggingFace, Colab) — works best on residential IPs.
+- Gemini free tier enforces a 20 request/day quota — large batches will quickly hit this limit and fall back to local heuristics.
+- Scout V2 runtime typically takes 30–60 minutes per run depending on the batch size and subtitle fetch speed.
+- For reliable automated scraping, it is highly recommended to run locally or configure a residential proxy.
+
+---
+
+## Deployment
+
+- **Local:** Just run `python -m shorts_clipper autopilot` to execute locally.
+- **Railway:** Environment variables go in the Railway dashboard; pushing to the `main` branch triggers an automatic deploy.
+- **Proxy:** Set Webshare credentials in `SHORTS_PROXY` environment variable for reliable cloud execution.
+
+---
+
+## Contributing
+
+Open issues and PRs are always welcome. Please describe your fix or feature clearly in the pull request description.
+
+---
+
+## License
+
+MIT
