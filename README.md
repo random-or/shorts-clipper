@@ -1,174 +1,141 @@
-# Shorts Clipper ✂️
+# 🎬 Shorts Clipper
 
-> AI-powered pipeline that scouts YouTube for viral moments and renders them as 9:16 Shorts — fully automated.
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![CI](https://github.com/random-or/shorts-clipper/actions/workflows/ci.yml/badge.svg)
-![Last Commit](https://img.shields.io/github/last-commit/random-or/shorts-clipper)
+**Shorts Clipper** is an experimental, fully automated pipeline that searches for trending YouTube videos, downloads them, finds the best moments, and renders **9:16 vertical shorts with dynamic burned-in subtitles**—ready to be uploaded to TikTok, YouTube Shorts, or Instagram Reels.
 
-## What it does
-Shorts Clipper completely automates the extraction of viral short-form content from long-form YouTube videos. It handles the entire lifecycle: discovering trending videos based on niche keywords, downloading audio, generating precision word-level transcripts, and using AI to isolate high-retention moments. Finally, it uses FFmpeg to crop the segment to a 9:16 vertical format and burns in dynamic, animated ASS subtitles without requiring manual video editing.
+> **⚠️ EXPERIMENTAL WARNING:** The core infrastructure (downloading, vertical cropping, transcription, and FFmpeg rendering) works flawlessly. However, the **AI Highlight Selection engine is currently experimental**. The AI may sometimes struggle to select the absolute most viral or engaging moment. Expect accurate rendering, but double-check the AI's content choices!
 
 ---
 
-## How it works
+## 🚀 What It Does
 
-```mermaid
-flowchart LR
-    A[Scout] --> B[Transcribe]
-    B --> C[Score]
-    C --> D[Download]
-    D --> E[Render]
-    E --> F[Output]
-```
-
-- **Scout:** Uses the YouTube Data API and yt-dlp to discover trending videos within specific niches while respecting age and view thresholds.
-- **Transcribe:** Fetches native English subtitles or falls back to a fast local Whisper transcription (with Gemini Flash acceleration) to generate precise word-level timings.
-- **Score:** Evaluates the transcript using Gemini Pro as an Attention Prediction Engine to locate the most emotionally intense, high-retention highlight windows.
-- **Download:** Employs yt-dlp to extract only the required video segment, saving bandwidth and processing time.
-- **Render:** Scales, crops to 1080x1920, and burns in custom, animated `.ass` subtitles in a single GPU-accelerated FFmpeg pass.
-- **Output:** Generates a ready-to-publish MP4 along with metadata (title, description, tags) and can automatically upload it to YouTube Shorts.
+1. **Scouts Content:** Searches YouTube for videos in a specific niche (e.g., "tech", "finance") using the YouTube Data API and `yt-dlp`.
+2. **Filters & Selects:** Analyzes transcripts to find high-retention segments (using Google Gemini).
+3. **Downloads & Transcribes:** Downloads the video securely and extracts/transcribes the audio (falling back to local Whisper AI if YouTube subtitles are missing).
+4. **Renders:** Uses FFmpeg to automatically crop the video to a vertical 9:16 aspect ratio and burns in dynamic, word-by-word animated subtitles.
+5. **(Optional) Publishes:** Can upload the finished clip directly to your YouTube channel using OAuth.
 
 ---
 
-## Tech Stack
-- Python + FastAPI
-- yt-dlp
-- Whisper (local) + subtitle fallback
-- Google Gemini (free tier, 20 req/day limit)
-- FFmpeg
-- YouTube Data API v3
-- Webshare proxy
+## ⚙️ Prerequisites
+
+Before installing, you must have the following system dependencies installed:
+
+* **Python 3.10+**
+* **FFmpeg** (Required for video rendering)
+  * **Ubuntu/Debian:** `sudo apt-get install ffmpeg`
+  * **macOS:** `brew install ffmpeg`
+  * **Windows:** Download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) and add it to your system PATH.
 
 ---
 
-## Prerequisites
-- Python 3.11+
-- `ffmpeg` installed and on your PATH
-- `yt-dlp` installed
-- API keys: `GEMINI_API_KEY` (required), `YOUTUBE_API_KEY` (optional but recommended), Webshare proxy (optional)
+## 🛠️ Installation
 
----
-
-## Quick Start
-
+**1. Clone the repository:**
 ```bash
 git clone https://github.com/random-or/shorts-clipper.git
 cd shorts-clipper
+```
+
+**2. Create and activate a virtual environment:**
+```bash
+# macOS / Linux
+python3 -m venv env
+source env/bin/activate
+
+# Windows
+python -m venv env
+env\Scripts\activate
+```
+
+**3. Install dependencies:**
+```bash
 pip install -r requirements.txt
+```
+
+---
+
+## 🔑 Configuration & API Keys
+
+To use Shorts Clipper, you need a few free API keys. Copy the `.env.example` file to create your own `.env` file:
+
+```bash
 cp .env.example .env
-# edit .env and add your GEMINI_API_KEY
-python -m shorts_clipper autopilot --niche "tech"
 ```
 
+Open the `.env` file and fill in the following keys:
+
+### 1. Google Gemini API Key (Required for Highlight Selection)
+* **Get it here:** [Google AI Studio](https://aistudio.google.com/app/apikey)
+* **Cost:** Free tier available.
+
+### 2. YouTube Data API v3 Key (Required for Video Discovery)
+* **Get it here:** [Google Cloud Console - YouTube API](https://console.cloud.google.com/apis/library/youtube.googleapis.com)
+* Click **Enable**, then go to **Credentials** -> **Create Credentials** -> **API Key**.
+
+### 3. YouTube OAuth Client ID (Required for Auto-Uploading)
+*If you only want to generate clips locally, you can skip this step.*
+* **Get it here:** [Google Cloud Console - Credentials](https://console.cloud.google.com/apis/credentials)
+* Click **Create Credentials** -> **OAuth client ID**.
+* Select **Desktop App**.
+* Download the resulting JSON file.
+* Rename it to `client_secret.json` and place it directly in the root `shorts-clipper` folder.
+
 ---
 
-## Configuration
+## 💻 Usage
 
-| Variable | Required | Description |
-|---|---|---|
-| `GEMINI_API_KEY` | **Yes** | Google Gemini API key used for AI highlight scoring and metadata generation. |
-| `YOUTUBE_API_KEY` | No | YouTube Data API v3 key for faster, reliable video discovery (10,000 quota/day). |
-| `SHORTS_PROXY` | No | Proxy string (e.g., Webshare credentials) to bypass YouTube scraping blocks. |
-| `SHORTS_WHISPER_MODEL` | No | Whisper model size for transcription fallback (default: `tiny.en`). |
-| `SHORTS_WHISPER_DEVICE` | No | Device to run Whisper on: `cpu` or `cuda` (default: `cpu`). |
-| `SHORTS_WHISPER_COMPUTE_TYPE` | No | Compute type for Whisper: `int8` or `float16` (default: `int8`). |
-| `SHORTS_VIDEO_CODEC` | No | FFmpeg video codec for rendering (default: `libx264` or `h264_nvenc`). |
-| `SHORTS_VIDEO_PRESET` | No | FFmpeg encoding preset (default: `ultrafast`). |
-| `SHORTS_SCOUT_MAX_AGE_DAYS`| No | Maximum age of trending videos to scout (default: `90`). |
-| `SHORTS_ENABLE_GPU` | No | Set to `true` to enable CUDA Whisper and NVENC hardware encoding. |
-| `SHORTS_OUTPUT_DIR` | No | Directory to store generated clips and metadata (default: `outputs`). |
-| `SHORTS_LOG_LEVEL` | No | Application logging level (default: `INFO`). |
+Make sure your virtual environment is activated (`source env/bin/activate`), then use the CLI tool or the Web UI!
 
----
+### Command Line Interface (CLI)
 
-## Project Structure
-
-```text
-shorts-clipper/
-├── pipeline.py                       # Root wrapper for backward compatibility
-├── shorts_clipper/
-│   ├── __main__.py                   # CLI entry point for scout, clip, and autopilot commands
-│   ├── analyze/
-│   │   └── feedback.py               # Evaluates performance metrics of generated clips
-│   ├── api/
-│   │   └── server.py                 # FastAPI web console and background job server
-│   ├── captions/
-│   │   └── generator.py              # Generates animated ASS subtitle files for FFmpeg
-│   ├── cli/
-│   │   └── repair_metadata.py        # CLI tool to fix missing metadata in existing clips
-│   ├── core/
-│   │   ├── cache.py                  # SQLite-based caching for API responses
-│   │   ├── exceptions.py             # Custom exceptions (e.g., Rate Limits, Missing Subs)
-│   │   ├── logging.py                # Console and file logger configuration
-│   │   ├── models.py                 # Dataclasses for transcripts, highlight scores, and jobs
-│   │   ├── queue.py                  # SQLite-backed background job queue management
-│   │   ├── settings.py               # Environment variables and configuration loader
-│   │   └── worker.py                 # Background worker process for asynchronous jobs
-│   ├── cropping/
-│   │   └── geometry.py               # Calculates dimensions for center and edge crops
-│   ├── downloader/
-│   │   └── yt_dlp.py                 # Fetches video, audio, and YouTube subtitles safely
-│   ├── highlight_detection/
-│   │   └── scoring.py                # Deterministic scoring heuristics for backup evaluation
-│   ├── metadata/
-│   │   └── fallback.py               # Local metadata generation when AI APIs are unavailable
-│   ├── pipeline/
-│   │   └── runner.py                 # Main orchestration flow from scout to final render
-│   ├── providers/
-│   │   ├── base.py                   # Abstract base class for AI prompt providers
-│   │   └── gemini.py                 # Gemini implementation for Attention Prediction scoring
-│   ├── publish/
-│   │   └── *                         # Future multi-platform publish modules
-│   ├── render/
-│   │   └── thumbnailer.py            # Extracts frame thumbnails for generated clips
-│   ├── rendering/
-│   │   ├── crop.py                   # FFmpeg video cropping and 9:16 vertical scaling
-│   │   ├── ffmpeg.py                 # Safe FFmpeg subprocess command builders
-│   │   └── pipe.py                   # Handles streaming I/O for media processing
-│   ├── scout/
-│   │   ├── keywords.py               # Niche-to-keyword mapping and dynamic AI expansion
-│   │   ├── memory.py                 # SQLite storage for successful channel tracking
-│   │   ├── metrics.py                # Tracks scout performance and API quota usage
-│   │   ├── relevance.py              # Semantic filtering for candidate videos
-│   │   ├── subtitle_cache.py         # Subtitle availability caching to avoid 429s
-│   │   ├── trending.py               # Multi-stage parallel video discovery and ranking
-│   │   └── youtube_api.py            # Official YouTube Data API v3 client implementation
-│   ├── social/
-│   │   └── youtube.py                # YouTube OAuth authentication and Shorts upload logic
-│   ├── transcription/
-│   │   ├── formatting.py             # Formats transcript segments for AI context
-│   │   └── whisper.py                # Faster-whisper local transcription logic
-│   └── utils/
-│       └── video.py                  # Helper functions for FFprobe media probing
+**1. Scout a niche:**
+Search for trending video ideas without downloading them.
+```bash
+python -m shorts_clipper scout --niche "tech" --keyword "AI"
 ```
 
+**2. Clip a specific video:**
+Pass a YouTube URL directly to generate a vertical short.
+```bash
+python -m shorts_clipper clip https://youtu.be/VIDEO_ID
+```
+
+**3. Autopilot Mode:**
+Run the entire pipeline automatically (Scout -> Download -> Transcribe -> Render).
+```bash
+python -m shorts_clipper autopilot --niche "science" --count 1
+```
+
+> **Where do my videos go?** 
+> Finished `.mp4` clips and thumbnails are saved automatically in the `outputs/` folder!
+
+### Web UI Dashboard
+
+Prefer a graphical interface? You can launch the local web dashboard:
+```bash
+python -m shorts_clipper web
+```
+*(Open your browser to the URL printed in the terminal to interact with the visual dashboard).*
+
 ---
 
-## Known Limitations / Current Status
+## 📁 Project Structure
 
-- YouTube bot detection frequently blocks the pipeline on cloud platforms (Railway, Oracle, HuggingFace, Colab) — works best on residential IPs.
-- Gemini free tier enforces a 20 request/day quota — large batches will quickly hit this limit and fall back to local heuristics.
-- Scout V2 runtime typically takes 30–60 minutes per run depending on the batch size and subtitle fetch speed.
-- For reliable automated scraping, it is highly recommended to run locally or configure a residential proxy.
-
----
-
-## Deployment
-
-- **Local:** Just run `python -m shorts_clipper autopilot` to execute locally.
-- **Railway:** Environment variables go in the Railway dashboard; pushing to the `main` branch triggers an automatic deploy.
-- **Proxy:** Set Webshare credentials in `SHORTS_PROXY` environment variable for reliable cloud execution.
+* `shorts_clipper/` - Core Python engine (scouting, rendering, API logic).
+* `tests/` - Pytest validation suite.
+* `outputs/` - Generated 9:16 `.mp4` clips, `.ass` subtitles, and thumbnails.
+* `env/` - Your local Python environment.
 
 ---
 
-## Contributing
+## 🤝 Roadmap & Known Limitations
 
-Open issues and PRs are always welcome. Please describe your fix or feature clearly in the pull request description.
+* **Highlight AI:** The AI frequently struggles to pick the climax of a story. We are actively working on improving the "Attention Engine" to better recognize hooks, pacing, and emotional payoff.
+* **Quota Exhaustion:** Heavy users might hit Google Gemini's free tier limits quickly.
 
 ---
 
-## License
-
-MIT
+*Built for creators to scale short-form content seamlessly.*
