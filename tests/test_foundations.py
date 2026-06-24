@@ -225,7 +225,7 @@ class GeminiProviderTests(unittest.TestCase):
 
         with patch("time.sleep") as mock_sleep:
             window, layout = provider.select_clip_raw(segments)
-            mock_sleep.assert_called_once_with(2.0)
+            mock_sleep.assert_called_once_with(5.0)
 
         self.assertEqual(window.start, 10.0)
         self.assertEqual(window.end, 45.0)

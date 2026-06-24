@@ -54,7 +54,6 @@ def _transcribe_with_gemini(
 ) -> list[TranscriptSegment] | None:
     """Attempt to transcribe the media file using Gemini 2.5 Flash."""
     try:
-        from google import genai
         from google.genai import types
 
         api_key = api_key or os.environ.get("GEMINI_API_KEY")
@@ -65,7 +64,9 @@ def _transcribe_with_gemini(
         log.info("🚀 Attempting fast transcription with Gemini 2.5 Flash...")
         audio_bytes, mime_type = _get_audio_bytes(media_path)
 
-        client = genai.Client(api_key=api_key)
+        from shorts_clipper.providers.gemini import GeminiProvider
+
+        provider = GeminiProvider(api_key=api_key)
 
         prompt = (
             "Transcribe this audio file. Format the response as a JSON array of objects, "
@@ -82,8 +83,7 @@ def _transcribe_with_gemini(
             "Return ONLY the raw valid JSON."
         )
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = provider.generate_content(
             contents=[
                 types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
                 prompt,
@@ -97,6 +97,9 @@ def _transcribe_with_gemini(
         json_match = re.search(r"```(?:json)?(.*?)```", raw_text, re.DOTALL)
         if json_match:
             raw_text = json_match.group(1).strip()
+
+        # Fix trailing commas that cause json.loads to fail
+        raw_text = re.sub(r",\s*([\]}])", r"\1", raw_text)
 
         data = json.loads(raw_text)
         segments: list[TranscriptSegment] = []

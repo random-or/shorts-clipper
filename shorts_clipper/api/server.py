@@ -1018,7 +1018,7 @@ def gemini_chat(payload: GeminiChatRequest) -> dict[str, Any]:
         )
 
         prompt_context = f"System Instruction: {system_instruction}\n\nClip Transcript Context:\n{payload.context}\n\nUser Request: {payload.prompt}"
-        response = provider._generate_content_with_retry(prompt_context)
+        response = provider.generate_content(prompt_context)
         return {"text": response.text.strip()}
     except Exception as exc:
         logger.error("Failed to chat with Gemini: %s", exc)

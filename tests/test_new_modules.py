@@ -162,7 +162,7 @@ class ScoutQueryTests(unittest.TestCase):
     def test_build_queries_keyword(self):
         queries = build_queries("tech", "clash")
         self.assertIn("ytsearch15:clash", queries)
-        self.assertIn("ytsearch15:best clash", queries)
+        self.assertIn("ytsearch15:clash interview", queries)
 
     def test_build_queries_niche(self):
         queries = build_queries("tech", None, count=2)
@@ -170,9 +170,13 @@ class ScoutQueryTests(unittest.TestCase):
         self.assertTrue(queries[0].startswith("ytsearch15:tech "))
 
     def test_build_queries_fallback(self):
-        queries = build_queries("unknown_niche", None, count=5)
-        self.assertEqual(len(queries), 1)
-        self.assertEqual(queries[0], "ytsearch15:unknown_niche unknown_niche")
+        with patch(
+            "shorts_clipper.scout.keywords._expand_niche_dynamically",
+            return_value=["unknown_niche"],
+        ):
+            queries = build_queries("unknown_niche", None, count=5)
+            self.assertEqual(len(queries), 1)
+            self.assertEqual(queries[0], "ytsearch15:unknown_niche")
 
     def test_is_suitable_enforces_max_age_days(self):
         pass

@@ -831,7 +831,7 @@ class GeminiProvider(HighlightProvider):
         self,
         *,
         api_key: str | None = None,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-flash-lite-latest",
         fallback_window: tuple[float, float] = (60.0, 95.0),
         fallback_layout: str = "crop_center",
     ) -> None:
@@ -844,8 +844,8 @@ class GeminiProvider(HighlightProvider):
 
         self._client = genai.Client(api_key=api_key or os.environ.get("GEMINI_API_KEY"))
 
-    def _generate_content_with_retry(
-        self, prompt: str, max_retries: int = 3, initial_delay: float = 2.0
+    def generate_content(
+        self, contents: any, max_retries: int = 5, initial_delay: float = 5.0, **kwargs
     ) -> any:
         """Call generate_content with exponential backoff on transient errors."""
         import time
@@ -854,8 +854,7 @@ class GeminiProvider(HighlightProvider):
         for attempt in range(1, max_retries + 1):
             try:
                 return self._client.models.generate_content(
-                    model=self._model,
-                    contents=prompt,
+                    model=self._model, contents=contents, **kwargs
                 )
             except Exception as exc:
                 exc_str = str(exc)
@@ -896,7 +895,7 @@ class GeminiProvider(HighlightProvider):
 
         log.info("\n--- CONSULTING %s ---", self._model)
         try:
-            response = self._generate_content_with_retry(prompt)
+            response = self.generate_content(prompt)
             raw = response.text.strip()
             log.debug("Gemini raw response: %r", raw)
 
@@ -996,7 +995,7 @@ class GeminiProvider(HighlightProvider):
 
         log.info("\n--- CONSULTING %s FOR MULTIPLE CLIPS (up to %d) ---", self._model, count)
         try:
-            response = self._generate_content_with_retry(prompt)
+            response = self.generate_content(prompt)
             raw = response.text.strip()
             log.debug("Gemini raw response: %r", raw)
 
@@ -1068,7 +1067,7 @@ class GeminiProvider(HighlightProvider):
         transcript_text = format_transcript(segments)
         prompt = _MULTI_PROMPT_TEMPLATE.format(count=count, transcript=transcript_text)
         try:
-            response = self._generate_content_with_retry(prompt)
+            response = self.generate_content(prompt)
             raw = response.text.strip()
 
             if "NO_CLIP_FOUND" in raw:
@@ -1202,7 +1201,12 @@ class GeminiProvider(HighlightProvider):
             except Exception:
                 return []
 
-    def generate_clip_metadata(self, segments: Sequence[TranscriptSegment]) -> dict:
+    def generate_clip_metadata(
+        self,
+        segments: Sequence[TranscriptSegment],
+        source_title: str = "",
+        source_channel: str = "",
+    ) -> dict:
         """Generate production-grade viral metadata for a clip using Gemini.
 
         Generates 5 candidate titles, scores them, and selects the best.
@@ -1220,6 +1224,14 @@ You are a YouTube Shorts metadata strategist.
 You have generated over 10,000 viral Shorts titles.
 
 Your titles consistently outperform generic titles by 300-500%.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SOURCE CONTEXT
+Original Video Title: {source_title}
+Original Channel: {source_channel}
+
+Use this context to accurately align the short's title and description with the broader topic. Do not just use generic words if specific entities are implied.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1311,7 +1323,7 @@ Return ONLY valid JSON. No markdown. No commentary.
 }}
 """
         log.info("🧠 Generating production metadata (5 candidate titles)...")
-        response = self._generate_content_with_retry(prompt)
+        response = self.generate_content(prompt)
         raw = response.text.strip()
 
         json_str = raw

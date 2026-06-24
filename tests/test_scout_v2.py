@@ -52,12 +52,17 @@ class ScoutV2Tests(unittest.TestCase):
         # Verify it doesn't fail on missing fields
         self.assertTrue(compute_scout_v2_intermediate_score({}, now, {}) == 0.0)
 
+    @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
     @patch("shorts_clipper.scout.trending.GeminiProvider")
     def test_self_healing_pre_evaluation(
-        self, mock_gemini_provider_cls, mock_fetch_subs, mock_discover_ytdlp
+        self, mock_gemini_provider_cls, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls
     ):
+        # Mock SemanticRelevanceGate to pass all candidates through
+        mock_gate = Mock()
+        mock_gate.filter_candidates.side_effect = lambda candidates: candidates
+        mock_gate_cls.return_value = mock_gate
         # Mock discover returning 2 candidates
         mock_discover_ytdlp.return_value = [
             {
@@ -128,12 +133,16 @@ class ScoutV2Tests(unittest.TestCase):
         self.assertEqual(report_data["video_id"], "vid_good")
         self.assertEqual(report_data["final_score"], report_data["final_score"])
 
+    @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
     @patch("shorts_clipper.scout.trending.GeminiProvider")
     def test_all_candidates_rejected(
-        self, mock_gemini_provider_cls, mock_fetch_subs, mock_discover_ytdlp
+        self, mock_gemini_provider_cls, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls
     ):
+        mock_gate = Mock()
+        mock_gate.filter_candidates.side_effect = lambda candidates: candidates
+        mock_gate_cls.return_value = mock_gate
         # All candidates have poor highlights
         mock_discover_ytdlp.return_value = [
             {
@@ -157,12 +166,25 @@ class ScoutV2Tests(unittest.TestCase):
         # Verify None is returned when all candidates are rejected
         self.assertIsNone(url)
 
+    @patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer")
+    @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
     @patch("shorts_clipper.scout.trending.GeminiProvider")
     def test_gemini_quota_exhausted_fail_fast_and_fallback(
-        self, mock_gemini_provider_cls, mock_fetch_subs, mock_discover_ytdlp
+        self,
+        mock_gemini_provider_cls,
+        mock_fetch_subs,
+        mock_discover_ytdlp,
+        mock_gate_cls,
+        mock_scorer_cls,
     ):
+        mock_scorer = Mock()
+        mock_scorer.score_transcript.return_value = (100.0, [], "Perfect score")
+        mock_scorer_cls.return_value = mock_scorer
+        mock_gate = Mock()
+        mock_gate.filter_candidates.side_effect = lambda candidates: candidates
+        mock_gate_cls.return_value = mock_gate
         from shorts_clipper.providers.gemini import GeminiQuotaExhaustedError
 
         mock_discover_ytdlp.return_value = [
@@ -174,7 +196,13 @@ class ScoutV2Tests(unittest.TestCase):
                 "published_at": datetime.now(UTC).isoformat(),
             }
         ]
-        mock_fetch_subs.return_value = [TranscriptSegment(start=0, end=10, text="hello")]
+        mock_fetch_subs.return_value = [
+            TranscriptSegment(
+                start=0,
+                end=45,
+                text="You won't believe this shocking secret truth. Here's why this amazing insane revelation changed everything. The truth is absolutely unbelievable and crazy.",
+            )
+        ]
 
         mock_provider = Mock()
         mock_gemini_provider_cls.return_value = mock_provider

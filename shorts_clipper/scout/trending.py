@@ -351,7 +351,7 @@ def _discover_via_ytdlp(query: str, max_age_days: int, metrics: ScoutMetrics) ->
         return []
     cmd = _get_base_yt_dlp_cmd()
     if max_age_days:
-        query += f" dateafter:now-{max_age_days}days"
+        cmd.extend(["--dateafter", f"now-{max_age_days}days"])
     cmd.extend(
         [
             query,
@@ -433,12 +433,12 @@ def get_trending_link(
         if db_path.exists():
             con = sqlite3.connect(db_path, check_same_thread=False)
             rows = con.execute(
-                "SELECT channel_id, success_count, avg_virality FROM successful_channels "
-                "WHERE ? LIKE '%' || niche || '%' OR niche LIKE '%' || ? || '%'",
-                (niche or "tech", niche or "tech"),
+                "SELECT channel_id, success_count, avg_virality, niche FROM successful_channels"
             ).fetchall()
             con.close()
-            channel_history = {r[0]: {"success_count": r[1], "avg_virality": r[2]} for r in rows}
+            channel_history = {
+                r[0]: {"success_count": r[1], "avg_virality": r[2], "niche": r[3]} for r in rows
+            }
     except Exception as e:
         log.warning("Failed to load channel history for feedback loop: %s", e)
 
@@ -466,16 +466,32 @@ def get_trending_link(
             queries = []
 
             # Stage 1: Discovery
-            known_channels = list(channel_history.keys())
+
+            # Parse multiple niches
+            niches = [n.strip() for n in (niche or "tech").split(",")]
+
             if channel:
                 queries.append(f"ytsearch15:from:{channel}")
-            elif attempt == 1 and known_channels and not keyword:
-                for kc in known_channels[:2]:
-                    queries.append(f"ytsearch15:from:{kc} {niche or 'tech'}")
             else:
-                if not known_channels and attempt == 1:
-                    log.info("No learning data for niche '%s'. Using fresh discovery.", niche)
-                queries.extend(build_queries(niche or "tech", keyword))
+                for current_niche in niches:
+                    current_queries = []
+                    if attempt == 1 and not keyword:
+                        # Find channels that match this exact niche
+                        niche_channels = [
+                            cid
+                            for cid, stats in channel_history.items()
+                            if stats.get("niche")
+                            and current_niche.lower() in stats.get("niche", "").lower()
+                        ]
+                        if niche_channels:
+                            for kc in niche_channels[:2]:
+                                current_queries.append(f"ytsearch15:from:{kc} {current_niche}")
+
+                        # Always include generic discovery to maintain diversity
+                        current_queries.extend(build_queries(current_niche, keyword))
+                    else:
+                        current_queries.extend(build_queries(current_niche, keyword))
+                    queries.extend(current_queries)
 
             discovered = []
             for q in queries:
@@ -503,6 +519,17 @@ def get_trending_link(
             discovered = unique_discovered
 
             metrics.queries_with_results += 1
+
+            # ── PHASE 1.5: SEMANTIC RELEVANCE GATE ────────────────────────
+            from shorts_clipper.scout.relevance import SemanticRelevanceGate
+
+            gate = SemanticRelevanceGate(keyword=keyword or "", niche=niche or "")
+            discovered = gate.filter_candidates(discovered)
+
+            if not discovered:
+                log.warning("Semantic Relevance Gate rejected all candidates.")
+                continue
+
             survivors = []
 
             # Stages 2 & 3: Freshness & Quality
@@ -514,7 +541,9 @@ def get_trending_link(
                 title_lower = video.get("title", "").lower()
 
                 # ── PHASE 3: HARD FILTERS ─────────────────────────────
-                if niche and niche.lower() == "ai":
+                niche_lower = niche.lower() if niche else ""
+
+                if niche_lower == "ai":
                     music_terms = [
                         "music video",
                         "official music video",
@@ -526,6 +555,20 @@ def get_trending_link(
                     ]
                     if any(term in title_lower for term in music_terms):
                         log.info("Rejected video %s: music content in AI niche", vid)
+                        continue
+
+                if "tech" in niche_lower:
+                    demo_terms = [
+                        "8k",
+                        "hdr",
+                        "dolby",
+                        "test video",
+                        "demo",
+                        "visual showcase",
+                        "4k 60fps",
+                    ]
+                    if any(term in title_lower for term in demo_terms):
+                        log.info("Rejected video %s: visual demo in Tech niche", vid)
                         continue
 
                 # Reject non-English titles unless explicitly allowed
@@ -575,15 +618,41 @@ def get_trending_link(
 
             # ══════════════════════════════════════════════════════════════
             # STAGE A: Cheap metadata-only ranking (no transcription)
-            # Score ALL survivors using only: views, velocity, age,
-            # engagement, virality score, channel history, metadata.
-            # Keep only top N candidates for expensive evaluation.
             # ══════════════════════════════════════════════════════════════
             finalist_pool_limit = int(os.getenv("SCOUT_FINALIST_LIMIT", "15"))
-            all_finalists = survivors[:finalist_pool_limit]
+            max_per_category = max(1, int(finalist_pool_limit * 0.40))  # Max 40% per category
+
+            def _categorize(title: str) -> str:
+                t = title.lower()
+                if any(x in t for x in ["phone", "iphone", "pixel", "galaxy", "smartphone"]):
+                    return "phones"
+                if any(x in t for x in ["macbook", "laptop", "pc", "computer", "desktop"]):
+                    return "pc_hardware"
+                if any(
+                    x in t for x in ["ai", "gpt", "openai", "claude", "gemini", "anthropic", "llm"]
+                ):
+                    return "ai"
+                if any(x in t for x in ["camera", "lens", "sony", "canon", "lumix"]):
+                    return "cameras"
+                if any(
+                    x in t for x in ["game", "nintendo", "xbox", "playstation", "ps5", "switch"]
+                ):
+                    return "gaming"
+                return "general_tech"
+
+            all_finalists = []
+            category_counts = {}
+
+            for v in survivors:
+                if len(all_finalists) >= finalist_pool_limit:
+                    break
+                cat = _categorize(v.get("title", ""))
+                if category_counts.get(cat, 0) < max_per_category:
+                    all_finalists.append(v)
+                    category_counts[cat] = category_counts.get(cat, 0) + 1
 
             if all_finalists:
-                log.info("\n========== SCOUT STAGE A: METADATA RANKING ==========")
+                log.info("\n========== SCOUT STAGE A: METADATA RANKING (DIVERSIFIED) ==========")
                 log.info(f"{'Rank':<5} | {'Video ID':<11} | {'Views':<10} | {'Score':<8} | Title")
                 for idx, v in enumerate(all_finalists, 1):
                     log.info(
@@ -606,9 +675,6 @@ def get_trending_link(
 
             # ══════════════════════════════════════════════════════════════
             # STAGE B: Expensive evaluation (subtitle fetch + Gemini)
-            # Only for the top N candidates from Stage A.
-            # NO Whisper. NO audio download. Subtitle-first filter.
-            # Local Transcript Scorer selects the single best finalist BEFORE Gemini.
             # ══════════════════════════════════════════════════════════════
             winner = None
             evaluated_count = 0
@@ -624,11 +690,14 @@ def get_trending_link(
             with tempfile.TemporaryDirectory(prefix="scout_eval_") as temp_dir:
                 temp_path = Path(temp_dir)
 
-                candidates_to_eval = finalists.copy()
                 local_scored_candidates = []
+                stage_b_target = int(os.getenv("SCOUT_STAGE_B_LIMIT", "3"))
 
-                # PHASE 1 & 2: Evaluate top 3 using LocalTranscriptScorer
-                for v in candidates_to_eval:
+                # Iterate through all finalists until we successfully score enough
+                for v in all_finalists:
+                    if len(local_scored_candidates) >= stage_b_target:
+                        break
+
                     vid = v.get("id")
                     candidate_start_time = time.time()
                     timing = {
@@ -695,6 +764,7 @@ def get_trending_link(
                                 vid,
                                 v.get("_score", 0),
                             )
+                            time.sleep(15)  # Cooldown API to prevent cascading limits
                             continue
                         except SUBTITLE_NOT_AVAILABLE:
                             set_status(vid, "MISSING")
@@ -736,13 +806,16 @@ def get_trending_link(
                     # Score transcript locally
                     evaluated_count += 1
                     local_scorer = LocalTranscriptScorer()
-                    local_score, best_local_window = local_scorer.score_transcript(segments)
+                    local_score, best_local_window, local_reasoning = local_scorer.score_transcript(
+                        segments
+                    )
                     log.info("Candidate %s local transcript score: %.2f", vid, local_score)
 
                     local_scored_candidates.append(
                         {
                             "video": v,
                             "local_score": local_score,
+                            "local_reasoning": local_reasoning,
                             "segments": segments,
                             "transcript_source": transcript_source,
                             "has_native_subs": has_native_subs,
@@ -792,21 +865,27 @@ def get_trending_link(
                     # PHASE 4: FALLBACK MODE
                     if not valid_highlights:
                         if gemini_failed:
-                            log.warning("[FALLBACK] Local transcript scorer selected clip.")
-                            start_t = best_local_window[0].start if best_local_window else 0.0
-                            end_t = best_local_window[-1].end if best_local_window else 60.0
-                            if end_t - start_t < 15.0:
-                                end_t = start_t + 45.0
+                            if local_score >= 75.0:
+                                log.warning("[FALLBACK] Local transcript scorer selected clip.")
+                                start_t = best_local_window[0].start if best_local_window else 0.0
+                                end_t = best_local_window[-1].end if best_local_window else 60.0
+                                if end_t - start_t < 15.0:
+                                    end_t = start_t + 45.0
 
-                            valid_highlights = [
-                                {
-                                    "start": start_t,
-                                    "end": end_t,
-                                    "layout": "crop_center",
-                                    "virality_score": max(85, int(local_score)),
-                                    "reason": "[FALLBACK] Selected by Local Transcript Scorer due to Gemini unavailability.",
-                                }
-                            ]
+                                valid_highlights = [
+                                    {
+                                        "start": start_t,
+                                        "end": end_t,
+                                        "layout": "crop_center",
+                                        "virality_score": int(local_score),
+                                        "reason": f"[FALLBACK] Local Transcript Scorer: {top_candidate.get('local_reasoning', 'Selected fallback clip')}",
+                                    }
+                                ]
+                            else:
+                                log.warning(
+                                    "Fallback candidate rejected: Local score %.1f is below threshold 75",
+                                    local_score,
+                                )
                         else:
                             log.info(
                                 "Top candidate %s rejected: Gemini virality score too low", vid

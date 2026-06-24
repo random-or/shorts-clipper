@@ -93,124 +93,163 @@ class RuleBasedHighlightScorer:
         )
 
 
+class AttentionScore:
+    def __init__(self, score: float, reasoning: str, window: list[TranscriptSegment]):
+        self.score = score
+        self.reasoning = reasoning
+        self.window = window
+
+
 class LocalTranscriptScorer:
-    """Lightweight scorer that operates directly on subtitle text. Returns 0-100 score and best segment."""
+    """Evaluates transcripts using Gemini Flash for true semantic attention scoring."""
 
     def __init__(self):
-        self.signals = [
-            "?",
-            "disagree",
-            "shock",
-            "i was wrong",
-            "i couldn't believe",
-            "fail",
-            "success",
-            "controvers",
-            "never",
-            "always",
-            "money",
-            "$",
-            "percent",
-            "%",
-            "million",
-            "billion",
-            "secret",
-            "truth",
-        ]
-        self.penalties = [
-            "sponsor",
-            "nordvpn",
-            "skillshare",
-            "welcome back",
-            "hey guys",
-            "subscribe",
-            "like and subscribe",
-            "link in description",
-            "outro",
-            "music",
-            "♪",
-            "lyrics",
-            "thanks for watching",
-        ]
+        from shorts_clipper.core.settings import Settings
+
+        self.settings = Settings.from_env()
+
+    def _determine_dynamic_duration(self, current_dur: float) -> float:
+        """Lock to specific dynamic durations based on closest fit."""
+        allowed = [20.0, 30.0, 40.0, 50.0, 60.0]
+        return min(allowed, key=lambda x: abs(x - current_dur))
+
+    def _optimize_boundaries(
+        self, segments: list[TranscriptSegment], target_start: float, target_end: float
+    ) -> list[TranscriptSegment]:
+        """
+        Phase 3: Real Boundary Optimization
+        Expands or shrinks the window slightly to find sentence/thought completion.
+        """
+        if not segments:
+            return []
+
+        # Find closest segments to target
+        start_idx = 0
+        end_idx = len(segments) - 1
+
+        for i, s in enumerate(segments):
+            if s.start >= target_start - 5.0:
+                start_idx = i
+                break
+
+        for i in range(start_idx, len(segments)):
+            if segments[i].end >= target_end:
+                end_idx = i
+                break
+
+        # Expand start backwards if mid-sentence (look for punctuation ending the previous sentence)
+        while start_idx > 0:
+            prev_text = segments[start_idx - 1].text.strip()
+            curr_text = segments[start_idx].text.strip()
+            # If current starts with lowercase and prev didn't end in punctuation, it's mid-sentence
+            if curr_text and curr_text[0].islower() and not prev_text.endswith((".", "!", "?")):
+                start_idx -= 1
+            else:
+                break
+
+        # Expand end forwards to complete sentence
+        while end_idx < len(segments) - 1:
+            curr_text = segments[end_idx].text.strip()
+            if not curr_text.endswith((".", "!", "?")):
+                end_idx += 1
+            else:
+                break
+
+        # Ensure we don't exceed 60s
+        while end_idx > start_idx and (segments[end_idx].end - segments[start_idx].start) > 60.0:
+            end_idx -= 1
+
+        return segments[start_idx : end_idx + 1]
 
     def score_transcript(
         self, segments: list[TranscriptSegment]
-    ) -> tuple[float, list[TranscriptSegment]]:
-        """Scores entire transcript, returns (0-100 score, list of segments for best window)"""
+    ) -> tuple[float, list[TranscriptSegment], str]:
+        """Scores transcript using LLM for true semantic understanding."""
         if not segments:
-            return 0.0, []
+            return 0.0, [], "Empty transcript"
 
-        best_window = []
-        best_window_score = -1.0
+        import json
+        import logging
 
-        # We will scan through windows of ~60 seconds to find the best local clip
-        window_duration = 60.0
+        log = logging.getLogger(__name__)
 
-        for i, start_seg in enumerate(segments):
-            window_segs = []
-            current_dur = 0.0
+        full_text_parts = []
+        for s in segments:
+            full_text_parts.append(f"[{s.start:.1f} - {s.end:.1f}] {s.text}")
+        full_text = "\n".join(full_text_parts)
 
-            curiosity = 0.0
-            conflict = 0.0
-            surprise = 0.0
-            emotion = 0.0
-            stakes = 0.0
-            specificity = 0.0
-            penalty = 0.0
+        prompt = f"""
+You are an Attention Prediction Engine.
+Analyze the following transcript and identify the TOP 3 BEST highlights (between 20s and 60s).
+Evaluate based on true semantics: conflict, surprise, stakes, emotion, transformation, curiosity, tension, and resolution.
+Do NOT rely on simple keywords. Look for story progression and emotional peaks.
 
-            for j in range(i, len(segments)):
-                seg = segments[j]
-                window_segs.append(seg)
-                current_dur = seg.end - start_seg.start
+Transcript:
+{full_text}
 
-                text = seg.text.lower()
+Return ONLY valid JSON in this format:
+{{
+    "highlights": [
+        {{
+            "start_time": float,
+            "end_time": float,
+            "score": float (0-100),
+            "signals_triggered": ["list", "of", "signals"],
+            "why_it_won": "detailed explanation of emotional arc and tension"
+        }}
+    ]
+}}
+"""
 
-                # Signals
-                if "?" in text:
-                    curiosity += 5.0
-                if any(w in text for w in ["disagree", "wrong", "no", "stop"]):
-                    conflict += 5.0
-                if any(w in text for w in ["shock", "couldn't believe", "crazy"]):
-                    surprise += 5.0
-                if "!" in text or any(w in text for w in ["hate", "love", "angry"]):
-                    emotion += 5.0
-                if any(w in text for w in ["money", "$", "fail", "success", "life"]):
-                    stakes += 5.0
-                if any(
-                    w in text
-                    for w in [
-                        "%",
-                        "percent",
-                        "million",
-                        "billion",
-                        "1",
-                        "2",
-                        "3",
-                        "4",
-                        "5",
-                        "6",
-                        "7",
-                        "8",
-                        "9",
-                    ]
-                ):
-                    specificity += 5.0
+        try:
+            from google import genai
 
-                # Penalties
-                if any(w in text for w in self.penalties):
-                    penalty += 15.0
+            from shorts_clipper.providers.gemini import GeminiProvider
 
-                if current_dur >= window_duration:
-                    break
+            provider = GeminiProvider(api_key=self.settings.gemini_api_key)
 
-            # Combine into 0-100 score for this window
-            base_score = curiosity + conflict + surprise + emotion + stakes + specificity
-            window_score = max(0.0, min(100.0, base_score - penalty))
+            response = provider.generate_content(
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    response_mime_type="application/json", temperature=0.0
+                ),
+            )
 
-            if window_score > best_window_score and 30.0 <= current_dur <= 75.0:
-                best_window_score = window_score
-                best_window = window_segs
+            res = json.loads(response.text)
+            highlights = res.get("highlights", [])
+            if not highlights:
+                return 0.0, [], "No highlights returned"
 
-        # Overall transcript score can be the max window score found
-        final_score = max(0.0, min(100.0, best_window_score))
-        return final_score, best_window
+            # Sort highlights by score descending and pick the best one
+            highlights.sort(key=lambda x: x.get("score", 0), reverse=True)
+            best = highlights[0]
+
+            start_t = best["start_time"]
+            end_t = best["end_time"]
+            score = best["score"]
+            reasoning = f"Signals: {', '.join(best['signals_triggered'])}. Why it won: {best['why_it_won']}."
+
+            # Phase 3 & 4: Optimize Boundaries and Dynamic Duration
+            best_window = self._optimize_boundaries(segments, start_t, end_t)
+
+            if not best_window:
+                return 0.0, [], "Failed to map window"
+
+            actual_dur = best_window[-1].end - best_window[0].start
+            target_dur = self._determine_dynamic_duration(actual_dur)
+
+            # If the optimized window is wildly off from target duration, we shrink it from the start or end
+            # depending on where the payoff is, but for safety we just trim to target_dur.
+            while best_window and (best_window[-1].end - best_window[0].start) > target_dur + 5.0:
+                # Trim from the beginning if it's too long, assuming punchline is at the end
+                best_window.pop(0)
+
+            final_dur = best_window[-1].end - best_window[0].start
+            reasoning += f" | Original Duration: {end_t - start_t:.1f}s | Calculated Target: {target_dur}s | Final Applied Duration: {final_dur:.1f}s"
+
+            return float(score), best_window, reasoning
+
+        except Exception as e:
+            log.warning("Semantic scoring failed: %s", e)
+            # True fallback (if offline)
+            return 0.0, segments[:10], f"Failed semantic scoring: {e}"

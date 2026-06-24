@@ -225,9 +225,19 @@ def run(
                     "publish_status": "idle",
                     "publish_error": None,
                 }
+
+                from shorts_clipper.core.cache import get_cached
+
+                vid_for_meta = url.split("watch?v=")[-1] if "watch?v=" in url else url
+                c_data = get_cached(vid_for_meta) or {}
+                s_title = c_data.get("title", "")
+                s_channel = c_data.get("uploader", "") or c_data.get("channel_title", "")
+
                 try:
                     provider = GeminiProvider(api_key=settings.gemini_api_key)
-                    ai_meta = provider.generate_clip_metadata(precision_segments)
+                    ai_meta = provider.generate_clip_metadata(
+                        precision_segments, source_title=s_title, source_channel=s_channel
+                    )
                     meta["title"] = ai_meta["title"]
                     meta["description"] = ai_meta["description"]
                     meta["tags"] = ai_meta["tags"]
@@ -238,13 +248,7 @@ def run(
                         idx,
                         meta_err,
                     )
-                    from shorts_clipper.core.cache import get_cached
                     from shorts_clipper.metadata.fallback import generate_fallback_metadata
-
-                    vid_for_meta = url.split("watch?v=")[-1] if "watch?v=" in url else url
-                    c_data = get_cached(vid_for_meta) or {}
-                    s_title = c_data.get("title", "")
-                    s_channel = c_data.get("uploader", "") or c_data.get("channel_title", "")
 
                     fallback_meta = generate_fallback_metadata(
                         segments=precision_segments,
