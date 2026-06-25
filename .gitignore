@@ -36,3 +36,8 @@ htmlcov/
 coverage.xml
 audit_report.md
 metadata_audit_report.md
+
+# Benchmark and testing artifacts
+benchmark.py
+generate_final.py
+dataset/
