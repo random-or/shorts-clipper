@@ -865,8 +865,8 @@ def get_trending_link(
                     # PHASE 4: FALLBACK MODE
                     if not valid_highlights:
                         if gemini_failed:
-                            if local_score >= 75.0:
-                                log.warning("[FALLBACK] Local transcript scorer selected clip.")
+                            if True:
+                                log.warning("[FALLBACK] Local transcript scorer selected clip due to API failure.")
                                 start_t = best_local_window[0].start if best_local_window else 0.0
                                 end_t = best_local_window[-1].end if best_local_window else 60.0
                                 if end_t - start_t < 15.0:
