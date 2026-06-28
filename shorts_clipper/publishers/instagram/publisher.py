@@ -1,6 +1,11 @@
 import logging
 import time
 import requests
+import urllib.parse
+import uuid
+import os
+import shutil
+import threading
 from pathlib import Path
 from typing import Callable, Optional
 from datetime import datetime
@@ -75,6 +80,41 @@ class InstagramGraphPublisher(Publisher):
                 
         raise RuntimeError("All temporary file hosts failed to upload the video.")
 
+    def _get_video_url(self, video_path: Path) -> str:
+        """Determines the public URL of the video for Meta Graph API."""
+        if self.settings.use_temp_hosts:
+            log.warning("Using deprecated temporary hosts for Instagram video upload. Set PUBLIC_URL instead.")
+            return self._upload_temp_video(video_path)
+            
+        if not self.settings.public_url:
+            raise RuntimeError("PUBLIC_URL must be set in settings/env to publish to Instagram natively. Alternatively, set SHORTS_USE_TEMP_HOSTS=true to use the legacy temporary hosts.")
+            
+        # Create a unique hardlink to prevent collision if the original is overwritten
+        hosted_dir = video_path.parent / "ig_hosted"
+        hosted_dir.mkdir(exist_ok=True)
+        unique_name = f"{video_path.stem}_{uuid.uuid4().hex[:8]}{video_path.suffix}"
+        unique_path = hosted_dir / unique_name
+        
+        try:
+            os.link(video_path, unique_path)
+        except OSError:
+            shutil.copy2(video_path, unique_path)
+            
+        def _cleanup_link(p: Path) -> None:
+            time.sleep(3600)  # Wait 1 hour for Meta to download
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
+                
+        threading.Thread(target=_cleanup_link, args=(unique_path,), daemon=True).start()
+            
+        base_url = self.settings.public_url.rstrip('/')
+        encoded_name = urllib.parse.quote(unique_name)
+        url = f"{base_url}/clips/ig_hosted/{encoded_name}"
+        log.info(f"Using self-hosted video URL: {url}")
+        return url
+
     def publish(
         self,
         video_path: Path,
@@ -91,9 +131,8 @@ class InstagramGraphPublisher(Publisher):
         caption = f"{metadata.title}\n\n{metadata.description}\n\n{tags_str}"
         
         try:
-            # Step 1: Temporarily host the video
-            video_url = self._upload_temp_video(video_path)
-            log.info(f"Temporary public video URL: {video_url}")
+            # Step 1: Get the video URL (self-hosted or temporary)
+            video_url = self._get_video_url(video_path)
             
             # Step 2: Create Media Container
             log.info("Initializing Reel upload via Graph API...")

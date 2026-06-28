@@ -14,7 +14,10 @@
 1. **Scouts Content:** Searches YouTube for videos in a specific niche (e.g., "tech", "finance") using the YouTube Data API and `yt-dlp`.
 2. **Filters & Selects:** Analyzes transcripts to find high-retention segments (using Google Gemini).
 3. **Downloads & Transcribes:** Downloads the video securely and extracts/transcribes the audio (falling back to local Whisper AI if YouTube subtitles are missing).
-4. **Renders:** Uses FFmpeg to automatically crop the video to a vertical 9:16 aspect ratio and burns in dynamic, word-by-word animated subtitles.
+4. **Renders:**
+- 📱 **Multi-Platform Publishing**: Automatically distribute rendered clips to YouTube Shorts and Instagram Reels with a single execution.
+- ⚙️ **Publishing Engine**: A highly extensible registry-based publishing architecture. Easy to add TikTok or Facebook Reels in the future.
+- 💬 **Smart Subtitles**: Burns animated, word-level subtitles into the video.
 5. **(Optional) Publishes:** Can upload the finished clip directly to your YouTube channel using OAuth.
 
 ---

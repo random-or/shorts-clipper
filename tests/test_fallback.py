@@ -6,7 +6,14 @@ from unittest.mock import MagicMock, patch
 from shorts_clipper.core.settings import Settings
 from shorts_clipper.pipeline.runner import run
 
-MockSegment = namedtuple("MockSegment", ["start", "end", "text"])
+from dataclasses import dataclass
+
+@dataclass
+class MockSegment:
+    start: float
+    end: float
+    text: str
+    words: list = None
 
 
 class FallbackMetadataTests(unittest.TestCase):
@@ -14,7 +21,7 @@ class FallbackMetadataTests(unittest.TestCase):
     @patch("shorts_clipper.pipeline.runner.process_to_vertical")
     @patch("shorts_clipper.pipeline.runner.burn_subtitles")
     @patch("shorts_clipper.pipeline.runner.transcribe_clip")
-    @patch("shorts_clipper.pipeline.runner.upload_short")
+    @patch("shorts_clipper.pipeline.runner.PublishingEngine")
     @patch("shorts_clipper.pipeline.runner.GeminiProvider")
     @patch("shorts_clipper.core.cache.get_cached")
     @patch("shorts_clipper.pipeline.runner.fetch_subtitles")
@@ -23,7 +30,7 @@ class FallbackMetadataTests(unittest.TestCase):
         mock_fetch_subs,
         mock_get_cached,
         mock_gemini_cls,
-        mock_upload,
+        mock_engine_cls,
         mock_transcribe,
         mock_burn,
         mock_process,
@@ -57,7 +64,11 @@ class FallbackMetadataTests(unittest.TestCase):
         settings = Settings.from_env()
 
         # Mock upload success
-        mock_upload.return_value = "fake_yt_id"
+        from shorts_clipper.publishers.models import PublishResult
+        mock_engine = mock_engine_cls.return_value
+        mock_engine.publish.return_value = {
+            "youtube": PublishResult("youtube", True, "https://youtube.com/shorts/fake_yt_id", "fake_yt_id", "2026-06-27T00:00:00Z")
+        }
 
         # Run pipeline
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}):
@@ -78,8 +89,8 @@ class FallbackMetadataTests(unittest.TestCase):
         self.assertIsNotNone(meta["title"])
         self.assertIsNotNone(meta["description"])
         self.assertTrue(len(meta["tags"]) > 0)
-        self.assertEqual(meta["publish_status"], "success")
-        self.assertEqual(meta["youtube_video_id"], "fake_yt_id")
+        self.assertEqual(meta["publish_status"], "partial_success")
+        self.assertEqual(meta["publish_results"]["youtube"]["platform_id"], "fake_yt_id")
 
         print("Generated Title:", meta["title"])
         print("Generated Description:", meta["description"])

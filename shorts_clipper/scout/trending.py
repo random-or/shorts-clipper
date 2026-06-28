@@ -28,6 +28,11 @@ from shorts_clipper.scout.youtube_api import YouTubeAPIClient
 log = logging.getLogger(__name__)
 
 
+def _is_english_key(k: str) -> bool:
+    k_lower = k.lower().strip()
+    return k_lower == "en" or k_lower.startswith("en-")
+
+
 
 
 def compute_scout_v2_intermediate_score(
@@ -288,11 +293,27 @@ def _get_attempt_max_age(base_days: int, attempt: int) -> int | None:
     if attempt == 3:
         relaxed = max(base_days * 4, 90)
         log.warning("Scout: still no candidates. Relaxing window to %d days.", relaxed)
-        return relaxed
+        return base_days * 10
     return None
 
 
-
+def _has_english(info: dict) -> bool:
+    subs = info.get("subtitles") or {}
+    auto = info.get("automatic_captions") or {}
+    title = info.get("title", "").lower()
+    lang = info.get("language")
+    if lang and not str(lang).lower().startswith("en"):
+        return False
+    has_non_en_orig = any(k.endswith("-orig") and not _is_english_key(k) for k in auto)
+    if has_non_en_orig:
+        return False
+    has_en_sub = any(_is_english_key(k) for k in subs) or any(_is_english_key(k) for k in auto)
+    if not has_en_sub:
+        return False
+    strict_ascii = str(os.getenv("SCOUT_STRICT_ASCII", "true")).lower() == "true"
+    if strict_ascii and any(ord(c) > 127 for c in title if c.isalpha()):
+        return False
+    return True
 
 
 def _discover_via_api(
@@ -560,10 +581,9 @@ def get_trending_link(
                         log.info("Rejected video %s: visual demo in Tech niche", vid)
                         continue
 
-                # Reject non-English titles unless explicitly allowed
-                strict_ascii = str(os.getenv("SCOUT_STRICT_ASCII", "true")).lower() == "true"
-                if strict_ascii and any(ord(c) > 127 for c in title_lower if c.isalpha()):
-                    log.info("Rejected video %s: non-English title", vid)
+                # Reject non-English videos (checks subtitles, captions, language, and ascii title)
+                if not _has_english(video):
+                    log.info("Rejected video %s: non-English content detected", vid)
                     metrics.rejected_low_quality += 1
                     continue
                 # ──────────────────────────────────────────────────────

@@ -53,6 +53,8 @@ class Settings:
     scout_max_age_days: int = 90
     subtitle_style: str = "default"
     proxy: str | None = None
+    public_url: str | None = None
+    use_temp_hosts: bool = False
     publish_platforms: list[str] = field(default_factory=lambda: ["youtube", "instagram"])
 
     @classmethod
@@ -104,6 +106,9 @@ class Settings:
         if youtube_api_key:
             os.environ["YOUTUBE_API_KEY"] = youtube_api_key
 
+        use_temp_hosts_env = _env("SHORTS_USE_TEMP_HOSTS", file_values, "false") or "false"
+        use_temp_hosts = use_temp_hosts_env.lower() in {"1", "true", "yes", "on"}
+
         return cls(
             gemini_api_key=_env("GEMINI_API_KEY", file_values),
             openai_api_key=_env("OPENAI_API_KEY", file_values),
@@ -132,5 +137,7 @@ class Settings:
             scout_max_age_days=scout_max_age_days,
             subtitle_style=subtitle_style,
             proxy=proxy,
+            public_url=_env("PUBLIC_URL", file_values),
+            use_temp_hosts=use_temp_hosts,
             publish_platforms=publish_platforms,
         )
