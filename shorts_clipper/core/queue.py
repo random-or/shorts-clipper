@@ -48,7 +48,7 @@ class Job:
 
 
 _DB_PATH = Path("outputs/jobs.db")
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 
 def _get_db_path() -> Path:
@@ -119,19 +119,6 @@ class JobQueue:
 
         global _CLEANUP_DONE
         if not _CLEANUP_DONE:
-            # Reset any stuck 'running' or 'pending' jobs to failed on server start
-            with _lock:
-                self._conn.execute(
-                    "UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE status IN (?, ?)",
-                    (
-                        JobStatus.FAILED.value,
-                        "Interrupted by server restart",
-                        time.time(),
-                        JobStatus.RUNNING.value,
-                        JobStatus.PENDING.value,
-                    ),
-                )
-                self._conn.commit()
             _CLEANUP_DONE = True
 
     def close(self) -> None:
@@ -187,6 +174,32 @@ class JobQueue:
                 (status.value, limit),
             ).fetchall()
         return [_row_to_job(r) for r in rows]
+
+    def claim_job(self) -> Job | None:
+        """Atomically claim the oldest pending job."""
+        with _lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                row = self._conn.execute(
+                    "SELECT * FROM jobs WHERE status = ? ORDER BY created_at ASC LIMIT 1",
+                    (JobStatus.PENDING.value,)
+                ).fetchone()
+                
+                if not row:
+                    self._conn.commit()
+                    return None
+                    
+                job_id = row["id"]
+                self._conn.execute(
+                    "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
+                    (JobStatus.RUNNING.value, time.time(), job_id)
+                )
+                self._conn.commit()
+                
+                return self.get(job_id)
+            except Exception:
+                self._conn.rollback()
+                raise
 
     def update_status(
         self,

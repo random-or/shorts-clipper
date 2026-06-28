@@ -58,6 +58,8 @@ def process_to_vertical(
     crf: int = 18,
     preset: str = "ultrafast",
     video_codec: str = "libx264",
+    start_time: float | None = None,
+    duration: float | None = None,
 ) -> Path:
     """
     Crop and scale a video to 1080×1920 vertical using pure FFmpeg.
@@ -94,13 +96,20 @@ def process_to_vertical(
     cmd = [
         "ffmpeg",
         "-y",
+    ]
+    if start_time is not None:
+        cmd.extend(["-ss", str(start_time)])
+    if duration is not None:
+        cmd.extend(["-t", str(duration)])
+    
+    cmd.extend([
         "-i",
         str(input_path),
         "-vf",
         vf,
         "-c:v",
         video_codec,
-    ]
+    ])
 
     if video_codec == "libx264":
         cmd.extend(["-crf", str(crf), "-preset", preset])

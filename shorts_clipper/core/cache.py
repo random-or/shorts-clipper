@@ -30,24 +30,22 @@ def get_cached(video_id: str) -> dict | None:
     with _lock:
         try:
             _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-            con = sqlite3.connect(_DB_PATH, check_same_thread=False)
-            _ensure_table(con)
-            row = con.execute(
-                "SELECT metadata_json, cached_at, ttl_hours FROM metadata_cache WHERE video_id = ?",
-                (video_id,),
-            ).fetchone()
-            if not row:
-                con.close()
-                return None
-            metadata_json, cached_at, ttl_hours = row
-            cached_dt = datetime.fromisoformat(cached_at)
-            if datetime.now() > cached_dt + timedelta(hours=ttl_hours):
-                con.execute("DELETE FROM metadata_cache WHERE video_id = ?", (video_id,))
-                con.commit()
-                con.close()
-                return None
-            con.close()
-            return json.loads(metadata_json)
+            import contextlib
+            with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
+                _ensure_table(con)
+                row = con.execute(
+                    "SELECT metadata_json, cached_at, ttl_hours FROM metadata_cache WHERE video_id = ?",
+                    (video_id,),
+                ).fetchone()
+                if not row:
+                    return None
+                metadata_json, cached_at, ttl_hours = row
+                cached_dt = datetime.fromisoformat(cached_at)
+                if datetime.now() > cached_dt + timedelta(hours=ttl_hours):
+                    con.execute("DELETE FROM metadata_cache WHERE video_id = ?", (video_id,))
+                    con.commit()
+                    return None
+                return json.loads(metadata_json)
         except Exception:
             return None
 
@@ -62,16 +60,16 @@ def set_cached(video_id: str, metadata: dict, ttl_hours: int = 6) -> None:
     with _lock:
         try:
             _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-            con = sqlite3.connect(_DB_PATH, check_same_thread=False)
-            _ensure_table(con)
-            con.execute(
-                """INSERT OR REPLACE INTO metadata_cache
-                   (video_id, metadata_json, cached_at, ttl_hours)
-                   VALUES (?, ?, ?, ?)""",
-                (video_id, json.dumps(safe), datetime.now().isoformat(), ttl_hours),
-            )
-            con.commit()
-            con.close()
+            import contextlib
+            with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
+                _ensure_table(con)
+                con.execute(
+                    """INSERT OR REPLACE INTO metadata_cache
+                       (video_id, metadata_json, cached_at, ttl_hours)
+                       VALUES (?, ?, ?, ?)""",
+                    (video_id, json.dumps(safe), datetime.now().isoformat(), ttl_hours),
+                )
+                con.commit()
         except Exception:
             pass
 
@@ -81,15 +79,15 @@ def purge_expired() -> int:
     with _lock:
         try:
             _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-            con = sqlite3.connect(_DB_PATH, check_same_thread=False)
-            _ensure_table(con)
-            cur = con.execute(
-                """DELETE FROM metadata_cache
-                   WHERE datetime(cached_at, '+' || ttl_hours || ' hours') < datetime('now')"""
-            )
-            con.commit()
-            count = cur.rowcount
-            con.close()
-            return count
+            import contextlib
+            with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
+                _ensure_table(con)
+                cur = con.execute(
+                    """DELETE FROM metadata_cache
+                       WHERE datetime(cached_at, '+' || ttl_hours || ' hours') < datetime('now')"""
+                )
+                con.commit()
+                count = cur.rowcount
+                return count
         except Exception:
             return 0

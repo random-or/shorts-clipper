@@ -128,36 +128,39 @@ def check_watchdog_channels(job_queue: JobQueue) -> None:
                     f"{url}/videos",
                 ]
             )
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-            if res.returncode == 0 and res.stdout.strip():
-                try:
-                    video_data = json.loads(res.stdout.splitlines()[0])
-                    video_id = video_data.get("id")
-                    video_url = f"https://www.youtube.com/watch?v={video_id}"
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+                if res.returncode == 0 and res.stdout.strip():
+                    try:
+                        video_data = json.loads(res.stdout.splitlines()[0])
+                        video_id = video_data.get("id")
+                        video_url = f"https://www.youtube.com/watch?v={video_id}"
 
-                    if video_id and video_id != last_seen:
-                        logger.info(
-                            "🔔 Watchdog: New video detected on channel %s: %s",
-                            ch.get("name"),
-                            video_url,
-                        )
+                        if video_id and video_id != last_seen:
+                            logger.info(
+                                "🔔 Watchdog: New video detected on channel %s: %s",
+                                ch.get("name"),
+                                video_url,
+                            )
 
-                        # Create autopilot job
-                        job_queue.create(
-                            "autopilot",
-                            {
-                                "niche": "auto_watchdog",
-                                "url": video_url,
-                                "count": 1,
-                                "upload": True,
-                                "scout_duration": "today",
-                            },
-                        )
+                            # Create autopilot job
+                            job_queue.create(
+                                "autopilot",
+                                {
+                                    "niche": "auto_watchdog",
+                                    "url": video_url,
+                                    "count": 1,
+                                    "upload": True,
+                                    "scout_duration": "today",
+                                },
+                            )
 
-                        ch["last_seen_video"] = video_id
-                        changed = True
-                except Exception as inner:
-                    logger.error("Watchdog parse error for %s: %s", url, inner)
+                            ch["last_seen_video"] = video_id
+                            changed = True
+                    except Exception as inner:
+                        logger.error("Watchdog parse error for %s: %s", url, inner)
+            except Exception as cmd_err:
+                logger.error("Watchdog subprocess error for %s: %s", url, cmd_err)
 
         if changed:
             watchdog_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -186,6 +189,24 @@ def run_worker() -> None:
     watchdog_thread = threading.Thread(target=watchdog_thread_loop, daemon=True)
     watchdog_thread.start()
 
+    def cancellation_monitor_thread_loop() -> None:
+        """Continuously monitors the active job status and terminates subprocesses if cancelled."""
+        while True:
+            jid = active_job_id
+            if jid:
+                try:
+                    current = job_queue.get(jid)
+                    if current and current.status == JobStatus.CANCELLED:
+                        logger.info("Cancellation monitor detected cancelled job: %s. Terminating processes...", jid)
+                        cancel_active_processes()
+                except Exception:
+                    pass
+            time.sleep(1.0)
+
+    # Launch cancellation monitor thread
+    cancel_thread = threading.Thread(target=cancellation_monitor_thread_loop, daemon=True)
+    cancel_thread.start()
+
     # Clean up any stuck running jobs left from a previous crash/termination
     for job in job_queue.list_by_status(JobStatus.RUNNING):
         logger.info("Resetting stuck running job to pending: %s", job.id)
@@ -195,12 +216,11 @@ def run_worker() -> None:
         update_heartbeat()
         time.sleep(1.0)
 
-        # Check for pending jobs
-        pending_jobs = job_queue.list_by_status(JobStatus.PENDING, limit=1)
-        if not pending_jobs:
+        # Check for and claim a pending job atomically
+        job = job_queue.claim_job()
+        if not job:
             continue
 
-        job = pending_jobs[0]
         active_job_id = job.id
         logger.info("📥 Acquired job: %s [%s]", job.id, job.kind)
 
@@ -374,6 +394,9 @@ def run_worker() -> None:
                     result={"clip_count": 1},
                 )
                 logger.info("✅ Precise Render job finished successfully: %s", job.id)
+
+            else:
+                raise ValueError(f"Unknown job kind: {job.kind}")
 
         except JobCancelledError as exc:
             logger.warning("❌ Job %s cancelled: %s", job.id, exc)

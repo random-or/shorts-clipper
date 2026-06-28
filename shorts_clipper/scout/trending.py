@@ -28,9 +28,6 @@ from shorts_clipper.scout.youtube_api import YouTubeAPIClient
 log = logging.getLogger(__name__)
 
 
-def _is_english_key(k: str) -> bool:
-    k_lower = k.lower().strip()
-    return k_lower == "en" or k_lower.startswith("en-")
 
 
 def compute_scout_v2_intermediate_score(
@@ -50,9 +47,9 @@ def compute_scout_v2_intermediate_score(
     now_utc = now.replace(tzinfo=UTC) if now.tzinfo is None else now
     hours_live = max((now_utc - published).total_seconds() / 3600, 1)
 
-    views = max(video.get("view_count", 0), 1)
-    likes = video.get("like_count", 0)
-    comments = video.get("comment_count", 0)
+    views = max(int(video.get("view_count") or 0), 1)
+    likes = int(video.get("like_count") or 0)
+    comments = int(video.get("comment_count") or 0)
 
     views_velocity = views / hours_live
 
@@ -106,7 +103,7 @@ _AGE_RELAXATION_ALLOWED = str(os.getenv("SCOUT_ALLOW_AGE_RELAXATION", "true")).l
 _failure_lock = threading.Lock()
 _consecutive_yt_failures = 0
 _yt_paused_until: float = 0.0
-_quarantine_queue: dict[str, dict] = {}
+
 
 
 def _yt_circuit_breaker_check() -> bool:
@@ -201,7 +198,18 @@ def fetch_metadata_batch(video_ids: list[str]) -> list[dict]:
         )
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=_YT_DLP_TIMEOUT)
-            if result.returncode == 0:
+            results_found = False
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    results.append(json.loads(line))
+                    results_found = True
+                except json.JSONDecodeError:
+                    continue
+            
+            if result.returncode == 0 or results_found:
                 _yt_record_success()
             else:
                 err_str = result.stderr or ""
@@ -218,14 +226,6 @@ def fetch_metadata_batch(video_ids: list[str]) -> list[dict]:
                     log.warning("YouTube Access Forbidden (403) detected during metadata fetch!")
                 _yt_record_failure()
                 continue
-            for line in result.stdout.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    results.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
         except subprocess.TimeoutExpired:
             _yt_record_failure()
             log.warning("Batch metadata fetch timed out for %d videos", len(batch))
@@ -292,23 +292,7 @@ def _get_attempt_max_age(base_days: int, attempt: int) -> int | None:
     return None
 
 
-def _has_english(info: dict) -> bool:
-    subs = info.get("subtitles") or {}
-    auto = info.get("automatic_captions") or {}
-    title = info.get("title", "").lower()
-    lang = info.get("language")
-    if lang and not str(lang).lower().startswith("en"):
-        return False
-    has_non_en_orig = any(k.endswith("-orig") and not _is_english_key(k) for k in auto)
-    if has_non_en_orig:
-        return False
-    has_en_sub = any(_is_english_key(k) for k in subs) or any(_is_english_key(k) for k in auto)
-    if not has_en_sub:
-        return False
-    strict_ascii = str(os.getenv("SCOUT_STRICT_ASCII", "false")).lower() == "true"
-    if strict_ascii and any(ord(c) > 127 for c in title if c.isalpha()):
-        return False
-    return True
+
 
 
 def _discover_via_api(
@@ -335,9 +319,9 @@ def _discover_via_api(
                 "channel_id": snippet.get("channelId", ""),
                 "channel_title": snippet.get("channelTitle", ""),
                 "language": snippet.get("defaultAudioLanguage", ""),
-                "view_count": int(stats.get("viewCount", 0)),
-                "like_count": int(stats.get("likeCount", 0)),
-                "comment_count": int(stats.get("commentCount", 0)),
+                "view_count": int(stats.get("viewCount") or 0),
+                "like_count": int(stats.get("likeCount") or 0),
+                "comment_count": int(stats.get("commentCount") or 0),
                 "duration_s": client.parse_duration_seconds(content.get("duration", "PT0S")),
                 "_source": "youtube_api",
                 "_source_query": query,
@@ -367,7 +351,18 @@ def _discover_via_ytdlp(query: str, max_age_days: int, metrics: ScoutMetrics) ->
     )
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=_YT_DLP_TIMEOUT)
-        if result.returncode == 0:
+        videos = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line:
+                try:
+                    v = json.loads(line)
+                    v["_source_query"] = query
+                    videos.append(v)
+                except Exception:
+                    continue
+
+        if result.returncode == 0 or videos:
             _yt_record_success()
         else:
             err_str = result.stderr or ""
@@ -380,16 +375,7 @@ def _discover_via_ytdlp(query: str, max_age_days: int, metrics: ScoutMetrics) ->
                 log.warning("YouTube Access Forbidden (403) detected during search!")
             _yt_record_failure()
             return []
-        videos = []
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if line:
-                try:
-                    v = json.loads(line)
-                    v["_source_query"] = query
-                    videos.append(v)
-                except Exception:
-                    continue
+
         metrics.video_ids_discovered += len(videos)
         return videos
     except Exception as exc:
@@ -414,8 +400,10 @@ def get_trending_link(
 ) -> str | None:
     purge_expired()
     log.info(f"SCOUT RECEIVED:\nniche={niche}\nkeyword={keyword}")
+    import uuid
+    job_id_str = job_id or str(uuid.uuid4())[:8]
     metrics = ScoutMetrics(
-        niche=niche or "", keyword=keyword or "", time_window_days=max_age_days or 0
+        run_id=job_id_str, niche=niche or "", keyword=keyword or "", time_window_days=max_age_days or 0
     )
     api_key = os.getenv("YOUTUBE_API_KEY", "")
     client = YouTubeAPIClient(api_key) if api_key else None
@@ -431,11 +419,12 @@ def get_trending_link(
 
         db_path = Path("outputs/scout_memory.db")
         if db_path.exists():
-            con = sqlite3.connect(db_path, check_same_thread=False)
-            rows = con.execute(
-                "SELECT channel_id, success_count, avg_virality, niche FROM successful_channels"
-            ).fetchall()
-            con.close()
+            import contextlib
+            with contextlib.closing(sqlite3.connect(db_path, check_same_thread=False)) as con:
+                rows = con.execute(
+                    "SELECT channel_id, success_count, avg_virality, niche FROM successful_channels"
+                ).fetchall()
+
             channel_history = {
                 r[0]: {"success_count": r[1], "avg_virality": r[2], "niche": r[3]} for r in rows
             }
@@ -1046,7 +1035,9 @@ def get_trending_link(
                     }
 
                     try:
-                        report_path = Path("outputs/scout_report.json")
+                        import uuid
+                        job_suffix = f"_{job_id}" if job_id else f"_{uuid.uuid4().hex[:8]}"
+                        report_path = Path(f"outputs/scout_report{job_suffix}.json")
                         report_path.parent.mkdir(parents=True, exist_ok=True)
                         report_path.write_text(
                             json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"

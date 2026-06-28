@@ -469,8 +469,16 @@ def stream_render_pipeline(
         if yt_proc.stdout:
             yt_proc.stdout.close()
 
-        ffmpeg_out, ffmpeg_errs = ffmpeg_proc.communicate()
-        yt_out, yt_errs = yt_proc.communicate()
+        try:
+            ffmpeg_out, ffmpeg_errs = ffmpeg_proc.communicate(timeout=600)
+            yt_out, yt_errs = yt_proc.communicate(timeout=60)
+        except subprocess.TimeoutExpired:
+            log.error("Stream pipeline timed out! Killing yt-dlp and ffmpeg processes...")
+            yt_proc.kill()
+            ffmpeg_proc.kill()
+            yt_proc.communicate()
+            ffmpeg_proc.communicate()
+            raise RuntimeError("Stream render pipeline timed out after 600 seconds.")
 
         if yt_proc.returncode != 0:
             yt_err_msg = yt_errs.decode(errors="ignore").strip()

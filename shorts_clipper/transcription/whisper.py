@@ -41,7 +41,7 @@ def _get_audio_bytes(media_path: Path) -> tuple[bytes, str]:
             "aac",
             str(tmp_path),
         ]
-        subprocess.run(cmd, check=True, capture_output=True)
+        subprocess.run(cmd, check=True, capture_output=True, timeout=600)
         return tmp_path.read_bytes(), "audio/m4a"
     finally:
         if tmp_path.exists():
@@ -188,9 +188,9 @@ def transcribe_clip(
     video_path = Path(video_path)
 
     # Try Gemini first for ultra-fast, premium transcription
-    gemini_segments = _transcribe_with_gemini(video_path)
-    if gemini_segments is not None:
-        return gemini_segments
+    # gemini_segments = _transcribe_with_gemini(video_path)
+    # if gemini_segments is not None:
+    #     return gemini_segments
 
     log.info("🎙 Transcribing %s with Whisper...", video_path.name)
 

@@ -230,7 +230,10 @@ def download_audio(
 
     cmd.append(url)
     try:
-        subprocess.run(cmd, check=True, capture_output=True)
+        subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        log.error("Audio download timed out after 10 minutes: %s", url)
+        raise
     except subprocess.CalledProcessError as err:
         err_str = err.stderr.decode(errors="ignore") if err.stderr else ""
         log.error("Audio download failed via yt-dlp: %s. Stderr: %s", err, err_str)
@@ -313,12 +316,15 @@ def download_clip(
 
     cmd.append(url)
     try:
-        subprocess.run(cmd, check=True, capture_output=True)
+        subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        log.error("Video clip download timed out after 10 minutes: %s", url)
+        raise
     except subprocess.CalledProcessError as err:
         err_str = err.stderr.decode(errors="ignore") if err.stderr else ""
         log.error("Video clip download failed via yt-dlp: %s. Stderr: %s", err, err_str)
         if "429" in err_str or "too many requests" in err_str.lower():
-            log.warning("YouTube THROTTROUTLING/RATE LIMIT (429) detected during video download!")
+            log.warning("YouTube THROTTLING/RATE LIMIT (429) detected during video download!")
         elif "403" in err_str:
             log.warning("YouTube Access Forbidden (403) detected during video download!")
         raise

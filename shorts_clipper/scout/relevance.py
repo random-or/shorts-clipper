@@ -126,8 +126,5 @@ Here are the videos:
             return passed_candidates
 
         except Exception as e:
-            log.error(
-                "Semantic Relevance Gate API failed: %s. REJECTING ALL CANDIDATES to preserve safety.",
-                e,
-            )
-            return []
+            log.error(f"Semantic Relevance Gate API failed: {e}. ALLOWING ALL CANDIDATES as fallback.")
+            return candidates

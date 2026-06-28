@@ -63,65 +63,65 @@ def record_success(winner: dict, niche: str, query: str, virality: float) -> Non
     with _lock:
         try:
             _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-            con = sqlite3.connect(_DB_PATH, check_same_thread=False)
-            _ensure_tables(con)
+            import contextlib
+            with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
+                _ensure_tables(con)
 
-            if channel_id:
-                # Update channel
-                row = con.execute(
-                    "SELECT success_count, avg_virality FROM successful_channels WHERE channel_id = ?",
-                    (channel_id,),
-                ).fetchone()
-                if row:
-                    sc = row[0] + 1
-                    av = (row[1] * row[0] + virality) / sc
+                if channel_id:
+                    # Update channel
+                    row = con.execute(
+                        "SELECT success_count, avg_virality FROM successful_channels WHERE channel_id = ?",
+                        (channel_id,),
+                    ).fetchone()
+                    if row:
+                        sc = row[0] + 1
+                        av = (row[1] * row[0] + virality) / sc
+                        con.execute(
+                            "UPDATE successful_channels SET success_count = ?, avg_virality = ?, last_success = ? WHERE channel_id = ?",
+                            (sc, av, now_str, channel_id),
+                        )
+                    else:
+                        con.execute(
+                            "INSERT INTO successful_channels (channel_id, channel_title, niche, success_count, last_success, avg_virality) VALUES (?, ?, ?, 1, ?, ?)",
+                            (channel_id, channel_title, niche, now_str, virality),
+                        )
+
+                if query:
+                    # Update query
+                    row = con.execute(
+                        "SELECT success_count, avg_virality FROM successful_queries WHERE query = ? AND niche = ?",
+                        (query, niche),
+                    ).fetchone()
+                    if row:
+                        sc = row[0] + 1
+                        av = (row[1] * row[0] + virality) / sc
+                        con.execute(
+                            "UPDATE successful_queries SET success_count = ?, avg_virality = ?, last_success = ? WHERE query = ? AND niche = ?",
+                            (sc, av, now_str, query, niche),
+                        )
+                    else:
+                        con.execute(
+                            "INSERT INTO successful_queries (query, niche, success_count, last_success, avg_virality) VALUES (?, ?, 1, ?, ?)",
+                            (query, niche, now_str, virality),
+                        )
+
+                if video_id:
+                    # Record video
                     con.execute(
-                        "UPDATE successful_channels SET success_count = ?, avg_virality = ?, last_success = ? WHERE channel_id = ?",
-                        (sc, av, now_str, channel_id),
-                    )
-                else:
-                    con.execute(
-                        "INSERT INTO successful_channels (channel_id, channel_title, niche, success_count, last_success, avg_virality) VALUES (?, ?, ?, 1, ?, ?)",
-                        (channel_id, channel_title, niche, now_str, virality),
+                        "INSERT OR REPLACE INTO successful_videos (video_id, title, channel_id, niche, virality_score, view_count, published_at, clipped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            video_id,
+                            title,
+                            channel_id,
+                            niche,
+                            virality,
+                            view_count,
+                            published_at,
+                            now_str,
+                        ),
                     )
 
-            if query:
-                # Update query
-                row = con.execute(
-                    "SELECT success_count, avg_virality FROM successful_queries WHERE query = ? AND niche = ?",
-                    (query, niche),
-                ).fetchone()
-                if row:
-                    sc = row[0] + 1
-                    av = (row[1] * row[0] + virality) / sc
-                    con.execute(
-                        "UPDATE successful_queries SET success_count = ?, avg_virality = ?, last_success = ? WHERE query = ? AND niche = ?",
-                        (sc, av, now_str, query, niche),
-                    )
-                else:
-                    con.execute(
-                        "INSERT INTO successful_queries (query, niche, success_count, last_success, avg_virality) VALUES (?, ?, 1, ?, ?)",
-                        (query, niche, now_str, virality),
-                    )
-
-            if video_id:
-                # Record video
-                con.execute(
-                    "INSERT OR REPLACE INTO successful_videos (video_id, title, channel_id, niche, virality_score, view_count, published_at, clipped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        video_id,
-                        title,
-                        channel_id,
-                        niche,
-                        virality,
-                        view_count,
-                        published_at,
-                        now_str,
-                    ),
-                )
-
-            con.commit()
-            con.close()
+                con.commit()
         except Exception:
             pass
 
@@ -135,14 +135,14 @@ def get_successful_channels(niche: str, limit: int = 10) -> list[str]:
         try:
             if not _DB_PATH.exists():
                 return []
-            con = sqlite3.connect(_DB_PATH, check_same_thread=False)
-            _ensure_tables(con)
-            rows = con.execute(
-                "SELECT channel_id FROM successful_channels WHERE niche = ? ORDER BY avg_virality DESC, success_count DESC LIMIT ?",
-                (niche, limit),
-            ).fetchall()
-            con.close()
-            return [r[0] for r in rows]
+            import contextlib
+            with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
+                _ensure_tables(con)
+                rows = con.execute(
+                    "SELECT channel_id FROM successful_channels WHERE niche = ? ORDER BY avg_virality DESC, success_count DESC LIMIT ?",
+                    (niche, limit),
+                ).fetchall()
+                return [r[0] for r in rows]
         except Exception:
             return []
 
@@ -156,13 +156,13 @@ def get_successful_queries(niche: str, limit: int = 5) -> list[str]:
         try:
             if not _DB_PATH.exists():
                 return []
-            con = sqlite3.connect(_DB_PATH, check_same_thread=False)
-            _ensure_tables(con)
-            rows = con.execute(
-                "SELECT query FROM successful_queries WHERE niche = ? ORDER BY avg_virality DESC, success_count DESC LIMIT ?",
-                (niche, limit),
-            ).fetchall()
-            con.close()
-            return [r[0] for r in rows]
+            import contextlib
+            with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
+                _ensure_tables(con)
+                rows = con.execute(
+                    "SELECT query FROM successful_queries WHERE niche = ? ORDER BY avg_virality DESC, success_count DESC LIMIT ?",
+                    (niche, limit),
+                ).fetchall()
+                return [r[0] for r in rows]
         except Exception:
             return []

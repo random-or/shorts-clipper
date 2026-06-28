@@ -831,7 +831,7 @@ class GeminiProvider(HighlightProvider):
         self,
         *,
         api_key: str | None = None,
-        model: str = "gemini-flash-lite-latest",
+        model: str = "gemini-flash-latest",
         fallback_window: tuple[float, float] = (60.0, 95.0),
         fallback_layout: str = "crop_center",
     ) -> None:
@@ -839,10 +839,11 @@ class GeminiProvider(HighlightProvider):
         self._fallback_window = fallback_window
         self._fallback_layout = fallback_layout
 
-        # Lazy import — keeps the package importable without google-genai installed
         from google import genai  # type: ignore[import]
+        from shorts_clipper.core.settings import Settings
 
-        self._client = genai.Client(api_key=api_key or os.environ.get("GEMINI_API_KEY"))
+        settings = Settings.from_env()
+        self._client = genai.Client(api_key=api_key or settings.gemini_api_key or os.environ.get("GEMINI_API_KEY"))
 
     def generate_content(
         self, contents: any, max_retries: int = 5, initial_delay: float = 5.0, **kwargs
@@ -858,16 +859,28 @@ class GeminiProvider(HighlightProvider):
                 )
             except Exception as exc:
                 exc_str = str(exc)
-                is_quota_exhausted = (
+                is_quota = "quota" in exc_str.lower()
+                is_rate_limit = (
                     "429" in exc_str
                     or "RESOURCE_EXHAUSTED" in exc_str
-                    or "quota" in exc_str.lower()
                     or getattr(exc, "code", None) == 429
                     or getattr(exc, "status_code", None) == 429
                 )
-                if is_quota_exhausted:
+                if is_quota:
                     log.error("GEMINI QUOTA EXHAUSTED\nSWITCHING TO FALLBACK")
                     raise GeminiQuotaExhaustedError(exc_str) from exc
+                elif is_rate_limit:
+                    log.warning("Gemini Rate Limit (429) hit. Will retry.")
+
+                is_auth_error = (
+                    "400" in exc_str
+                    or "INVALID_ARGUMENT" in exc_str
+                    or "API_KEY_INVALID" in exc_str
+                    or "API key not valid" in exc_str
+                )
+                if is_auth_error:
+                    log.error("GEMINI API KEY INVALID OR MISSING: %s", exc_str)
+                    raise ProviderError(f"Gemini API key is invalid or missing: {exc_str}") from exc
 
                 if attempt == max_retries:
                     log.error(
@@ -912,7 +925,12 @@ class GeminiProvider(HighlightProvider):
 
             try:
                 data = json.loads(json_str)
-            except json.JSONDecodeError as exc:
+                if not isinstance(data, dict):
+                    if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                        data = data[0]
+                    else:
+                        raise ValueError(f"Expected dict, got {type(data)}")
+            except Exception as exc:
                 raise ProviderError(f"Gemini returned unparseable JSON: {raw!r}") from exc
 
             start = float(data.get("timestamp_start", data.get("start", 0.0)))
@@ -1015,7 +1033,15 @@ class GeminiProvider(HighlightProvider):
                 raise ProviderError(f"Gemini returned unparseable JSON array: {raw!r}") from exc
 
             if not isinstance(items, list):
-                raise ProviderError(f"Gemini response did not return a JSON list: {raw!r}")
+                if isinstance(items, dict):
+                    extracted = None
+                    for val in items.values():
+                        if isinstance(val, list):
+                            extracted = val
+                            break
+                    items = extracted if extracted is not None else [items]
+                else:
+                    raise ProviderError(f"Gemini response did not return a JSON list: {raw!r}")
 
             results: list[tuple[ClipWindow, str]] = []
             for item in items[:count]:
@@ -1081,7 +1107,15 @@ class GeminiProvider(HighlightProvider):
             try:
                 items = json.loads(json_str)
                 if not isinstance(items, list):
-                    items = []
+                    if isinstance(items, dict):
+                        extracted = None
+                        for val in items.values():
+                            if isinstance(val, list):
+                                extracted = val
+                                break
+                        items = extracted if extracted is not None else [items]
+                    else:
+                        items = []
             except json.JSONDecodeError as exc:
                 log.info("[GEMINI] JSON parse failed, attempting timestamp extraction")
                 start, end = None, None
@@ -1333,7 +1367,9 @@ Return ONLY valid JSON. No markdown. No commentary.
 
         try:
             data = json.loads(json_str)
-        except json.JSONDecodeError as exc:
+            if not isinstance(data, dict):
+                raise ValueError(f"Expected dict, got {type(data)}")
+        except Exception as exc:
             log.error("Gemini returned unparseable metadata JSON: %r", raw)
             raise ProviderError(f"Metadata JSON parse failed: {raw!r}") from exc
 

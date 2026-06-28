@@ -10,7 +10,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-METRICS_FILE = Path("outputs/scout_metrics.json")
+# No shared METRICS_FILE constant anymore
 
 
 @dataclass
@@ -76,13 +76,6 @@ class ScoutMetrics:
         else:
             self.failure_reason = failure_reason
 
-        METRICS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        history = []
-        if METRICS_FILE.exists():
-            try:
-                history = json.loads(METRICS_FILE.read_text())
-            except Exception:
-                history = []
-        history.append(asdict(self))
-        history = history[-100:]
-        METRICS_FILE.write_text(json.dumps(history, indent=2))
+        metrics_file = Path(f"outputs/scout_metrics_{self.run_id}.json")
+        metrics_file.parent.mkdir(parents=True, exist_ok=True)
+        metrics_file.write_text(json.dumps(asdict(self), indent=2))

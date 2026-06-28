@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -34,6 +34,10 @@ class Settings:
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
     youtube_api_key: str | None = None
+    instagram_username: str | None = None
+    instagram_password: str | None = None
+    ig_access_token: str | None = None
+    ig_account_id: str | None = None
     ollama_base_url: str = "http://localhost:11434"
     default_provider: str = "gemini"
     whisper_model: str = "tiny.en"
@@ -49,6 +53,7 @@ class Settings:
     scout_max_age_days: int = 90
     subtitle_style: str = "default"
     proxy: str | None = None
+    publish_platforms: list[str] = field(default_factory=lambda: ["youtube", "instagram"])
 
     @classmethod
     def from_env(cls, env_path: str | Path = ".env") -> Settings:
@@ -82,9 +87,15 @@ class Settings:
             _env("SHORTS_VIDEO_PRESET", file_values, default_video_preset) or default_video_preset
         )
 
-        scout_max_age_days = int(_env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90")
+        try:
+            scout_max_age_days = int(_env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90")
+        except ValueError:
+            scout_max_age_days = 90
         subtitle_style = _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
         proxy = _env("SHORTS_PROXY", file_values)
+        
+        platforms_raw = _env("SHORTS_PUBLISH_PLATFORMS", file_values, "youtube,instagram") or "youtube,instagram"
+        publish_platforms = [p.strip() for p in platforms_raw.split(",") if p.strip()]
 
         if proxy:
             os.environ["SHORTS_PROXY"] = proxy
@@ -98,6 +109,10 @@ class Settings:
             openai_api_key=_env("OPENAI_API_KEY", file_values),
             anthropic_api_key=_env("ANTHROPIC_API_KEY", file_values),
             youtube_api_key=_env("YOUTUBE_API_KEY", file_values),
+            instagram_username=_env("INSTAGRAM_USERNAME", file_values),
+            instagram_password=_env("INSTAGRAM_PASSWORD", file_values),
+            ig_access_token=_env("IG_ACCESS_TOKEN", file_values),
+            ig_account_id=_env("IG_ACCOUNT_ID", file_values),
             ollama_base_url=_env("OLLAMA_BASE_URL", file_values, "http://localhost:11434")
             or "http://localhost:11434",
             default_provider=_env("SHORTS_PROVIDER", file_values, "gemini") or "gemini",
@@ -117,4 +132,5 @@ class Settings:
             scout_max_age_days=scout_max_age_days,
             subtitle_style=subtitle_style,
             proxy=proxy,
+            publish_platforms=publish_platforms,
         )

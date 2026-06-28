@@ -24,6 +24,8 @@ from shorts_clipper.captions.generator import burn_subtitles
 from shorts_clipper.core.exceptions import MediaProcessingError
 from shorts_clipper.core.logging import configure_logging
 from shorts_clipper.core.settings import Settings
+from dataclasses import replace
+from shorts_clipper.pipeline.finisher import EditorialFinisher
 from shorts_clipper.downloader.yt_dlp import (
     download_audio,
     download_clip,
@@ -32,7 +34,7 @@ from shorts_clipper.downloader.yt_dlp import (
 from shorts_clipper.providers.gemini import GeminiProvider
 from shorts_clipper.rendering.crop import process_to_vertical
 from shorts_clipper.scout.trending import get_trending_link
-from shorts_clipper.social.youtube import upload_short
+from shorts_clipper.publishers import PublishingEngine, ClipMetadata
 from shorts_clipper.transcription.whisper import transcribe_clip
 
 log = logging.getLogger(__name__)
@@ -50,7 +52,9 @@ def run(
     output_path: Path | None = None,
     count: int = 1,
     upload: bool = False,
+    platforms: list[str] | None = None,
     privacy: str = "private",
+    niche: str | None = None,
     progress_callback: Callable[[int], None] | None = None,
 ) -> Path | list[Path]:
     """
@@ -76,6 +80,9 @@ def run(
     if settings is None:
         settings = Settings.from_env()
 
+    if platforms is None:
+        platforms = settings.publish_platforms
+
     configure_logging(settings.log_level)
     log.info("🚀 PIPELINE START: %s (extracting %d clip(s))", url, count)
 
@@ -89,7 +96,9 @@ def run(
             from shorts_clipper.core.cache import get_cached
             from shorts_clipper.core.models import ClipWindow
 
-            vid = url.split("watch?v=")[-1] if "watch?v=" in url else url
+            import re
+            vid_match = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})(?:\?|&|/|$)", url)
+            vid = vid_match.group(1) if vid_match else url
             cached_data = get_cached(vid)
 
             clips = None
@@ -168,11 +177,14 @@ def run(
                 clip_work_dir.mkdir(parents=True, exist_ok=True)
                 micro_path = clip_work_dir / "micro_clip.mp4"
 
-                # ── PASS 2: PRECISION TRANSCRIPTION ───────────────────────
+                # ── PASS 2: PRECISION TRANSCRIPTION (WITH BUFFER) ─────────────
                 log.info("\n--- PASS 2: PRECISION TRANSCRIPTION ---")
                 if progress_callback:
                     progress_callback(30)
-                download_clip(url, micro_path, start_time=window.start, end_time=window.end)
+                
+                BUFFER = 45.0
+                buffered_start = max(0.0, window.start - BUFFER)
+                download_clip(url, micro_path, start_time=buffered_start, end_time=window.end + BUFFER)
 
                 log.info(
                     "Running Whisper (%s) on micro-clip for word-level timing...",
@@ -182,8 +194,43 @@ def run(
                     progress_callback(50)
                 precision_segments = transcribe_clip(micro_path)
 
-                # ── Step 3: Vertical crop ─────────────────────────────────────
-                log.info("\n--- VERTICAL CROP ---")
+                # ── Step 2.5: Editorial Finisher ──────────────────────────────
+                finisher = EditorialFinisher()
+                target_start_in_buffer = window.start - buffered_start
+                target_end_in_buffer = window.end - buffered_start
+                final_window = finisher.snap_boundaries(target_start_in_buffer, target_end_in_buffer, precision_segments)
+                
+                # Shift timestamps in precision_segments to account for trimming
+                trim_start = final_window.start
+                duration = final_window.end - final_window.start
+                shifted_segments = []
+                for s in precision_segments:
+                    shifted_words = []
+                    if s.words:
+                        for w in s.words:
+                            new_start = w.start - trim_start
+                            new_end = w.end - trim_start
+                            # Strict inclusion: word must roughly fit entirely inside the new duration
+                            if new_start >= -0.1 and new_end <= duration + 0.1:
+                                shifted_words.append(replace(w, start=new_start, end=new_end))
+                    
+                    if shifted_words:
+                        seg_start = shifted_words[0].start
+                        seg_end = shifted_words[-1].end
+                        seg_text = " ".join(w.word for w in shifted_words)
+                        shifted_segments.append(
+                            replace(s, start=seg_start, end=seg_end, text=seg_text, words=shifted_words)
+                        )
+                    elif not s.words:
+                        # Fallback if no word-level timestamps
+                        new_start = s.start - trim_start
+                        new_end = s.end - trim_start
+                        if new_start >= -0.1 and new_end <= duration + 0.1:
+                            shifted_segments.append(replace(s, start=new_start, end=new_end))
+                precision_segments = shifted_segments
+
+                # ── Step 3: Vertical crop + Trim ──────────────────────────────
+                log.info("\n--- VERTICAL CROP & TRIM ---")
                 if progress_callback:
                     progress_callback(70)
                 cropped_path = clip_work_dir / "cropped.mp4"
@@ -193,6 +240,8 @@ def run(
                     layout=layout,
                     video_codec=settings.video_codec,
                     preset=settings.video_preset,
+                    start_time=trim_start,
+                    duration=duration,
                 )
 
                 # ── Step 4: Burn subtitles + 1.15× pacing (single pass) ───────
@@ -211,7 +260,7 @@ def run(
                 )
 
                 try:
-                    from shorts_clipper.render.thumbnailer import extract_thumbnail
+                    from shorts_clipper.rendering.thumbnailer import extract_thumbnail
 
                     extract_thumbnail(current_output_path)
                 except Exception as thumb_err:
@@ -228,7 +277,9 @@ def run(
 
                 from shorts_clipper.core.cache import get_cached
 
-                vid_for_meta = url.split("watch?v=")[-1] if "watch?v=" in url else url
+                import re
+                vid_match = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})(?:\?|&|/|$)", url)
+                vid_for_meta = vid_match.group(1) if vid_match else url
                 c_data = get_cached(vid_for_meta) or {}
                 s_title = c_data.get("title", "")
                 s_channel = c_data.get("uploader", "") or c_data.get("channel_title", "")
@@ -254,7 +305,7 @@ def run(
                         segments=precision_segments,
                         source_title=s_title,
                         source_channel=s_channel,
-                        niche="tech",  # Settings object might not have niche directly, safe default
+                        niche=niche or "tech",
                     )
                     meta["title"] = fallback_meta["title"]
                     meta["description"] = fallback_meta["description"]
@@ -279,10 +330,10 @@ def run(
                 output_paths.append(current_output_path)
                 log.info("✅ Clip %d ready at: %s", idx, current_output_path)
 
-                if upload:
+                if upload and platforms:
                     if progress_callback:
                         progress_callback(95)
-                    log.info("Uploading Clip %d to YouTube Shorts...", idx)
+                    log.info("Publishing Clip %d to platforms: %s", idx, platforms)
                     try:
                         meta["publish_status"] = "uploading"
                         json_path.write_text(
@@ -292,7 +343,7 @@ def run(
 
                         if not meta.get("title") or not meta.get("description"):
                             log.error(
-                                "❌ REFUSING TO UPLOAD clip %d: metadata is missing. "
+                                "❌ REFUSING TO PUBLISH clip %d: metadata is missing. "
                                 "Title=%r, Description=%r",
                                 idx,
                                 meta.get("title"),
@@ -306,25 +357,43 @@ def run(
                             )
                             continue
 
-                        vid_id = upload_short(
-                            str(current_output_path),
+                        clip_metadata = ClipMetadata(
                             title=meta["title"],
                             description=meta["description"],
                             tags=meta.get("tags", ["shorts"]),
                             privacy_status=privacy,
                         )
-                        meta["publish_status"] = "success"
-                        meta["youtube_video_id"] = vid_id
-                        meta["publish_error"] = None
+
+                        engine = PublishingEngine()
+                        publish_results = engine.publish(
+                            video_path=current_output_path,
+                            metadata=clip_metadata,
+                            platforms=platforms,
+                        )
+
+                        # Update metadata JSON with results
+                        meta["publish_results"] = {
+                            p: {
+                                "success": r.success,
+                                "url": r.url,
+                                "platform_id": r.platform_id,
+                                "error_message": r.error_message
+                            } for p, r in publish_results.items()
+                        }
+                        
+                        successes = [r for r in publish_results.values() if r.success]
+                        if len(successes) == len(platforms):
+                            meta["publish_status"] = "success"
+                        elif len(successes) > 0:
+                            meta["publish_status"] = "partial_success"
+                        else:
+                            meta["publish_status"] = "failed"
+                            
                         json_path.write_text(
                             json.dumps(meta, indent=2, ensure_ascii=False),
                             encoding="utf-8",
                         )
-                        log.info(
-                            "✅ Clip %d uploaded to YouTube successfully! Video ID: %s",
-                            idx,
-                            vid_id,
-                        )
+                        log.info("✅ Clip %d publishing completed with status: %s", idx, meta["publish_status"])
                     except Exception as upload_err:
                         meta["publish_status"] = "failed"
                         meta["publish_error"] = str(upload_err)
@@ -332,7 +401,7 @@ def run(
                             json.dumps(meta, indent=2, ensure_ascii=False),
                             encoding="utf-8",
                         )
-                        log.error("❌ Failed to upload clip %d: %s", idx, upload_err)
+                        log.error("❌ Failed to publish clip %d: %s", idx, upload_err)
 
         except Exception as exc:
             log.exception("❌ PIPELINE FAILED")
@@ -366,8 +435,12 @@ def run_autopilot(
         Output path (or list of paths) on success, or None if no suitable video was found.
     """
     import time
+    import uuid
 
     start_time = time.time()
+    
+    # Ensure job_id exists for tracking
+    job_id = job_id or str(uuid.uuid4())[:8]
 
     if settings is None:
         settings = Settings.from_env()
@@ -396,6 +469,7 @@ def run_autopilot(
         count=count,
         upload=upload,
         privacy=privacy,
+        niche=niche,
         progress_callback=progress_callback,
     )
 
@@ -407,10 +481,9 @@ def run_autopilot(
             from shorts_clipper.core.cache import get_cached
             from shorts_clipper.scout.memory import record_success
 
-            mf = Path("outputs/scout_metrics.json")
+            mf = Path(f"outputs/scout_metrics_{job_id}.json")
             if mf.exists():
-                metrics_list = json.loads(mf.read_text())
-                last_m = metrics_list[-1]
+                last_m = json.loads(mf.read_text())
                 vid = last_m.get("winner_id")
                 niche_str = last_m.get("niche") or niche or "tech"
                 query_str = last_m.get("winning_query", "")
