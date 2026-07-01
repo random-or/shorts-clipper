@@ -24,9 +24,10 @@ Publishing is controlled via the `Settings` class and your `.env` file. By defau
 # Platforms to publish to (comma-separated)
 SHORTS_PUBLISH_PLATFORMS=youtube,instagram
 
-# Instagram Credentials
-INSTAGRAM_USERNAME=your_username
-INSTAGRAM_PASSWORD=your_password
+# Instagram Credentials (Graph API)
+IG_ACCESS_TOKEN=your_token
+IG_ACCOUNT_ID=your_id
+PUBLIC_URL=https://your-domain.com
 ```
 
 ## Authentication Flow
@@ -35,7 +36,7 @@ INSTAGRAM_PASSWORD=your_password
 YouTube uses OAuth2. The first time you use it, you must run the Web UI and link your account via the sidebar. This generates a `.cache/shorts-clipper/token.pickle` file containing access and refresh tokens. The Publishing Engine will automatically use and refresh these tokens.
 
 ### Instagram
-Instagram uses the `instagrapi` library. It performs a direct login using your `INSTAGRAM_USERNAME` and `INSTAGRAM_PASSWORD` from `.env`. Upon successful login, the session is dumped to `.cache/shorts-clipper/instagram_session.json` to avoid suspicious login attempts in the future. The engine will reuse this session file.
+Instagram uses the official Meta Graph API. It authenticates directly using your `IG_ACCESS_TOKEN` and `IG_ACCOUNT_ID` from `.env`. Because the Graph API requires your video to be publicly accessible during upload, you must also specify `PUBLIC_URL` pointing to a reverse proxy (like ngrok or localtunnel) if running locally, or the direct domain of your server.
 
 ## How to Add a Future Publisher
 

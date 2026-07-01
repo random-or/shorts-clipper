@@ -12,6 +12,7 @@ import queue
 import subprocess
 import tempfile
 import threading
+import time
 from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
@@ -125,9 +126,10 @@ def ensure_worker_running() -> None:
 
 @app.on_event("startup")
 def startup_event():
-    from shorts_clipper.core.logging import configure_logging
     import json
     from pathlib import Path
+
+    from shorts_clipper.core.logging import configure_logging
 
     settings = Settings.from_env()
     configure_logging(settings.log_level)
@@ -142,7 +144,9 @@ def startup_event():
                 if isinstance(meta, dict) and meta.get("publish_status") == "uploading":
                     meta["publish_status"] = "failed"
                     meta["publish_error"] = "Upload interrupted by server restart."
-                    json_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+                    json_path.write_text(
+                        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+                    )
             except Exception as e:
                 logger.error("Failed to reset stuck uploading status for %s: %s", json_path, e)
 
@@ -289,7 +293,7 @@ async def api_scout_metrics() -> list[dict]:
     metrics_dir = Path("outputs")
     if not metrics_dir.exists():
         return []
-    
+
     results = []
     for mf in metrics_dir.glob("scout_metrics_*.json"):
         try:
@@ -297,7 +301,7 @@ async def api_scout_metrics() -> list[dict]:
             results.append(data)
         except Exception:
             continue
-            
+
     # Sort by started_at timestamp, descending (newest first)
     results.sort(key=lambda x: x.get("started_at", 0), reverse=True)
     return results
@@ -486,8 +490,7 @@ def publish_clip(
 
     if meta.get("publish_status") == "uploading":
         raise HTTPException(
-            status_code=400,
-            detail="Publishing is already in progress for this clip."
+            status_code=400, detail="Publishing is already in progress for this clip."
         )
 
     if not title or not desc:
@@ -522,7 +525,7 @@ def publish_clip(
                 language="en",
             )
             engine = PublishingEngine()
-            
+
             # Only target platforms that haven't succeeded yet
             target_platforms = []
             for p in settings.publish_platforms:
@@ -531,24 +534,26 @@ def publish_clip(
                 if p == "instagram" and meta.get("instagram_video_id"):
                     continue
                 target_platforms.append(p)
-                
+
             if not target_platforms:
                 meta["publish_status"] = "success"
                 meta["publish_progress"] = 100
                 meta["publish_error"] = None
-                json_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+                json_path.write_text(
+                    json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
                 return
 
             results = engine.publish(path, clip_meta, target_platforms)
-            
+
             meta["publish_progress"] = 100
-            
+
             # Always save IDs for successful platforms
             if "youtube" in results and results["youtube"].success:
                 meta["youtube_video_id"] = results["youtube"].platform_id
             if "instagram" in results and results["instagram"].success:
                 meta["instagram_video_id"] = results["instagram"].platform_id
-                
+
             # Check if all originally requested platforms are now successful
             all_successful = True
             for p in settings.publish_platforms:
@@ -563,7 +568,9 @@ def publish_clip(
                 logger.info("✅ Clip %s uploaded successfully to requested platforms!", clip_name)
             else:
                 meta["publish_status"] = "failed"
-                errors = "; ".join([f"{p}: {r.error_message}" for p, r in results.items() if not r.success])
+                errors = "; ".join(
+                    [f"{p}: {r.error_message}" for p, r in results.items() if not r.success]
+                )
                 meta["publish_error"] = errors
                 logger.error("❌ Failed to upload clip %s completely: %s", clip_name, errors)
 
@@ -649,7 +656,6 @@ def autogen_clip_title(clip_name: str) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-import time
 _status_cache = {}
 
 
@@ -659,15 +665,11 @@ def get_youtube_status() -> dict[str, Any]:
     now = time.time()
     if "youtube" in _status_cache and now - _status_cache["youtube"]["time"] < 60:
         return _status_cache["youtube"]["data"]
-    
+
     try:
+        from google.auth.exceptions import DefaultCredentialsError, RefreshError
+
         from shorts_clipper.publishers.youtube.auth import get_youtube_service
-        from google.auth.exceptions import DefaultCredentialsError
-        from google.auth.exceptions import RefreshError
-        import os
-        from pathlib import Path
-
-
 
         youtube = get_youtube_service()
         res = youtube.channels().list(part="snippet,statistics", mine=True).execute()
@@ -685,7 +687,7 @@ def get_youtube_status() -> dict[str, Any]:
             }
             _status_cache["youtube"] = {"time": time.time(), "data": data}
             return data
-            
+
     except (DefaultCredentialsError, RefreshError, ValueError, RuntimeError) as e:
         logger.info("YouTube not connected: %s", e)
         # Clear cache if disconnected
@@ -698,11 +700,11 @@ def get_youtube_status() -> dict[str, Any]:
         }
     except Exception as e:
         logger.warning("YouTube status error: %s", e)
-        
+
         # Fallback to last known good data if available
         if "youtube" in _status_cache:
             return _status_cache["youtube"]["data"]
-            
+
         res_data = {
             "connected": True,
             "channel_name": "YouTube Channel",
@@ -720,20 +722,21 @@ def get_instagram_status() -> dict[str, Any]:
     now = time.time()
     if "instagram" in _status_cache and now - _status_cache["instagram"]["time"] < 60:
         return _status_cache["instagram"]["data"]
-        
-    from shorts_clipper.core.settings import Settings
+
     import requests
-    
+
+    from shorts_clipper.core.settings import Settings
+
     settings = Settings.from_env()
     token = settings.ig_access_token
     acc_id = settings.ig_account_id
-    
+
     if token and acc_id:
         try:
             url = f"https://graph.instagram.com/v19.0/{acc_id}?fields=username,profile_picture_url,followers_count&access_token={token}"
             res = requests.get(url, timeout=5)
             data = res.json()
-            
+
             if "error" not in data:
                 res_data = {
                     "connected": True,
@@ -749,11 +752,11 @@ def get_instagram_status() -> dict[str, Any]:
                 logger.warning("Instagram Graph API error: %s", data["error"])
         except Exception as e:
             logger.warning("Instagram fetch error: %s", e)
-            
+
         # Fallback to last known good data if available
         if "instagram" in _status_cache:
             return _status_cache["instagram"]["data"]
-            
+
         res_data = {
             "connected": True,
             "channel_name": "Instagram Pro",
@@ -769,7 +772,6 @@ def get_instagram_status() -> dict[str, Any]:
         "channel_name": None,
         "message": "No Instagram account linked in .env",
     }
-
 
 
 def _get_oauth_redirect_uri(request: Request) -> str:

@@ -182,20 +182,20 @@ class JobQueue:
                 self._conn.execute("BEGIN IMMEDIATE")
                 row = self._conn.execute(
                     "SELECT * FROM jobs WHERE status = ? ORDER BY created_at ASC LIMIT 1",
-                    (JobStatus.PENDING.value,)
+                    (JobStatus.PENDING.value,),
                 ).fetchone()
-                
+
                 if not row:
                     self._conn.commit()
                     return None
-                    
+
                 job_id = row["id"]
                 self._conn.execute(
                     "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
-                    (JobStatus.RUNNING.value, time.time(), job_id)
+                    (JobStatus.RUNNING.value, time.time(), job_id),
                 )
                 self._conn.commit()
-                
+
                 return self.get(job_id)
             except Exception:
                 self._conn.rollback()

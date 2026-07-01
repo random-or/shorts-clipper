@@ -1,15 +1,13 @@
-import pytest
-import json
-import re
-from unittest.mock import patch, MagicMock
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
+from shorts_clipper.providers.gemini import GeminiProvider
 from shorts_clipper.scout.trending import (
     compute_scout_v2_intermediate_score,
     fetch_metadata_batch,
     get_trending_link,
 )
-from shorts_clipper.providers.gemini import GeminiProvider, GeminiQuotaExhaustedError, ProviderError
+
 
 # ITERATION 1 BUG 1
 def test_trending_with_null_metrics():
@@ -18,11 +16,12 @@ def test_trending_with_null_metrics():
         "published_at": "20240101",
         "view_count": None,  # the bug
         "like_count": None,
-        "comment_count": None
+        "comment_count": None,
     }
     # Should not raise TypeError
     score = compute_scout_v2_intermediate_score(video, now, {})
     assert isinstance(score, float)
+
 
 # ITERATION 1 BUG 3
 @patch("subprocess.run")
@@ -33,10 +32,11 @@ def test_yt_dlp_partial_success_handling(mock_run):
     mock_result.stdout = '{"id": "abc", "title": "test"}\n'
     mock_result.stderr = "some error"
     mock_run.return_value = mock_result
-    
+
     res = fetch_metadata_batch(["abc", "def"])
     assert len(res) == 1
     assert res[0]["id"] == "abc"
+
 
 # ITERATION 1 BUG 4
 @patch("pathlib.Path.write_text")
@@ -51,32 +51,42 @@ def test_concurrent_scout_report_writes(mock_ytdlp, mock_api, mock_write):
     # We just want to ensure it doesn't crash, the actual check is in the code
     # that uses job_id for the report file
 
+
 # ITERATION 2 BUG 1
 def test_gemini_generate_content_retries_on_429():
     provider = GeminiProvider(api_key="test")
     mock_client = MagicMock()
     provider._client = mock_client
-    
+
     class Fake429(Exception):
         pass
-        
-    mock_client.models.generate_content.side_effect = [Fake429("429 Too Many Requests"), MagicMock(text="success")]
-    
+
+    mock_client.models.generate_content.side_effect = [
+        Fake429("429 Too Many Requests"),
+        MagicMock(text="success"),
+    ]
+
     with patch("time.sleep", return_value=None):
         res = provider.generate_content("test prompt")
-    
+
     assert res.text == "success"
     assert mock_client.models.generate_content.call_count == 2
+
 
 # ITERATION 2 BUG 2
 def test_select_clips_detailed_invalid_json_type():
     provider = GeminiProvider(api_key="test")
     # Return a dict instead of a list
-    with patch.object(provider, "generate_content", return_value=MagicMock(text='{"candidates": [{"start": 10, "end": 50}]}')):
+    with patch.object(
+        provider,
+        "generate_content",
+        return_value=MagicMock(text='{"candidates": [{"start": 10, "end": 50}]}'),
+    ):
         res = provider.select_multiple_clips_detailed([], count=1)
-    
+
     assert len(res) == 1
     assert res[0]["start"] == 10
+
 
 # ITERATION 2 BUG 3
 def test_metadata_generation_null_tags():
@@ -84,9 +94,10 @@ def test_metadata_generation_null_tags():
     raw = '{"selected_title": "t", "description": "d", "tags": null}'
     with patch.object(provider, "generate_content", return_value=MagicMock(text=raw)):
         res = provider.generate_clip_metadata([], "test")
-    
+
     assert res["title"] == "t"
     assert res["tags"] == ["shorts"]
+
 
 # ITERATION 2 BUG 4
 def test_regex_fallback_with_string_floats():
@@ -94,27 +105,37 @@ def test_regex_fallback_with_string_floats():
     raw = 'invalid json "start": "10.5", "end": "50.5"'
     with patch.object(provider, "generate_content", return_value=MagicMock(text=raw)):
         res = provider.select_multiple_clips_detailed([], count=1)
-    
+
     assert len(res) == 1
     assert res[0]["start"] == 10.5
     assert res[0]["end"] == 50.5
 
+
 # ITERATION 3 BUG 2
 def test_editorial_finisher_retries_on_failure():
+    from shorts_clipper.core.models import TranscriptSegment, TranscriptWord
     from shorts_clipper.pipeline.finisher import EditorialFinisher
-    from shorts_clipper.core.models import TranscriptWord, TranscriptSegment
-    
+
     finisher = EditorialFinisher()
-    words = [TranscriptWord(word="test", start=float(i), end=float(i+1), probability=1.0) for i in range(10)]
+    words = [
+        TranscriptWord(word="test", start=float(i), end=float(i + 1), probability=1.0)
+        for i in range(10)
+    ]
     segments = [TranscriptSegment(start=0.0, end=10.0, text="test " * 10, words=words)]
-    
-    with patch("time.sleep", return_value=None), patch("shorts_clipper.pipeline.finisher.genai.Client") as mock_client_cls:
+
+    with (
+        patch("time.sleep", return_value=None),
+        patch("shorts_clipper.pipeline.finisher.genai.Client") as mock_client_cls,
+    ):
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
-        mock_client.models.generate_content.side_effect = [Exception("429 fail"), MagicMock(text='{"start_id": 2, "end_id": 5}')]
-        
+        mock_client.models.generate_content.side_effect = [
+            Exception("429 fail"),
+            MagicMock(text='{"start_id": 2, "end_id": 5}'),
+        ]
+
         window = finisher.snap_boundaries(0.0, 9.0, segments)
-        
+
         assert window.start == 2.0
         assert window.end == 6.0
         assert mock_client.models.generate_content.call_count == 2

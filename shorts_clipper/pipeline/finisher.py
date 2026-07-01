@@ -1,23 +1,25 @@
 from __future__ import annotations
-import os
+
 import json
 import logging
+import os
+
 from google import genai
 from google.genai import types
+
 from shorts_clipper.core.models import ClipWindow, TranscriptSegment
 
 log = logging.getLogger(__name__)
+
 
 class EditorialFinisher:
     """
     Decides whether a generated Short is editorially complete before it is rendered.
     If it's not, it modifies the boundaries to snap to nearest sentences.
     """
+
     def snap_boundaries(
-        self,
-        target_start: float,
-        target_end: float,
-        segments: list[TranscriptSegment]
+        self, target_start: float, target_end: float, segments: list[TranscriptSegment]
     ) -> ClipWindow:
         all_words = []
         for s in segments:
@@ -32,10 +34,10 @@ class EditorialFinisher:
         # Find the word indices closest to the target_start and target_end
         initial_start_idx = 0
         for i, w in enumerate(all_words):
-            if (getattr(w, 'end', w.start) > target_start) or (w.start >= target_start):
+            if (getattr(w, "end", w.start) > target_start) or (w.start >= target_start):
                 initial_start_idx = i
                 break
-                
+
         initial_end_idx = len(all_words) - 1
         for i in range(initial_start_idx, len(all_words)):
             if all_words[i].start >= target_end:
@@ -44,9 +46,9 @@ class EditorialFinisher:
 
         transcript_text = ""
         for i, w in enumerate(all_words):
-            text = getattr(w, 'word', getattr(w, 'text', '')).strip()
+            text = getattr(w, "word", getattr(w, "text", "")).strip()
             transcript_text += f"[{i}] {text} "
-            
+
         prompt = f"""
 You are the Editorial Finisher.
 Your job is to find the optimal start and end point for a short-form video clip.
@@ -97,45 +99,55 @@ Return ONLY valid JSON with no markdown and no commentary.
 """
 
         from shorts_clipper.core.settings import Settings
+
         settings = Settings.from_env()
 
         import time
+
         for attempt in range(1, 4):
             try:
-                client = genai.Client(api_key=settings.gemini_api_key or os.environ.get("GEMINI_API_KEY"))
+                client = genai.Client(
+                    api_key=settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
+                )
                 response = client.models.generate_content(
-                    model='gemini-flash-lite-latest',
+                    model="gemini-flash-lite-latest",
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         temperature=0.0,
                         response_mime_type="application/json",
-                    )
+                    ),
                 )
                 data = json.loads(response.text)
                 start_id = int(data.get("start_id", initial_start_idx))
                 end_id = int(data.get("end_id", initial_end_idx))
-                
+
                 # Ensure valid bounds
                 start_id = max(0, min(start_id, len(all_words) - 1))
                 end_id = max(start_id, min(end_id, len(all_words) - 1))
-                
-                log.info(f"EditorialFinisher LLM adjusted: start {initial_start_idx} -> {start_id}, end {initial_end_idx} -> {end_id}")
+
+                log.info(
+                    f"EditorialFinisher LLM adjusted: start {initial_start_idx} -> {start_id}, end {initial_end_idx} -> {end_id}"
+                )
                 log.info(f"Reasoning: {data.get('reasoning')}")
                 break
             except Exception as e:
                 if attempt == 3:
-                    log.warning(f"EditorialFinisher LLM failed after 3 attempts: {e}. Falling back to original bounds.")
+                    log.warning(
+                        f"EditorialFinisher LLM failed after 3 attempts: {e}. Falling back to original bounds."
+                    )
                     start_id = initial_start_idx
                     end_id = initial_end_idx
                     break
-                
+
                 log.warning(f"EditorialFinisher LLM failed (attempt {attempt}): {e}. Retrying...")
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
         final_start = all_words[start_id].start
-        final_end = getattr(all_words[end_id], 'end', all_words[end_id].start)
+        final_end = getattr(all_words[end_id], "end", all_words[end_id].start)
 
-        log.info(f"EditorialFinisher adjusted timestamps: start {target_start:.2f} -> {final_start:.2f}, end {target_end:.2f} -> {final_end:.2f}")
+        log.info(
+            f"EditorialFinisher adjusted timestamps: start {target_start:.2f} -> {final_start:.2f}, end {target_end:.2f} -> {final_end:.2f}"
+        )
 
         # Return exact bounds; do not add arbitrary padding, or it will bleed into the next word's audio
         return ClipWindow(start=final_start, end=final_end)

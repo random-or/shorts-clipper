@@ -1,144 +1,162 @@
 # 🎬 Shorts Clipper
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Shorts Clipper** is an experimental, fully automated pipeline that searches for trending YouTube videos, downloads them, finds the best moments, and renders **9:16 vertical shorts with dynamic burned-in subtitles**—ready to be uploaded to TikTok, YouTube Shorts, or Instagram Reels.
+## 1. Project Overview
+Shorts Clipper is an **Autonomous Content Intelligence System**. It is a fully automated, experimental pipeline that searches for trending YouTube videos, downloads them, finds the highest-retention moments using AI, and renders **9:16 vertical shorts with dynamic burned-in subtitles**. It is built for scale, enabling unattended discovery, editing, and publishing directly to YouTube Shorts and Instagram Reels.
 
-> **⚠️ EXPERIMENTAL WARNING:** The core infrastructure (downloading, vertical cropping, transcription, and FFmpeg rendering) works flawlessly. However, the **AI Highlight Selection engine is currently experimental**. The AI may sometimes struggle to select the absolute most viral or engaging moment. Expect accurate rendering, but double-check the AI's content choices!
+## 2. Features
+- **Intelligent Scouting**: Searches for trending videos using the YouTube Data API and `yt-dlp` based on niche and momentum.
+- **AI Highlight Extraction**: Analyzes transcripts with Google Gemini to identify the most engaging and viral segments.
+- **Automated Rendering**: Precision clipping, 9:16 vertical cropping, and 1.15x pacing using FFmpeg.
+- **Dynamic Subtitles**: Burns in animated, word-level `.ass` subtitles automatically.
+- **Multi-Platform Publishing**: Extensible registry-based engine that automatically distributes to YouTube Shorts and Instagram Reels (via official Meta Graph API).
+- **Production-Ready Reliability**: Built with circuit breakers, retry mechanisms, and cache-aware fallbacks for uninterrupted autonomous execution.
 
----
+## 3. Architecture Overview
+Shorts Clipper is designed around a multi-stage, modular pipeline:
+1. **Scout Module**: Discovers trending content and filters for suitability (e.g., english language, recency).
+2. **Transcription Engine**: Uses native YouTube subtitles or falls back to local `faster-whisper`.
+3. **AI Extractor**: Passes transcripts to Gemini to reason about the best hooks and narrative arcs.
+4. **Editorial Finisher**: Downloads the micro-clip and snaps precise clip boundaries to audio segments.
+5. **Rendering Pipe**: Uses FFmpeg for hardware-accelerated video formatting and subtitle burn-in.
+6. **Publishing Registry**: Uploads final assets and metadata asynchronously.
 
-## 🚀 What It Does
+## 4. Complete Pipeline Flow
+`Discover → Understand → Reason → Select → Edit → Render → Publish`
 
-1. **Scouts Content:** Searches YouTube for videos in a specific niche (e.g., "tech", "finance") using the YouTube Data API and `yt-dlp`.
-2. **Filters & Selects:** Analyzes transcripts to find high-retention segments (using Google Gemini).
-3. **Downloads & Transcribes:** Downloads the video securely and extracts/transcribes the audio (falling back to local Whisper AI if YouTube subtitles are missing).
-4. **Renders:**
-- 📱 **Multi-Platform Publishing**: Automatically distribute rendered clips to YouTube Shorts and Instagram Reels with a single execution.
-- ⚙️ **Publishing Engine**: A highly extensible registry-based publishing architecture. Easy to add TikTok or Facebook Reels in the future.
-- 💬 **Smart Subtitles**: Burns animated, word-level subtitles into the video.
-5. **(Optional) Publishes:** Can upload the finished clip directly to your YouTube channel using OAuth.
+1. **Discover**: Scout searches niche keywords for trending videos.
+2. **Understand**: Fetch or transcribe audio to text.
+3. **Reason**: LLM scores segments for Context, Hook, Curiosity, and Standalone Understanding.
+4. **Select**: Highest scoring segment is selected.
+5. **Edit**: High-precision boundaries are created using forced-alignment.
+6. **Render**: Video is cropped, resized, and subtitled.
+7. **Publish**: The resulting clip is uploaded to configured social platforms.
 
----
+## 5. Why this project exists
+Shorts Clipper was built to test the limits of Autonomous AI Agents in content creation. It is no longer just "an AI clipper"; it is an exercise in building a robust, self-healing system capable of functioning without human intervention for 10,000 creators simultaneously.
 
-## ⚙️ Prerequisites
+## 6. Reliability & Production Features
+- **Circuit Breakers**: Prevents cascading failures when external APIs (like YouTube or Gemini) go down.
+- **Retry Logic**: Injectable, backoff-aware retries for network calls and API quota limits (429s).
+- **Cache-aware Fallbacks**: Subtitles and scout reports are cached locally in SQLite to survive crashes and avoid duplicate processing.
+- **Graceful Degradation**: If an LLM provider fails completely, the system falls back to heuristic-based or regex-based clipping.
+- **Self-hosted Instagram Publishing**: Direct integration with the Meta Graph API.
+- **Worker Architecture**: Concurrency-safe SQLite queues to handle multiple publishing jobs asynchronously.
 
-Before installing, you must have the following system dependencies installed:
+## 7. Installation
 
-* **Python 3.10+**
+**Prerequisites:**
+* **Python 3.11+**
 * **FFmpeg** (Required for video rendering)
-  * **Ubuntu/Debian:** `sudo apt-get install ffmpeg`
-  * **macOS:** `brew install ffmpeg`
-  * **Windows:** Download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) and add it to your system PATH.
+  * Ubuntu/Debian: `sudo apt-get install ffmpeg`
+  * macOS: `brew install ffmpeg`
 
----
-
-## 🛠️ Installation
-
-**1. Clone the repository:**
+**Setup:**
 ```bash
 git clone https://github.com/random-or/shorts-clipper.git
 cd shorts-clipper
-```
-
-**2. Create and activate a virtual environment:**
-```bash
-# macOS / Linux
 python3 -m venv env
-source env/bin/activate
-
-# Windows
-python -m venv env
-env\Scripts\activate
-```
-
-**3. Install dependencies:**
-```bash
+source env/bin/activate  # Windows: env\Scripts\activate
 pip install -r requirements.txt
 ```
 
----
+## 8. Environment Variables
+Copy `.env.example` to `.env` and configure:
 
-## 🔑 Configuration & API Keys
+```env
+# AI Providers
+GEMINI_API_KEY=your_key
+# OPENAI_API_KEY=your_key (Optional)
+# ANTHROPIC_API_KEY=your_key (Optional)
 
-To use Shorts Clipper, you need a few free API keys. Copy the `.env.example` file to create your own `.env` file:
+# API & Platform Auth
+YOUTUBE_API_KEY=your_key
+IG_ACCESS_TOKEN=your_token
+IG_ACCOUNT_ID=your_id
+PUBLIC_URL=https://your-domain.com  # Required for Instagram Publishing
 
-```bash
-cp .env.example .env
+# Core Settings
+SHORTS_PROVIDER=gemini
+SHORTS_WHISPER_MODEL=tiny.en
+SHORTS_WHISPER_DEVICE=cpu
+SHORTS_WHISPER_COMPUTE_TYPE=int8
+SHORTS_VIDEO_CODEC=libx264
+SHORTS_VIDEO_PRESET=ultrafast
+SHORTS_OUTPUT_DIR=outputs
+SHORTS_ENABLE_GPU=false
+SHORTS_PUBLISH_PLATFORMS=youtube,instagram
 ```
+*(A `client_secret.json` must be placed in the root directory for YouTube OAuth uploads).*
 
-Open the `.env` file and fill in the following keys:
+## 9. Running the CLI
 
-### 1. Google Gemini API Key (Required for Highlight Selection)
-* **Get it here:** [Google AI Studio](https://aistudio.google.com/app/apikey)
-* **Cost:** Free tier available.
-
-### 2. YouTube Data API v3 Key (Required for Video Discovery)
-* **Get it here:** [Google Cloud Console - YouTube API](https://console.cloud.google.com/apis/library/youtube.googleapis.com)
-* Click **Enable**, then go to **Credentials** -> **Create Credentials** -> **API Key**.
-
-### 3. YouTube OAuth Client ID (Required for Auto-Uploading)
-*If you only want to generate clips locally, you can skip this step.*
-* **Get it here:** [Google Cloud Console - Credentials](https://console.cloud.google.com/apis/credentials)
-* Click **Create Credentials** -> **OAuth client ID**.
-* Select **Desktop App**.
-* Download the resulting JSON file.
-* Rename it to `client_secret.json` and place it directly in the root `shorts-clipper` folder.
-
----
-
-## 💻 Usage
-
-Make sure your virtual environment is activated (`source env/bin/activate`), then use the CLI tool or the Web UI!
-
-### Command Line Interface (CLI)
-
-**1. Scout a niche:**
-Search for trending video ideas without downloading them.
+**Scout a niche (Discovery only):**
 ```bash
 python -m shorts_clipper scout --niche "tech" --keyword "AI"
 ```
 
-**2. Clip a specific video:**
-Pass a YouTube URL directly to generate a vertical short.
+**Clip a specific video:**
 ```bash
 python -m shorts_clipper clip https://youtu.be/VIDEO_ID
 ```
 
-**3. Autopilot Mode:**
-Run the entire pipeline automatically (Scout -> Download -> Transcribe -> Render).
+**Autopilot Mode (End-to-End):**
 ```bash
 python -m shorts_clipper autopilot --niche "science" --count 1
 ```
 
-> **Where do my videos go?** 
-> Finished `.mp4` clips and thumbnails are saved automatically in the `outputs/` folder!
-
-### Web UI Dashboard
-
-Prefer a graphical interface? You can launch the local web dashboard:
+## 10. Running the Web Dashboard
+Launch the FastAPI web server to view the queue, trigger jobs, and monitor SSE live logs:
 ```bash
 python -m shorts_clipper web
 ```
-*(Open your browser to the URL printed in the terminal to interact with the visual dashboard).*
 
----
+## 11. Example Commands
+- **Full GPU acceleration**: 
+  `SHORTS_ENABLE_GPU=true python -m shorts_clipper clip https://youtu.be/xyz`
+- **Publish only to YouTube**:
+  `SHORTS_PUBLISH_PLATFORMS=youtube python -m shorts_clipper autopilot --niche "finance"`
 
-## 📁 Project Structure
+## 12. Testing
+The project features a comprehensive `pytest` suite ensuring pipeline integrity.
+```bash
+pip install ruff pytest
+pytest tests/ -v
+ruff check shorts_clipper/ tests/
+```
 
-* `shorts_clipper/` - Core Python engine (scouting, rendering, API logic).
-* `tests/` - Pytest validation suite.
-* `outputs/` - Generated 9:16 `.mp4` clips, `.ass` subtitles, and thumbnails.
-* `env/` - Your local Python environment.
+## 13. Project Structure
+- `shorts_clipper/` - Core engine (api, core, downloader, pipeline, providers, publishers, rendering, scout, transcription).
+- `tests/` - Validation suite (68+ tests covering regressions, fallbacks, and publishers).
+- `outputs/` - Default directory for generated `.mp4` clips and thumbnails.
 
----
+## 14. Performance Notes
+- **GPU Acceleration**: Setting `SHORTS_ENABLE_GPU=true` switches FFmpeg to `h264_nvenc` and Whisper to CUDA/float16, dramatically reducing rendering time.
+- **Partial Downloads**: The system uses precise `yt-dlp` section downloads (`--download-sections`) to avoid downloading entire 3-hour podcasts when only a 60-second clip is needed.
 
-## 🤝 Roadmap & Known Limitations
+## 15. Known Limitations
+- **AI Extraction Consistency**: LLMs can occasionally misidentify the climax of a story or fail to provide a structurally valid JSON response under severe rate limits.
+- **YouTube API Quotas**: Searching and downloading heavily can quickly exhaust YouTube Data API daily limits.
+- **Instagram Publishing Restrictions**: Meta's Graph API requires video URLs to be publicly accessible. Local development requires a reverse proxy (e.g., ngrok) configured via `PUBLIC_URL`.
 
-* **Highlight AI:** The AI frequently struggles to pick the climax of a story. We are actively working on improving the "Attention Engine" to better recognize hooks, pacing, and emotional payoff.
-* **Quota Exhaustion:** Heavy users might hit Google Gemini's free tier limits quickly.
+## 16. Roadmap
 
----
+**Completed (V3.1):**
+- Full static analysis and linting (Ruff).
+- Resolution of SQLite file locking leaks.
+- Mitigation of concurrent scout report race conditions.
+- Strict fallback integration for Gemini 429 quota exhaustion.
+- Formalized Publisher Registry for multi-platform distribution.
 
-*Built for creators to scale short-form content seamlessly.*
+**Future (V4):**
+- Transition to fully autonomous 24/7 background worker loops.
+- Expanded platform support (TikTok, Facebook Reels).
+- Advanced visual analysis (scene detection) for intelligent center-cropping.
+
+## 17. Contributing
+Contributions are welcome. Please ensure that you run `ruff check` and `pytest tests/` before submitting pull requests. New publishing targets should implement the `Publisher` base class in `shorts_clipper/publishers/base.py`.
+
+## 18. License
+This project is licensed under the MIT License.

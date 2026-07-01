@@ -840,10 +840,13 @@ class GeminiProvider(HighlightProvider):
         self._fallback_layout = fallback_layout
 
         from google import genai  # type: ignore[import]
+
         from shorts_clipper.core.settings import Settings
 
         settings = Settings.from_env()
-        self._client = genai.Client(api_key=api_key or settings.gemini_api_key or os.environ.get("GEMINI_API_KEY"))
+        self._client = genai.Client(
+            api_key=api_key or settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
+        )
 
     def generate_content(
         self, contents: any, max_retries: int = 5, initial_delay: float = 5.0, **kwargs
@@ -866,11 +869,11 @@ class GeminiProvider(HighlightProvider):
                     or getattr(exc, "code", None) == 429
                     or getattr(exc, "status_code", None) == 429
                 )
-                if is_quota:
+                if is_rate_limit:
+                    log.warning("Gemini Rate Limit (429) hit. Will retry.")
+                elif is_quota:
                     log.error("GEMINI QUOTA EXHAUSTED\nSWITCHING TO FALLBACK")
                     raise GeminiQuotaExhaustedError(exc_str) from exc
-                elif is_rate_limit:
-                    log.warning("Gemini Rate Limit (429) hit. Will retry.")
 
                 is_auth_error = (
                     "400" in exc_str
@@ -1116,21 +1119,21 @@ class GeminiProvider(HighlightProvider):
                         items = extracted if extracted is not None else [items]
                     else:
                         items = []
-                
+
                 if not items:
                     raise ValueError("Parsed JSON resulted in an empty items list")
             except (json.JSONDecodeError, ValueError) as exc:
                 log.info("[GEMINI] JSON parse failed, attempting timestamp extraction")
                 start, end = None, None
 
-                start_match = re.search(r'"start":\s*(\d+\.?\d*)', raw)
-                end_match = re.search(r'"end":\s*(\d+\.?\d*)', raw)
+                start_match = re.search(r'"start":\s*"?(\d+\.?\d*)"?', raw)
+                end_match = re.search(r'"end":\s*"?(\d+\.?\d*)"?', raw)
                 if start_match and end_match:
                     start = float(start_match.group(1))
                     end = float(end_match.group(1))
                 else:
-                    start_match = re.search(r'"timestamp_start":\s*(\d+\.?\d*)', raw)
-                    end_match = re.search(r'"timestamp_end":\s*(\d+\.?\d*)', raw)
+                    start_match = re.search(r'"timestamp_start":\s*"?(\d+\.?\d*)"?', raw)
+                    end_match = re.search(r'"timestamp_end":\s*"?(\d+\.?\d*)"?', raw)
                     if start_match and end_match:
                         start = float(start_match.group(1))
                         end = float(end_match.group(1))

@@ -1,6 +1,7 @@
 import pickle
 from pathlib import Path
 
+
 def get_youtube_service(client_secret_file: Path | str = "client_secret.json"):
     """Authenticate and return the YouTube service object."""
     from google.auth.transport.requests import Request

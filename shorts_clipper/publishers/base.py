@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from collections.abc import Callable
 from pathlib import Path
+
 from .models import ClipMetadata, PublishResult
 
 
@@ -26,7 +27,7 @@ class Publisher(ABC):
         self,
         video_path: Path,
         metadata: ClipMetadata,
-        progress_callback: Optional[Callable[[int], None]] = None,
+        progress_callback: Callable[[int], None] | None = None,
     ) -> PublishResult:
         """
         Publish a vertical video clip to the destination platform.

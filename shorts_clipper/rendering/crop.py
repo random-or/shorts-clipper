@@ -101,15 +101,17 @@ def process_to_vertical(
         cmd.extend(["-ss", str(start_time)])
     if duration is not None:
         cmd.extend(["-t", str(duration)])
-    
-    cmd.extend([
-        "-i",
-        str(input_path),
-        "-vf",
-        vf,
-        "-c:v",
-        video_codec,
-    ])
+
+    cmd.extend(
+        [
+            "-i",
+            str(input_path),
+            "-vf",
+            vf,
+            "-c:v",
+            video_codec,
+        ]
+    )
 
     if video_codec == "libx264":
         cmd.extend(["-crf", str(crf), "-preset", preset])

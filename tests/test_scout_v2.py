@@ -38,7 +38,7 @@ class ScoutV2Tests(unittest.TestCase):
     def test_compute_scout_v2_intermediate_score(self):
         video = {
             "published_at": datetime.now(UTC).isoformat(),
-                "automatic_captions": {"en": []},
+            "automatic_captions": {"en": []},
             "view_count": 100000,
             "like_count": 5000,
             "comment_count": 200,
@@ -59,7 +59,12 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
     @patch("shorts_clipper.scout.trending.GeminiProvider")
     def test_self_healing_pre_evaluation(
-        self, mock_gemini_provider_cls, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls, mock_scorer_cls
+        self,
+        mock_gemini_provider_cls,
+        mock_fetch_subs,
+        mock_discover_ytdlp,
+        mock_gate_cls,
+        mock_scorer_cls,
     ):
         mock_scorer = __import__("unittest.mock").mock.Mock()
         mock_scorer.score_transcript.return_value = (90.0, [], "great hook")
@@ -123,7 +128,6 @@ class ScoutV2Tests(unittest.TestCase):
             ],
         ]
 
-        report_file = Path("outputs/scout_report.json")
         for f in Path("outputs").glob("scout_report*.json"):
             f.unlink()
 
@@ -135,7 +139,9 @@ class ScoutV2Tests(unittest.TestCase):
         self.assertEqual(url, "https://www.youtube.com/watch?v=vid_good")
 
         # Verify scout_report.json was generated
-        self.assertTrue(any(f.name.startswith("scout_report") for f in Path("outputs").glob("*.json")))
+        self.assertTrue(
+            any(f.name.startswith("scout_report") for f in Path("outputs").glob("*.json"))
+        )
         actual_report_file = next(Path("outputs").glob("scout_report*.json"))
         report_data = json.loads(actual_report_file.read_text(encoding="utf-8"))
         self.assertEqual(report_data["video_id"], "vid_good")

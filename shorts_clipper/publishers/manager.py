@@ -1,9 +1,8 @@
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from .models import ClipMetadata, PublishResult
 from .registry import PublisherRegistry
@@ -26,8 +25,8 @@ class PublishingEngine:
         self,
         video_path: Path,
         metadata: ClipMetadata,
-        platforms: List[str],
-    ) -> Dict[str, PublishResult]:
+        platforms: list[str],
+    ) -> dict[str, PublishResult]:
         """
         Publish a video to multiple platforms independently.
 
@@ -39,7 +38,7 @@ class PublishingEngine:
         Returns:
             A dictionary mapping platform names to their PublishResult.
         """
-        results: Dict[str, PublishResult] = {}
+        results: dict[str, PublishResult] = {}
         log.info(f"🚀 PublishingEngine started for {len(platforms)} platforms: {platforms}")
 
         for platform_name in platforms:
@@ -74,10 +73,10 @@ class PublishingEngine:
                     log.info(
                         f"📤 Publishing to {platform_name} (Attempt {attempt}/{self.max_retries})..."
                     )
-                    
+
                     result = publisher.publish(video_path, metadata)
                     result.retry_count = attempt - 1
-                    
+
                     if result.success:
                         # Optional Verification
                         try:
@@ -87,13 +86,17 @@ class PublishingEngine:
                                 log.warning(f"⚠️ Verification inconclusive for {platform_name}")
                         except Exception as ve:
                             log.warning(f"⚠️ Verification check failed for {platform_name}: {ve}")
-                        
+
                         log.info(f"✅ Successfully published to {platform_name}!")
                         break
                     else:
-                        log.warning(f"⚠️ Publishing to {platform_name} returned failure: {result.error_message}")
+                        log.warning(
+                            f"⚠️ Publishing to {platform_name} returned failure: {result.error_message}"
+                        )
                 except Exception as e:
-                    log.warning(f"⚠️ Publishing attempt {attempt} to {platform_name} threw an error: {e}")
+                    log.warning(
+                        f"⚠️ Publishing attempt {attempt} to {platform_name} threw an error: {e}"
+                    )
                     result = PublishResult(
                         platform=platform_name,
                         success=False,
@@ -102,7 +105,7 @@ class PublishingEngine:
                     )
 
                 if attempt < self.max_retries:
-                    wait_time = self.base_backoff ** attempt
+                    wait_time = self.base_backoff**attempt
                     log.info(f"⏳ Waiting {wait_time}s before retrying {platform_name}...")
                     time.sleep(wait_time)
 
@@ -110,21 +113,21 @@ class PublishingEngine:
 
         # Generate manifest
         self._generate_manifest(video_path, metadata, results)
-        
+
         return results
 
     def _generate_manifest(
         self,
         video_path: Path,
         metadata: ClipMetadata,
-        results: Dict[str, PublishResult],
+        results: dict[str, PublishResult],
     ) -> None:
         """Generates a publish_manifest.json file in the output directory."""
         manifest_path = video_path.with_name(f"{video_path.stem}_publish_manifest.json")
-        
+
         platforms_requested = list(results.keys())
         successful = [p for p, r in results.items() if r.success]
-        
+
         if len(successful) == len(platforms_requested):
             overall_status = "SUCCESS"
         elif len(successful) > 0:
@@ -134,7 +137,7 @@ class PublishingEngine:
 
         manifest_data = {
             "clip_id": video_path.stem,
-            "render_timestamp": datetime.utcnow().isoformat() + "Z",
+            "render_timestamp": datetime.now(UTC).isoformat() + "Z",
             "video_path": str(video_path.resolve()),
             "metadata": {
                 "title": metadata.title,

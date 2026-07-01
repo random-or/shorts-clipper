@@ -1,12 +1,13 @@
 import sqlite3
-import time
 import threading
-from pathlib import Path
+import time
 from functools import lru_cache
+from pathlib import Path
 
 DB_PATH = Path("outputs/subtitle_cache.db")
 _conn_pool = None
 _db_lock = threading.Lock()
+
 
 def _get_db():
     global _conn_pool
@@ -14,12 +15,12 @@ def _get_db():
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         # Use isolation_level=None for autocommit and avoid transaction deadlocks
         _conn_pool = sqlite3.connect(DB_PATH, check_same_thread=False, isolation_level=None)
-        
+
         # Performance and concurrency optimizations
         _conn_pool.execute("PRAGMA journal_mode=WAL")
         _conn_pool.execute("PRAGMA synchronous=NORMAL")
         _conn_pool.execute("PRAGMA busy_timeout=5000")
-        
+
         _conn_pool.execute("""
             CREATE TABLE IF NOT EXISTS subtitle_cache (
                 video_id      TEXT PRIMARY KEY,
@@ -29,9 +30,11 @@ def _get_db():
                 expires_at    REAL
             )
         """)
-        
+
         # Create an index on expires_at to speed up purge_expired
-        _conn_pool.execute("CREATE INDEX IF NOT EXISTS idx_expires_at ON subtitle_cache(expires_at)")
+        _conn_pool.execute(
+            "CREATE INDEX IF NOT EXISTS idx_expires_at ON subtitle_cache(expires_at)"
+        )
     return _conn_pool
 
 
@@ -85,8 +88,8 @@ def purge_expired() -> int:
     with _db_lock:
         cur = conn.execute("DELETE FROM subtitle_cache WHERE expires_at <= ?", (now,))
         deleted_count = cur.rowcount
-    
+
     if deleted_count > 0:
         get_status.cache_clear()
-        
+
     return deleted_count

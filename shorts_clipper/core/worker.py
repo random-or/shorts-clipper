@@ -197,7 +197,10 @@ def run_worker() -> None:
                 try:
                     current = job_queue.get(jid)
                     if current and current.status == JobStatus.CANCELLED:
-                        logger.info("Cancellation monitor detected cancelled job: %s. Terminating processes...", jid)
+                        logger.info(
+                            "Cancellation monitor detected cancelled job: %s. Terminating processes...",
+                            jid,
+                        )
                         cancel_active_processes()
                 except Exception:
                     pass

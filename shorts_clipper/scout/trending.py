@@ -33,8 +33,6 @@ def _is_english_key(k: str) -> bool:
     return k_lower == "en" or k_lower.startswith("en-")
 
 
-
-
 def compute_scout_v2_intermediate_score(
     video: dict, now: datetime, channel_history: dict[str, dict]
 ) -> float:
@@ -108,7 +106,6 @@ _AGE_RELAXATION_ALLOWED = str(os.getenv("SCOUT_ALLOW_AGE_RELAXATION", "true")).l
 _failure_lock = threading.Lock()
 _consecutive_yt_failures = 0
 _yt_paused_until: float = 0.0
-
 
 
 def _yt_circuit_breaker_check() -> bool:
@@ -213,7 +210,7 @@ def fetch_metadata_batch(video_ids: list[str]) -> list[dict]:
                     results_found = True
                 except json.JSONDecodeError:
                     continue
-            
+
             if result.returncode == 0 or results_found:
                 _yt_record_success()
             else:
@@ -304,7 +301,7 @@ def _has_english(info: dict) -> bool:
     lang = info.get("language")
     if lang and not str(lang).lower().startswith("en"):
         return False
-        
+
     if subs is not None or auto is not None:
         subs = subs or {}
         auto = auto or {}
@@ -314,7 +311,7 @@ def _has_english(info: dict) -> bool:
         has_en_sub = any(_is_english_key(k) for k in subs) or any(_is_english_key(k) for k in auto)
         if not has_en_sub:
             return False
-            
+
     strict_ascii = str(os.getenv("SCOUT_STRICT_ASCII", "true")).lower() == "true"
     if strict_ascii and any(ord(c) > 127 for c in title if c.isalpha()):
         return False
@@ -424,14 +421,20 @@ def get_trending_link(
     max_age_days: int | None = 90,
     job_id: str | None = None,
 ) -> str | None:
-    from shorts_clipper.scout.subtitle_cache import get_status, set_status, purge_expired as purge_subtitle_cache
+    from shorts_clipper.scout.subtitle_cache import get_status, set_status
+    from shorts_clipper.scout.subtitle_cache import purge_expired as purge_subtitle_cache
+
     purge_expired()
     purge_subtitle_cache()
     log.info(f"SCOUT RECEIVED:\nniche={niche}\nkeyword={keyword}")
     import uuid
+
     job_id_str = job_id or str(uuid.uuid4())[:8]
     metrics = ScoutMetrics(
-        run_id=job_id_str, niche=niche or "", keyword=keyword or "", time_window_days=max_age_days or 0
+        run_id=job_id_str,
+        niche=niche or "",
+        keyword=keyword or "",
+        time_window_days=max_age_days or 0,
     )
     api_key = os.getenv("YOUTUBE_API_KEY", "")
     client = YouTubeAPIClient(api_key) if api_key else None
@@ -448,6 +451,7 @@ def get_trending_link(
         db_path = Path("outputs/scout_memory.db")
         if db_path.exists():
             import contextlib
+
             with contextlib.closing(sqlite3.connect(db_path, check_same_thread=False)) as con:
                 rows = con.execute(
                     "SELECT channel_id, success_count, avg_virality, niche FROM successful_channels"
@@ -554,7 +558,7 @@ def get_trending_link(
                 vid = video.get("id")
                 if not vid:
                     continue
-                    
+
                 cached_data = get_cached(vid)
                 if cached_data:
                     if "transcript_segments" not in cached_data:
@@ -887,7 +891,9 @@ def get_trending_link(
                     if not valid_highlights:
                         if gemini_failed:
                             if True:
-                                log.warning("[FALLBACK] Local transcript scorer selected clip due to API failure.")
+                                log.warning(
+                                    "[FALLBACK] Local transcript scorer selected clip due to API failure."
+                                )
                                 start_t = best_local_window[0].start if best_local_window else 0.0
                                 end_t = best_local_window[-1].end if best_local_window else 60.0
                                 if end_t - start_t < 15.0:
@@ -912,7 +918,9 @@ def get_trending_link(
                                 "Top candidate %s rejected: Gemini virality score too low", vid
                             )
                     # Calculate final components for reporting
-                    max_ai_score = max((h.get("virality_score", 0) for h in valid_highlights), default=0)
+                    max_ai_score = max(
+                        (h.get("virality_score", 0) for h in valid_highlights), default=0
+                    )
                     ai_points = max_ai_score * 0.4
 
                     scorer = RuleBasedHighlightScorer()
@@ -1038,6 +1046,8 @@ def get_trending_link(
 
                     # Cache the selected clips under video ID
                     v_cached = get_cached(vid) or v.copy()
+                    if niche:
+                        v_cached["niche"] = niche
                     v_cached["selected_clips"] = [
                         {
                             "start": h["start"],
@@ -1068,6 +1078,7 @@ def get_trending_link(
 
                     try:
                         import uuid
+
                         job_suffix = f"_{job_id}" if job_id else f"_{uuid.uuid4().hex[:8]}"
                         report_path = Path(f"outputs/scout_report{job_suffix}.json")
                         report_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,12 +1,11 @@
 import json
 import unittest
-from collections import namedtuple
+from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 from shorts_clipper.core.settings import Settings
 from shorts_clipper.pipeline.runner import run
 
-from dataclasses import dataclass
 
 @dataclass
 class MockSegment:
@@ -65,9 +64,16 @@ class FallbackMetadataTests(unittest.TestCase):
 
         # Mock upload success
         from shorts_clipper.publishers.models import PublishResult
+
         mock_engine = mock_engine_cls.return_value
         mock_engine.publish.return_value = {
-            "youtube": PublishResult("youtube", True, "https://youtube.com/shorts/fake_yt_id", "fake_yt_id", "2026-06-27T00:00:00Z")
+            "youtube": PublishResult(
+                "youtube",
+                True,
+                "https://youtube.com/shorts/fake_yt_id",
+                "fake_yt_id",
+                "2026-06-27T00:00:00Z",
+            )
         }
 
         # Run pipeline

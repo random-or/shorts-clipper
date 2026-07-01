@@ -1,18 +1,19 @@
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional, List
 
 from .auth import get_youtube_service
 
 log = logging.getLogger(__name__)
 
+
 def upload_short(
     video_path: Path | str,
     title: str,
     description: str = "#Shorts",
-    tags: Optional[List[str]] = None,
+    tags: list[str] | None = None,
     privacy_status: str = "private",
-    progress_callback: Optional[Callable[[int], None]] = None,
+    progress_callback: Callable[[int], None] | None = None,
 ) -> str:
     """Upload a video to YouTube as a Short.
 

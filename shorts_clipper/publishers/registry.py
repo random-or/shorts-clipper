@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Type
+
 from .base import Publisher
 
 log = logging.getLogger(__name__)
@@ -8,10 +8,10 @@ log = logging.getLogger(__name__)
 class PublisherRegistry:
     """Registry to hold all available publisher implementations."""
 
-    _publishers: Dict[str, Type[Publisher]] = {}
+    _publishers: dict[str, type[Publisher]] = {}
 
     @classmethod
-    def register(cls, publisher_class: Type[Publisher]) -> Type[Publisher]:
+    def register(cls, publisher_class: type[Publisher]) -> type[Publisher]:
         """Decorator to register a Publisher class."""
         instance = publisher_class()
         cls._publishers[instance.platform_name] = publisher_class
@@ -26,6 +26,6 @@ class PublisherRegistry:
         return cls._publishers[platform_name]()
 
     @classmethod
-    def get_all_publishers(cls) -> Dict[str, Type[Publisher]]:
+    def get_all_publishers(cls) -> dict[str, type[Publisher]]:
         """Get a dictionary of all registered publishers."""
         return cls._publishers.copy()

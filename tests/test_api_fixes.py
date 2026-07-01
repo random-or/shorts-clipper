@@ -17,9 +17,14 @@ def test_settings_loads_youtube_api_key(tmp_path):
         assert os.environ.get("YOUTUBE_API_KEY") == "test_key_123"
 
 
+@mock.patch("shorts_clipper.scout.trending.GeminiProvider")
+@mock.patch("shorts_clipper.scout.trending.fetch_subtitles")
 @mock.patch("shorts_clipper.scout.trending._discover_via_api")
 @mock.patch("shorts_clipper.scout.trending.YouTubeAPIClient")
-def test_scout_creates_client_and_executes_api_path(mock_client_cls, mock_discover_api):
+def test_scout_creates_client_and_executes_api_path(
+    mock_client_cls, mock_discover_api, mock_fetch_subtitles, mock_gemini
+):
+    mock_fetch_subtitles.return_value = []
     # Setup mock client
     mock_instance = mock.Mock()
     mock_instance.searches_available = True

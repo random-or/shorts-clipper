@@ -64,6 +64,7 @@ def record_success(winner: dict, niche: str, query: str, virality: float) -> Non
         try:
             _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             import contextlib
+
             with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
                 _ensure_tables(con)
 
@@ -136,6 +137,7 @@ def get_successful_channels(niche: str, limit: int = 10) -> list[str]:
             if not _DB_PATH.exists():
                 return []
             import contextlib
+
             with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
                 _ensure_tables(con)
                 rows = con.execute(
@@ -157,6 +159,7 @@ def get_successful_queries(niche: str, limit: int = 5) -> list[str]:
             if not _DB_PATH.exists():
                 return []
             import contextlib
+
             with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
                 _ensure_tables(con)
                 rows = con.execute(

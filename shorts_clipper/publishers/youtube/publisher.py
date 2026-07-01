@@ -1,7 +1,7 @@
 import logging
-from pathlib import Path
-from typing import Callable, Optional
+from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 
 from ..base import Publisher
 from ..models import ClipMetadata, PublishResult
@@ -9,6 +9,7 @@ from .auth import get_youtube_service
 from .uploader import upload_short
 
 log = logging.getLogger(__name__)
+
 
 class YouTubePublisher(Publisher):
     """Handles publishing vertical clips to YouTube Shorts."""
@@ -26,7 +27,7 @@ class YouTubePublisher(Publisher):
         self,
         video_path: Path,
         metadata: ClipMetadata,
-        progress_callback: Optional[Callable[[int], None]] = None,
+        progress_callback: Callable[[int], None] | None = None,
     ) -> PublishResult:
         try:
             video_id = upload_short(

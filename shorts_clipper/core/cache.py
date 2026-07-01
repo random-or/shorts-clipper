@@ -31,6 +31,7 @@ def get_cached(video_id: str) -> dict | None:
         try:
             _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             import contextlib
+
             with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
                 _ensure_table(con)
                 row = con.execute(
@@ -61,6 +62,7 @@ def set_cached(video_id: str, metadata: dict, ttl_hours: int = 6) -> None:
         try:
             _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             import contextlib
+
             with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
                 _ensure_table(con)
                 con.execute(
@@ -80,6 +82,7 @@ def purge_expired() -> int:
         try:
             _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             import contextlib
+
             with contextlib.closing(sqlite3.connect(_DB_PATH, check_same_thread=False)) as con:
                 _ensure_table(con)
                 cur = con.execute(

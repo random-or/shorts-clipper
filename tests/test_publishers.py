@@ -1,10 +1,13 @@
 import json
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-from datetime import datetime
 
-from shorts_clipper.publishers import PublishingEngine, ClipMetadata, PublishResult, PublisherRegistry
+import pytest
+
+from shorts_clipper.publishers import (
+    ClipMetadata,
+    PublisherRegistry,
+    PublishingEngine,
+    PublishResult,
+)
 from shorts_clipper.publishers.base import Publisher
 
 
@@ -72,13 +75,13 @@ def setup_registry():
     # Backup original publishers
     original = dict(PublisherRegistry._publishers)
     PublisherRegistry._publishers.clear()
-    
+
     # Register mocks
     PublisherRegistry.register(MockYouTubePublisher)
     PublisherRegistry.register(MockInstagramPublisher)
-    
+
     yield
-    
+
     # Restore original publishers
     PublisherRegistry._publishers = original
 
@@ -87,7 +90,7 @@ def test_publisher_registry():
     # Verify that both are registered
     assert "youtube" in PublisherRegistry._publishers
     assert "instagram" in PublisherRegistry._publishers
-    
+
     yt = PublisherRegistry.get_publisher("youtube")
     assert isinstance(yt, MockYouTubePublisher)
     assert yt.platform_name == "youtube"
@@ -97,21 +100,21 @@ def test_publishing_engine_success(tmp_path):
     engine = PublishingEngine(max_retries=1, base_backoff=0)
     video_path = tmp_path / "test_clip.mp4"
     video_path.touch()
-    
+
     meta = ClipMetadata(title="Test", description="Test desc")
-    
+
     results = engine.publish(video_path, meta, ["youtube", "instagram"])
-    
+
     assert len(results) == 2
     assert results["youtube"].success
     assert results["instagram"].success
-    
+
     manifest_path = tmp_path / "test_clip_publish_manifest.json"
     assert manifest_path.exists()
-    
-    with open(manifest_path, "r") as f:
+
+    with open(manifest_path) as f:
         manifest = json.load(f)
-    
+
     assert manifest["overall_status"] == "SUCCESS"
     assert manifest["results"]["youtube"]["success"] is True
     assert manifest["results"]["instagram"]["success"] is True
@@ -122,40 +125,40 @@ def test_publishing_engine_partial_success(tmp_path):
     ig = PublisherRegistry.get_publisher("instagram")
     ig.should_fail = True
     PublisherRegistry._publishers["instagram"] = lambda: ig
-    
+
     engine = PublishingEngine(max_retries=1, base_backoff=0)
     video_path = tmp_path / "test_clip2.mp4"
     video_path.touch()
-    
+
     meta = ClipMetadata(title="Test", description="Test desc")
-    
+
     results = engine.publish(video_path, meta, ["youtube", "instagram"])
-    
+
     assert results["youtube"].success is True
     assert results["instagram"].success is False
-    
+
     manifest_path = tmp_path / "test_clip2_publish_manifest.json"
-    with open(manifest_path, "r") as f:
+    with open(manifest_path) as f:
         manifest = json.load(f)
-        
+
     assert manifest["overall_status"] == "PARTIAL_SUCCESS"
 
 
 def test_publishing_engine_retry_logic(tmp_path):
     ig = PublisherRegistry.get_publisher("instagram")
-    ig.fail_count = 2 # Fail twice, succeed on third
+    ig.fail_count = 2  # Fail twice, succeed on third
     PublisherRegistry._publishers["instagram"] = lambda: ig
-    
+
     engine = PublishingEngine(max_retries=3, base_backoff=0)
     video_path = tmp_path / "test_clip3.mp4"
     video_path.touch()
-    
+
     meta = ClipMetadata(title="Test", description="Test desc")
-    
+
     results = engine.publish(video_path, meta, ["instagram"])
-    
+
     assert results["instagram"].success is True
-    assert results["instagram"].retry_count == 2 # 0-indexed, so 0,1,2 = 3rd attempt
+    assert results["instagram"].retry_count == 2  # 0-indexed, so 0,1,2 = 3rd attempt
 
 
 def test_failure_isolation(tmp_path):
@@ -163,15 +166,15 @@ def test_failure_isolation(tmp_path):
     yt = PublisherRegistry.get_publisher("youtube")
     yt.should_fail = True
     PublisherRegistry._publishers["youtube"] = lambda: yt
-    
+
     engine = PublishingEngine(max_retries=1, base_backoff=0)
     video_path = tmp_path / "test_clip4.mp4"
     video_path.touch()
-    
+
     meta = ClipMetadata(title="Test", description="Test desc")
-    
+
     results = engine.publish(video_path, meta, ["youtube", "instagram"])
-    
+
     # YouTube should fail
     assert results["youtube"].success is False
     # Instagram should still succeed
@@ -180,21 +183,28 @@ def test_failure_isolation(tmp_path):
 
 class MockNewPublisher(Publisher):
     @property
-    def platform_name(self) -> str: return "tiktok"
-    def authenticate(self) -> None: pass
-    def publish(self, vp, meta, cb=None): return PublishResult("tiktok", True)
-    def verify(self, pid: str) -> bool: return True
+    def platform_name(self) -> str:
+        return "tiktok"
+
+    def authenticate(self) -> None:
+        pass
+
+    def publish(self, vp, meta, cb=None):
+        return PublishResult("tiktok", True)
+
+    def verify(self, pid: str) -> bool:
+        return True
 
 
 def test_adding_new_publisher_without_modifying_pipeline(tmp_path):
     PublisherRegistry.register(MockNewPublisher)
-    
+
     engine = PublishingEngine(max_retries=1, base_backoff=0)
     video_path = tmp_path / "test_clip5.mp4"
     video_path.touch()
-    
+
     meta = ClipMetadata(title="Test", description="Test desc")
-    
+
     results = engine.publish(video_path, meta, ["tiktok"])
-    
+
     assert results["tiktok"].success is True

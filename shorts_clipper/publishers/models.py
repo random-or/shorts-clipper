@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Optional
-from pathlib import Path
+
 
 @dataclass
 class ClipMetadata:
     """Universal metadata object for a clip."""
+
     title: str
     description: str
     tags: list[str] = field(default_factory=list)
@@ -15,10 +15,11 @@ class ClipMetadata:
 @dataclass
 class PublishResult:
     """Result of a publishing attempt."""
+
     platform: str
     success: bool
-    url: Optional[str] = None
-    platform_id: Optional[str] = None
-    published_at: Optional[str] = None
+    url: str | None = None
+    platform_id: str | None = None
+    published_at: str | None = None
     retry_count: int = 0
-    error_message: Optional[str] = None
+    error_message: str | None = None

@@ -95,8 +95,11 @@ class Settings:
             scout_max_age_days = 90
         subtitle_style = _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
         proxy = _env("SHORTS_PROXY", file_values)
-        
-        platforms_raw = _env("SHORTS_PUBLISH_PLATFORMS", file_values, "youtube,instagram") or "youtube,instagram"
+
+        platforms_raw = (
+            _env("SHORTS_PUBLISH_PLATFORMS", file_values, "youtube,instagram")
+            or "youtube,instagram"
+        )
         publish_platforms = [p.strip() for p in platforms_raw.split(",") if p.strip()]
 
         if proxy:
