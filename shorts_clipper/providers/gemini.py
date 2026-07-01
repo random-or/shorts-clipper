@@ -859,7 +859,7 @@ class GeminiProvider(HighlightProvider):
                 )
             except Exception as exc:
                 exc_str = str(exc)
-                is_quota = "quota" in exc_str.lower()
+                is_quota = "quota exceeded" in exc_str.lower() or "out of quota" in exc_str.lower()
                 is_rate_limit = (
                     "429" in exc_str
                     or "RESOURCE_EXHAUSTED" in exc_str
@@ -1116,7 +1116,10 @@ class GeminiProvider(HighlightProvider):
                         items = extracted if extracted is not None else [items]
                     else:
                         items = []
-            except json.JSONDecodeError as exc:
+                
+                if not items:
+                    raise ValueError("Parsed JSON resulted in an empty items list")
+            except (json.JSONDecodeError, ValueError) as exc:
                 log.info("[GEMINI] JSON parse failed, attempting timestamp extraction")
                 start, end = None, None
 
@@ -1391,7 +1394,10 @@ Return ONLY valid JSON. No markdown. No commentary.
             title = title[1:-1].strip()
 
         description = str(data.get("description", "")).strip()
-        tags = [str(t).strip() for t in data.get("tags", []) if str(t).strip()]
+        raw_tags = data.get("tags")
+        if raw_tags is None:
+            raw_tags = []
+        tags = [str(t).strip() for t in raw_tags if str(t).strip()]
 
         # Validate — refuse to return empty metadata
         if not title:

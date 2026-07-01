@@ -446,7 +446,7 @@ def stream_render_pipeline(
             ffmpeg_cmd.extend(["-preset", preset])
 
         ffmpeg_cmd.extend(
-            ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output_path)]
+            ["-c:a", "aac", "-b:a", "192k", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-use_editlist", "0", str(output_path)]
         )
 
         log.info("Launching Stream-Piped subprocesses:")

@@ -40,7 +40,7 @@ class InstagramGraphPublisher(Publisher):
         def try_catbox() -> str:
             url = "https://catbox.moe/user/api.php"
             with open(video_path, "rb") as f:
-                res = requests.post(url, data={"reqtype": "fileupload"}, files={"fileToUpload": f}, timeout=120)
+                res = requests.post(url, data={"reqtype": "fileupload"}, files={"fileToUpload": f}, timeout=600)
             if res.status_code != 200:
                 raise RuntimeError(f"Catbox failed: {res.status_code}")
             return res.text.strip()
@@ -48,7 +48,7 @@ class InstagramGraphPublisher(Publisher):
         def try_tmpfiles() -> str:
             url = "https://tmpfiles.org/api/v1/upload"
             with open(video_path, "rb") as f:
-                res = requests.post(url, files={"file": f}, timeout=120)
+                res = requests.post(url, files={"file": f}, timeout=600)
             if res.status_code != 200:
                 raise RuntimeError(f"Tmpfiles failed: {res.status_code}")
             data = res.json()
@@ -59,7 +59,7 @@ class InstagramGraphPublisher(Publisher):
             url = "https://uguu.se/upload.php"
             with open(video_path, "rb") as f:
                 files = {"files[]": (video_path.name, f, "video/mp4")}
-                res = requests.post(url, files=files, timeout=120)
+                res = requests.post(url, files=files, timeout=600)
             if res.status_code != 200:
                 raise RuntimeError(f"Uguu failed: {res.status_code}")
             data = res.json()
@@ -143,7 +143,7 @@ class InstagramGraphPublisher(Publisher):
                 "caption": caption,
                 "access_token": token
             }
-            res = requests.post(url, data=payload, timeout=30)
+            res = requests.post(url, data=payload, timeout=60)
             res_data = res.json()
             
             if "error" in res_data:
@@ -155,17 +155,17 @@ class InstagramGraphPublisher(Publisher):
                 
             # Step 3: Check Status until FINISHED
             log.info(f"Container created ({creation_id}). Waiting for Meta to download and process the video...")
-            status_url = f"https://graph.instagram.com/v19.0/{creation_id}?fields=status_code&access_token={token}"
+            status_url = f"https://graph.instagram.com/v19.0/{creation_id}?fields=status_code,status&access_token={token}"
             
             max_attempts = 60
             for attempt in range(max_attempts):
                 status_res = requests.get(status_url, timeout=30).json()
                 status = status_res.get("status_code")
-                log.info(f"Processing status: {status}")
+                log.info(f"Processing status: {status} | Full response: {status_res}")
                 if status == "FINISHED":
                     break
                 elif status == "ERROR":
-                    raise RuntimeError("Meta failed to process the video (Status: ERROR). Check the video format.")
+                    raise RuntimeError(f"Meta failed to process the video. Full response: {status_res}")
                 
                 if progress_callback:
                     progress_callback(min(90, int(90 * (attempt / max_attempts))))

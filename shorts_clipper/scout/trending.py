@@ -257,9 +257,9 @@ def compute_virality_score(video: dict, now: datetime) -> float:
     now_utc = now.replace(tzinfo=UTC) if now.tzinfo is None else now
     hours_live = max((now_utc - published).total_seconds() / 3600, 1)
 
-    views = max(video.get("view_count", 0), 1)
-    likes = video.get("like_count", 0)
-    comments = video.get("comment_count", 0)
+    views = max(int(video.get("view_count") or 0), 1)
+    likes = int(video.get("like_count") or 0)
+    comments = int(video.get("comment_count") or 0)
 
     views_velocity = views / hours_live
     velocity_score = views_velocity / 1000
@@ -298,18 +298,23 @@ def _get_attempt_max_age(base_days: int, attempt: int) -> int | None:
 
 
 def _has_english(info: dict) -> bool:
-    subs = info.get("subtitles") or {}
-    auto = info.get("automatic_captions") or {}
+    subs = info.get("subtitles")
+    auto = info.get("automatic_captions")
     title = info.get("title", "").lower()
     lang = info.get("language")
     if lang and not str(lang).lower().startswith("en"):
         return False
-    has_non_en_orig = any(k.endswith("-orig") and not _is_english_key(k) for k in auto)
-    if has_non_en_orig:
-        return False
-    has_en_sub = any(_is_english_key(k) for k in subs) or any(_is_english_key(k) for k in auto)
-    if not has_en_sub:
-        return False
+        
+    if subs is not None or auto is not None:
+        subs = subs or {}
+        auto = auto or {}
+        has_non_en_orig = any(k.endswith("-orig") and not _is_english_key(k) for k in auto)
+        if has_non_en_orig:
+            return False
+        has_en_sub = any(_is_english_key(k) for k in subs) or any(_is_english_key(k) for k in auto)
+        if not has_en_sub:
+            return False
+            
     strict_ascii = str(os.getenv("SCOUT_STRICT_ASCII", "true")).lower() == "true"
     if strict_ascii and any(ord(c) > 127 for c in title if c.isalpha()):
         return False
@@ -419,7 +424,9 @@ def get_trending_link(
     max_age_days: int | None = 90,
     job_id: str | None = None,
 ) -> str | None:
+    from shorts_clipper.scout.subtitle_cache import get_status, set_status, purge_expired as purge_subtitle_cache
     purge_expired()
+    purge_subtitle_cache()
     log.info(f"SCOUT RECEIVED:\nniche={niche}\nkeyword={keyword}")
     import uuid
     job_id_str = job_id or str(uuid.uuid4())[:8]
@@ -545,8 +552,13 @@ def get_trending_link(
             # Stages 2 & 3: Freshness & Quality
             for video in discovered:
                 vid = video.get("id")
-                if not vid or get_cached(vid):
+                if not vid:
                     continue
+                    
+                cached_data = get_cached(vid)
+                if cached_data:
+                    if "transcript_segments" not in cached_data:
+                        continue
 
                 title_lower = video.get("title", "").lower()
 
@@ -748,7 +760,7 @@ def get_trending_link(
                             SUBTITLE_NOT_AVAILABLE,
                             YOUTUBE_RATE_LIMIT_429,
                         )
-                        from shorts_clipper.scout.subtitle_cache import get_status, set_status
+                        # (Import moved to top of function)
 
                         cache_status = get_status(vid)
                         if cache_status == "RATE_LIMITED":
@@ -900,7 +912,7 @@ def get_trending_link(
                                 "Top candidate %s rejected: Gemini virality score too low", vid
                             )
                     # Calculate final components for reporting
-                    max_ai_score = max(h.get("virality_score", 0) for h in valid_highlights)
+                    max_ai_score = max((h.get("virality_score", 0) for h in valid_highlights), default=0)
                     ai_points = max_ai_score * 0.4
 
                     scorer = RuleBasedHighlightScorer()
@@ -922,9 +934,9 @@ def get_trending_link(
                     rule_emotion_points = min(10.0, max_rule_emotion * 5.0)
                     rule_virality_points = min(10.0, max_rule_virality * 5.0)
 
-                    views = max(v.get("view_count", 0), 1)
-                    likes = v.get("like_count", 0)
-                    comments = v.get("comment_count", 0)
+                    views = max(int(v.get("view_count") or 0), 1)
+                    likes = int(v.get("like_count") or 0)
+                    comments = int(v.get("comment_count") or 0)
                     pub_str = v.get("published_at") or v.get("upload_date") or ""
                     try:
                         pub_dt = (

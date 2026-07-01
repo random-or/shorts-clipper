@@ -38,7 +38,7 @@ def upload_short(
         },
     }
 
-    media = MediaFileUpload(str(video_path), chunksize=8 * 1024 * 1024, resumable=True)
+    media = MediaFileUpload(str(video_path), chunksize=2 * 1024 * 1024, resumable=True)
     request = youtube.videos().insert(
         part="snippet,status",
         body=body,
@@ -47,7 +47,7 @@ def upload_short(
 
     response = None
     while response is None:
-        status, response = request.next_chunk()
+        status, response = request.next_chunk(num_retries=5)
         if status:
             progress_pct = int(status.progress() * 100)
             log.info("Uploaded %d%%...", progress_pct)

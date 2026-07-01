@@ -906,6 +906,9 @@ def youtube_callback(request: Request, code: str, state: str | None = None) -> H
         with open(token_path, "wb") as token:
             pickle.dump(creds, token)
 
+        if "youtube" in _status_cache:
+            del _status_cache["youtube"]
+
         return HTMLResponse(
             content="""
             <html>
@@ -990,12 +993,16 @@ def disconnect_youtube() -> dict[str, Any]:
     if token_path.exists():
         try:
             token_path.unlink()
+            if "youtube" in _status_cache:
+                del _status_cache["youtube"]
             return {
                 "success": True,
                 "message": "YouTube account disconnected successfully.",
             }
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete token: {e}") from e
+    if "youtube" in _status_cache:
+        del _status_cache["youtube"]
     return {"success": True, "message": "YouTube account was already disconnected."}
 
 

@@ -131,16 +131,10 @@ def fetch_subtitles(url: str, work_dir: Path, max_retries: int = 3) -> list[Tran
 
             if is_rate_limit:
                 _subtitle_metrics["rate_limit_429"] += 1
-                log.warning(
-                    "YouTube 429 rate limit during subtitle fetch (attempt %d/%d)",
-                    attempt,
-                    max_retries,
-                )
-                if attempt < max_retries:
-                    backoff = 2**attempt
-                    log.info("Retrying subtitle fetch in %ds...", backoff)
-                    time.sleep(backoff)
-                    continue
+                log.warning("YouTube 429 rate limit during subtitle fetch for %s", url)
+                # Fail fast on 429, it is an IP-level block. Retrying is pointless.
+                _subtitle_metrics["fetch_failure"] += 1
+                raise YOUTUBE_RATE_LIMIT_429("Rate limited by YouTube") from None
             elif is_forbidden:
                 _subtitle_metrics["forbidden_403"] += 1
                 log.warning("YouTube 403 forbidden during subtitle fetch for %s", url)
@@ -152,11 +146,9 @@ def fetch_subtitles(url: str, work_dir: Path, max_retries: int = 3) -> list[Tran
                 max_retries,
                 last_err_str[:200],
             )
-            if attempt < max_retries and is_rate_limit:
+            if attempt < max_retries:
                 continue
             _subtitle_metrics["fetch_failure"] += 1
-            if is_rate_limit:
-                raise YOUTUBE_RATE_LIMIT_429("Rate limited after retries") from None
             raise SUBTITLE_NOT_AVAILABLE(f"Fetch failed: {last_err_str[:100]}") from None
 
         # Success — parse the SRT

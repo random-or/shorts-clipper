@@ -26,13 +26,13 @@ def _build_crop_filter(src_w: int, src_h: int, layout: str) -> str:
     if layout == "crop_left":
         scale_h = _TARGET_H
         scale_w = max(_TARGET_W, round(_TARGET_H * src_ratio) // 2 * 2)
-        return f"scale={scale_w}:{scale_h},crop={_TARGET_W}:{_TARGET_H}:0:0"
+        return f"scale={scale_w}:{scale_h},crop={_TARGET_W}:{_TARGET_H}:0:0,setsar=1"
 
     if layout == "crop_right":
         scale_h = _TARGET_H
         scale_w = max(_TARGET_W, round(_TARGET_H * src_ratio) // 2 * 2)
         x_offset = scale_w - _TARGET_W
-        return f"scale={scale_w}:{scale_h},crop={_TARGET_W}:{_TARGET_H}:{x_offset}:0"
+        return f"scale={scale_w}:{scale_h},crop={_TARGET_W}:{_TARGET_H}:{x_offset}:0,setsar=1"
 
     # Default: crop_center — compute precise center crop box
     crop = compute_center_crop(
@@ -47,7 +47,7 @@ def _build_crop_filter(src_w: int, src_h: int, layout: str) -> str:
     scaled_h = round(src_h * scale) // 2 * 2
     x = (scaled_w - _TARGET_W) // 2
     y = (scaled_h - _TARGET_H) // 2
-    return f"scale={scaled_w}:{scaled_h},crop={_TARGET_W}:{_TARGET_H}:{x}:{y}"
+    return f"scale={scaled_w}:{scaled_h},crop={_TARGET_W}:{_TARGET_H}:{x}:{y},setsar=1"
 
 
 def process_to_vertical(
@@ -124,8 +124,12 @@ def process_to_vertical(
             "aac",
             "-b:a",
             "192k",
+            "-pix_fmt",
+            "yuv420p",
             "-movflags",
             "+faststart",
+            "-use_editlist",
+            "0",
             str(output_path),
         ]
     )

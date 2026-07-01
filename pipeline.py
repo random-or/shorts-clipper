@@ -25,7 +25,7 @@ if __name__ == "__main__":
         url = sys.argv[1]
 
     try:
-        out = run(url, settings=settings)
+        out = run(url, settings=settings, upload=True)
         print(f"\n🔥 Clip ready: {out}")
     except Exception as exc:
         print(f"❌ FAILED: {exc}")

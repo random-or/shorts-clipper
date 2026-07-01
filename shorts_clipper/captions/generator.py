@@ -339,7 +339,7 @@ def burn_subtitles(
         escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
 
         # Build video + audio filters
-        vf = f"ass='{escaped}'"
+        vf = f"ass='{escaped}',setsar=1"
         af_parts = [
             "acompressor=threshold=-20dB:ratio=4:makeup=4",
             "aformat=channel_layouts=stereo",
@@ -377,8 +377,12 @@ def burn_subtitles(
                 "aac",
                 "-b:a",
                 "192k",
+                "-pix_fmt",
+                "yuv420p",
                 "-movflags",
                 "+faststart",
+                "-use_editlist",
+                "0",
                 str(output_path),
             ]
         )
