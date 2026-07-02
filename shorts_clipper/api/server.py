@@ -135,6 +135,14 @@ def startup_event():
     configure_logging(settings.log_level)
     ensure_worker_running()
 
+    # Clear old logs on startup so the web terminal is clean
+    log_file = Path("outputs/app.log")
+    if log_file.exists():
+        try:
+            log_file.write_text("")
+        except Exception:
+            pass
+
     # Reset any stuck "uploading" statuses from previous runs
     out_dir = Path(settings.output_dir)
     if out_dir.exists():
