@@ -110,7 +110,7 @@ Return ONLY valid JSON with no markdown and no commentary.
                     api_key=settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
                 )
                 response = client.models.generate_content(
-                    model="gemini-flash-lite-latest",
+                    model="gemini-3.1-flash-lite",
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         temperature=0.0,

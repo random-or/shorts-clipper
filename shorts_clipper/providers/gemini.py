@@ -831,7 +831,7 @@ class GeminiProvider(HighlightProvider):
         self,
         *,
         api_key: str | None = None,
-        model: str = "gemini-flash-latest",
+        model: str = "gemini-3.1-flash-lite",
         fallback_window: tuple[float, float] = (60.0, 95.0),
         fallback_layout: str = "crop_center",
     ) -> None:
@@ -871,6 +871,12 @@ class GeminiProvider(HighlightProvider):
                 )
                 if is_rate_limit:
                     log.warning("Gemini Rate Limit (429) hit. Will retry.")
+                    import re
+                    match = re.search(r"retry in (\d+(?:\.\d+)?)s", exc_str)
+                    if match:
+                        delay = float(match.group(1)) + 5.0
+                    else:
+                        delay = 65.0
                 elif is_quota:
                     log.error("GEMINI QUOTA EXHAUSTED\nSWITCHING TO FALLBACK")
                     raise GeminiQuotaExhaustedError(exc_str) from exc
@@ -900,7 +906,6 @@ class GeminiProvider(HighlightProvider):
                     delay,
                 )
                 time.sleep(delay)
-                delay *= 2
 
     def select_clip(
         self, segments: Sequence[TranscriptSegment], allow_fallback: bool = True
