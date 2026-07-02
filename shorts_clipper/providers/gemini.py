@@ -845,9 +845,7 @@ class GeminiProvider(HighlightProvider):
 
         settings = Settings.from_env()
         self._client = genai.Client(
-            api_key=api_key
-            or settings.gemini_api_key
-            or os.environ.get("GEMINI_API_KEY")
+            api_key=api_key or settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
         )
 
     def generate_content(
@@ -864,10 +862,7 @@ class GeminiProvider(HighlightProvider):
                 )
             except Exception as exc:
                 exc_str = str(exc)
-                is_quota = (
-                    "quota exceeded" in exc_str.lower()
-                    or "out of quota" in exc_str.lower()
-                )
+                is_quota = "quota exceeded" in exc_str.lower() or "out of quota" in exc_str.lower()
                 is_rate_limit = (
                     "429" in exc_str
                     or "RESOURCE_EXHAUSTED" in exc_str
@@ -895,9 +890,7 @@ class GeminiProvider(HighlightProvider):
                 )
                 if is_auth_error:
                     log.error("GEMINI API KEY INVALID OR MISSING: %s", exc_str)
-                    raise ProviderError(
-                        f"Gemini API key is invalid or missing: {exc_str}"
-                    ) from exc
+                    raise ProviderError(f"Gemini API key is invalid or missing: {exc_str}") from exc
 
                 if attempt == max_retries:
                     log.error(
@@ -942,18 +935,12 @@ class GeminiProvider(HighlightProvider):
             try:
                 data = json.loads(json_str)
                 if not isinstance(data, dict):
-                    if (
-                        isinstance(data, list)
-                        and len(data) > 0
-                        and isinstance(data[0], dict)
-                    ):
+                    if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
                         data = data[0]
                     else:
                         raise ValueError(f"Expected dict, got {type(data)}")
             except Exception as exc:
-                raise ProviderError(
-                    f"Gemini returned unparseable JSON: {raw!r}"
-                ) from exc
+                raise ProviderError(f"Gemini returned unparseable JSON: {raw!r}") from exc
 
             start = float(data.get("timestamp_start", data.get("start", 0.0)))
             end = float(data.get("timestamp_end", data.get("end", 0.0)))
@@ -1036,9 +1023,7 @@ class GeminiProvider(HighlightProvider):
         transcript_text = format_transcript(segments)
         prompt = _MULTI_PROMPT_TEMPLATE.format(count=count, transcript=transcript_text)
 
-        log.info(
-            "\n--- CONSULTING %s FOR MULTIPLE CLIPS (up to %d) ---", self._model, count
-        )
+        log.info("\n--- CONSULTING %s FOR MULTIPLE CLIPS (up to %d) ---", self._model, count)
         try:
             response = self.generate_content(prompt)
             raw = response.text.strip()
@@ -1057,9 +1042,7 @@ class GeminiProvider(HighlightProvider):
             try:
                 items = json.loads(json_str)
             except json.JSONDecodeError as exc:
-                raise ProviderError(
-                    f"Gemini returned unparseable JSON array: {raw!r}"
-                ) from exc
+                raise ProviderError(f"Gemini returned unparseable JSON array: {raw!r}") from exc
 
             if not isinstance(items, list):
                 if isinstance(items, dict):
@@ -1070,9 +1053,7 @@ class GeminiProvider(HighlightProvider):
                             break
                     items = extracted if extracted is not None else [items]
                 else:
-                    raise ProviderError(
-                        f"Gemini response did not return a JSON list: {raw!r}"
-                    )
+                    raise ProviderError(f"Gemini response did not return a JSON list: {raw!r}")
 
             results: list[tuple[ClipWindow, str]] = []
             for item in items[:count]:
@@ -1083,9 +1064,7 @@ class GeminiProvider(HighlightProvider):
                     score = int(item.get("final_score", item.get("virality_score", 0)))
 
                     if score < 85:
-                        log.warning(
-                            "Skipping selected clip with low score: %d (< 85)", score
-                        )
+                        log.warning("Skipping selected clip with low score: %d (< 85)", score)
                         continue
 
                     # Clamp duration
@@ -1105,9 +1084,7 @@ class GeminiProvider(HighlightProvider):
                     )
                     results.append((ClipWindow(start=start, end=end), layout))
                 except Exception as item_exc:
-                    log.warning(
-                        "Failed parsing individual clip candidate: %s", item_exc
-                    )
+                    log.warning("Failed parsing individual clip candidate: %s", item_exc)
 
             if not results:
                 raise ProviderError("No high-quality clips selected by Gemini.")
@@ -1164,17 +1141,13 @@ class GeminiProvider(HighlightProvider):
                     start = float(start_match.group(1))
                     end = float(end_match.group(1))
                 else:
-                    start_match = re.search(
-                        r'"timestamp_start":\s*"?(\d+\.?\d*)"?', raw
-                    )
+                    start_match = re.search(r'"timestamp_start":\s*"?(\d+\.?\d*)"?', raw)
                     end_match = re.search(r'"timestamp_end":\s*"?(\d+\.?\d*)"?', raw)
                     if start_match and end_match:
                         start = float(start_match.group(1))
                         end = float(end_match.group(1))
                     else:
-                        range_match = re.search(
-                            r"(\d+\.?\d*)\s*(?:→|-|to)\s*(\d+\.?\d*)", raw
-                        )
+                        range_match = re.search(r"(\d+\.?\d*)\s*(?:→|-|to)\s*(\d+\.?\d*)", raw)
                         if range_match:
                             start = float(range_match.group(1))
                             end = float(range_match.group(2))
@@ -1213,9 +1186,7 @@ class GeminiProvider(HighlightProvider):
 
                 # New keys
                 hook = int(item.get("hook_score", 0))
-                curiosity = int(
-                    item.get("curiosity_gap", item.get("curiosity_level", 0))
-                )
+                curiosity = int(item.get("curiosity_gap", item.get("curiosity_level", 0)))
                 emotion = int(item.get("emotional_intensity", 0))
                 delta = int(item.get("emotional_delta", 0))
                 tension = int(item.get("tension", item.get("tension_level", 0)))
@@ -1254,9 +1225,7 @@ class GeminiProvider(HighlightProvider):
         except Exception as e:
             if isinstance(e, GeminiQuotaExhaustedError):
                 raise
-            log.warning(
-                "Detailed Gemini highlights fetch failed: %s. Using simple fallback.", e
-            )
+            log.warning("Detailed Gemini highlights fetch failed: %s. Using simple fallback.", e)
             try:
                 simple_clips = self.select_multiple_clips(segments, count=count)
                 return [
@@ -1447,9 +1416,7 @@ Return ONLY valid JSON. No markdown. No commentary.
         if not title:
             raise ProviderError("Gemini returned empty title in metadata response.")
         if not description:
-            raise ProviderError(
-                "Gemini returned empty description in metadata response."
-            )
+            raise ProviderError("Gemini returned empty description in metadata response.")
         if not tags:
             tags = ["shorts"]
 

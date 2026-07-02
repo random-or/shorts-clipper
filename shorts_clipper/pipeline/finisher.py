@@ -139,9 +139,7 @@ Return ONLY valid JSON with no markdown and no commentary.
                     end_id = initial_end_idx
                     break
 
-                log.warning(
-                    f"EditorialFinisher LLM failed (attempt {attempt}): {e}. Retrying..."
-                )
+                log.warning(f"EditorialFinisher LLM failed (attempt {attempt}): {e}. Retrying...")
                 time.sleep(2**attempt)
 
         final_start = all_words[start_id].start
