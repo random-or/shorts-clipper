@@ -1,66 +1,54 @@
-# Contributing
+# Contributing to Shorts Clipper
 
-Thanks for helping make Shorts Clipper a better open-source AI clipping system.
+First off, thank you for considering contributing to Shorts Clipper! It's people like you that make this tool incredible.
 
-## Development principles
+## 🧠 Architectural Philosophy
 
-- Keep changes incremental and easy to review.
-- Preserve existing behavior unless the change explicitly documents a migration.
-- Prefer typed, modular, testable code over clever shortcuts.
-- Add tests for pure logic and bug fixes.
-- Keep dependencies minimal and justified.
-- Avoid broad rewrites without a plan.
-- Do not commit generated media, local models, virtualenvs, or credentials.
+Before writing code, please understand the core tenets of Shorts Clipper:
 
-## Local setup
+1. **Local-First & Deterministic:** We believe that core logic (like selecting a good video clip) should be mathematically sound, deterministic, and run locally. LLMs (like Gemini) are used only for semantic understanding (e.g., SEO metadata or verifying context), NOT as the core processing engine.
+2. **Zero Regression:** Every PR must pass all existing tests. If you add a new feature, add a test. We maintain 100% reliability on the core pipeline.
+3. **Decoupled Architecture:** The system is split into independent domains (Scout, Editorial Engine, Rendering, Publishing). If you modify the Scout, it should not break Rendering. 
+4. **Resilience & Fallbacks:** Always handle network failures, quota exhaustion, and API timeouts gracefully.
 
+## 🛠 Setup for Development
+
+1. **Clone the repo:**
+   ```bash
+   git clone https://github.com/your-org/shorts-clipper.git
+   cd shorts-clipper
+   ```
+
+2. **Set up a virtual environment:**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+3. **Install Pre-commit Hooks (Optional but recommended):**
+   ```bash
+   pip install pre-commit
+   pre-commit install
+   ```
+
+## 🧪 Testing
+
+We use `pytest` for all unit and integration testing.
+
+Run the test suite:
 ```bash
-python -m venv env
-source env/bin/activate
-python -m pip install --upgrade pip
-pip install -e .
+pytest tests/
 ```
 
-Install development hooks:
+Ensure you have a 100% pass rate before submitting a pull request.
 
-```bash
-pip install pre-commit
-pre-commit install
-```
+## 🚀 Submitting a Pull Request
 
-## Checks
+1. Fork the repository and create your branch from `main`.
+2. Write clean, heavily-documented code. We love type hints (`typing`) and docstrings.
+3. Ensure the test suite passes.
+4. Update any relevant documentation (README, Architecture docs).
+5. Submit your PR with a clear, detailed description of the problem solved and the implementation details.
 
-Run before opening a pull request:
-
-```bash
-python -m unittest discover -v
-python -m compileall -q .
-pre-commit run --all-files
-```
-
-## Commit style
-
-Use clear conventional-style commits when possible:
-
-```text
-feat: add transcript cache manifest
-fix: validate provider timestamp output
-docs: improve Docker quickstart
-test: cover crop geometry edge cases
-```
-
-## Good first areas
-
-- Improve docs and examples.
-- Add tests around existing script behavior.
-- Move legacy script logic into package modules while keeping wrappers.
-- Add provider adapters behind the existing provider interface.
-- Improve ffmpeg rendering while preserving output compatibility.
-
-## Pull request checklist
-
-- [ ] Change is focused and incremental.
-- [ ] Tests pass locally.
-- [ ] New behavior is documented.
-- [ ] No secrets, media outputs, virtualenvs, or model files committed.
-- [ ] Existing CLI behavior still works or migration is documented.
+Welcome to the team!

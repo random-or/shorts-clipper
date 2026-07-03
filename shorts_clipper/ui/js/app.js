@@ -121,11 +121,13 @@
             const stats = document.getElementById('active-upload-stats');
             const bar = document.getElementById('active-upload-progress-bar');
             
-            const isUploadStart = (logLine.includes('Uploading') || logLine.includes('Publishing')) || 
-                                  logLine.includes('Initializing upload') || 
-                                  logLine.includes('Uploading Clip');
+            const logLower = logLine.toLowerCase();
+            
+            const isUploadStart = (logLower.includes('uploading') || logLower.includes('publishing')) || 
+                                  logLower.includes('initializing upload') || 
+                                  logLower.includes('uploading clip');
                                   
-            if (isUploadStart) {
+            if (isUploadStart && !logLower.includes('publishing completed') && !logLower.includes('successfully published')) {
                 container.style.display = 'flex';
                 if (!uploadStartTime) {
                     uploadStartTime = Date.now();
@@ -177,11 +179,13 @@
                 return;
             }
             
-            const isDone = logLine.includes('uploaded to YouTube successfully') || 
-                           logLine.includes('Upload Complete') || 
-                           logLine.includes('Uploaded manual clip successfully') ||
-                           logLine.includes('successfully published') ||
-                           logLine.includes('uploaded successfully to requested platforms');
+            const isDone = logLower.includes('uploaded to youtube successfully') || 
+                           logLower.includes('upload complete') || 
+                           logLower.includes('uploaded manual clip successfully') ||
+                           logLower.includes('successfully published') ||
+                           logLower.includes('uploaded successfully to requested platforms') ||
+                           logLower.includes('job finished successfully') ||
+                           logLower.includes('publishing completed');
                            
             if (isDone) {
                 container.style.display = 'flex';
@@ -194,12 +198,25 @@
                 return;
             }
             
-            const isError = logLine.includes('failed') || 
-                            logLine.includes('cancelled') ||
-                            logLine.includes('Error') ||
-                            logLine.includes('ERROR');
+            const isFailed = logLower.includes('failed to upload') || 
+                             logLower.includes('publishing failed') || 
+                             logLower.includes('upload interrupted');
+                             
+            if (isFailed) {
+                stats.textContent = 'Upload Failed.';
+                bar.style.backgroundColor = 'var(--ash)';
+                setTimeout(() => {
+                    container.style.display = 'none';
+                    uploadStartTime = null;
+                }, 4000);
+            }
+            
+            const isError = logLower.includes('failed') || 
+                            logLower.includes('cancelled') ||
+                            logLower.includes('error') ||
+                            logLower.includes('error');
                             
-            if (isError && (logLine.includes('Upload') || logLine.includes('Publish') || logLine.includes('publish') || logLine.includes('youtube') || logLine.includes('YouTube'))) {
+            if (isError && (logLower.includes('upload') || logLower.includes('publish') || logLower.includes('youtube'))) {
                 container.style.display = 'none';
                 uploadStartTime = null;
             }
@@ -323,6 +340,13 @@
         function resetPipelineProgress() {
             currentProgressPct = 0;
             isLocalWhisperActive = false;
+            
+            const uploadContainer = document.getElementById('active-upload-progress-container');
+            if (uploadContainer) {
+                uploadContainer.style.display = 'none';
+                uploadStartTime = null;
+            }
+            
             document.querySelectorAll('.stage-step').forEach(step => {
                 step.className = 'stage-step';
             });
@@ -463,13 +487,18 @@
             } else if (logLine.includes('Uploading') || logLine.includes('Publishing') || logLine.includes('Uploading Clip')) {
                 setPipelineProgress(95);
                 setActivityMessage("Preparing export...");
-            } else if (logLine.includes('SUCCESS —') || logLine.includes('READY') || logLine.includes('uploaded to YouTube successfully') || logLine.includes('uploaded successfully to requested platforms') || logLine.includes('✅ Custom rendered clip ready')) {
+            } else if (logLine.includes('SUCCESS —') || logLine.includes('READY') || logLine.includes('Job finished successfully') || logLine.includes('uploaded to YouTube successfully') || logLine.includes('uploaded successfully to requested platforms') || logLine.includes('✅ Custom rendered clip ready')) {
                 setPipelineProgress(100);
                 setActivityMessage("Done.");
                 
                 // Immediately refresh library to show the new clip
                 refreshLibrary();
                 
+                setTimeout(() => {
+                    resetPipelineProgress();
+                }, 12000);
+            } else if (logLine.includes('Failed to upload') || logLine.includes('Pipeline failed') || logLine.includes('publishing failed')) {
+                setActivityMessage("Task failed.");
                 setTimeout(() => {
                     resetPipelineProgress();
                 }, 12000);
@@ -675,6 +704,10 @@
                         document.getElementById('active-job-cancel-container').style.display = 'none';
                         document.getElementById('stat-autopilot-count').textContent = "Ready";
                         document.getElementById('stat-autopilot-count').style.color = "";
+                        
+                        const uploadContainer = document.getElementById('active-upload-progress-container');
+                        if (uploadContainer) uploadContainer.style.display = 'none';
+                        uploadStartTime = null;
                         
                         setPipelineProgress(100);
                         refreshLibrary();

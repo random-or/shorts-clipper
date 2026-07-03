@@ -173,7 +173,7 @@ def get_whisper_model():
 def transcribe_clip(
     video_path: str | Path,
     *,
-    beam_size: int = 5,
+    beam_size: int = 1,
 ) -> list[TranscriptSegment]:
     """
     Transcribe a video/audio file locally with faster-whisper.

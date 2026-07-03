@@ -49,12 +49,9 @@ class FallbackMetadataTests(unittest.TestCase):
         ]
         mock_transcribe.return_value = segments
 
-        # Scenario 1: Gemini Provider throws Exception (429 or Timeout)
+        # Scenario 1: Gemini Provider throws Exception (429 or Timeout) during Metadata
         mock_provider = MagicMock()
-        # For Pass 1 highlight selection
         from shorts_clipper.core.models import ClipWindow
-
-        mock_provider.select_multiple_clips.return_value = [(ClipWindow(0, 15), "crop_center")]
 
         # For Pass 2 metadata generation
         mock_provider.generate_clip_metadata.side_effect = Exception("429 RESOURCE_EXHAUSTED")
@@ -78,12 +75,17 @@ class FallbackMetadataTests(unittest.TestCase):
 
         # Run pipeline
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}):
-            output = run(
-                url="https://www.youtube.com/watch?v=fallback123",
-                settings=settings,
-                count=1,
-                upload=True,
-            )
+            with patch("shorts_clipper.editorial.engine.EditorialEngine") as mock_editorial_cls:
+                mock_editorial_engine = MagicMock()
+                mock_editorial_engine.select_clips.return_value = [ClipWindow(0, 15)]
+                mock_editorial_cls.return_value = mock_editorial_engine
+
+                output = run(
+                    url="https://www.youtube.com/watch?v=fallback123",
+                    settings=settings,
+                    count=1,
+                    upload=True,
+                )
 
         # Verify Fallback was used
         json_path = output.with_suffix(".json")

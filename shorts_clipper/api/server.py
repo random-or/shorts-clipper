@@ -105,7 +105,7 @@ def ensure_worker_running() -> None:
     if heartbeat_path.exists():
         try:
             last_heartbeat = float(heartbeat_path.read_text(encoding="utf-8").strip())
-            if time.time() - last_heartbeat < 15.0:
+            if time.time() - last_heartbeat < 30.0:
                 worker_running = True
         except Exception:
             pass
@@ -1322,7 +1322,8 @@ async def stream_logs() -> StreamingResponse:
             lines = f.readlines()
             tail_lines = lines[-50:]
             if tail_lines:
-                yield f"data: {''.join(tail_lines)}\n\n"
+                for tline in tail_lines:
+                    yield f"data: {tline.strip()}\n\n"
 
             f.seek(0, 2)
             while True:

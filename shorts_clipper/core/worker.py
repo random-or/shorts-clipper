@@ -178,6 +178,13 @@ def watchdog_thread_loop() -> None:
         time.sleep(60)
 
 
+def heartbeat_thread_loop() -> None:
+    """Thread running the heartbeat every 5 seconds."""
+    while True:
+        update_heartbeat()
+        time.sleep(5.0)
+
+
 def run_worker() -> None:
     global active_job_id
     logger.info("👷 Shorts Clipper background worker started.")
@@ -188,6 +195,10 @@ def run_worker() -> None:
     # Launch watchdog thread
     watchdog_thread = threading.Thread(target=watchdog_thread_loop, daemon=True)
     watchdog_thread.start()
+
+    # Launch heartbeat thread
+    heartbeat_thread = threading.Thread(target=heartbeat_thread_loop, daemon=True)
+    heartbeat_thread.start()
 
     def cancellation_monitor_thread_loop() -> None:
         """Continuously monitors the active job status and terminates subprocesses if cancelled."""
@@ -216,7 +227,6 @@ def run_worker() -> None:
         job_queue.update_status(job.id, JobStatus.PENDING, progress=0)
 
     while True:
-        update_heartbeat()
         time.sleep(1.0)
 
         # Check for and claim a pending job atomically

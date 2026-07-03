@@ -56,6 +56,9 @@ def run(
     privacy: str = "private",
     niche: str | None = None,
     progress_callback: Callable[[int], None] | None = None,
+    preselected_clips: list | None = None,
+    source_title: str | None = None,
+    source_channel: str | None = None,
 ) -> Path | list[Path]:
     """
     Run the full shorts clipping pipeline for a given YouTube URL.
@@ -92,25 +95,10 @@ def run(
         work_path = Path(work_dir)
 
         try:
-            # Check Scout V2 Cache first to bypass PASS 1 if already evaluated (Phase 2 Integration)
-            import re
-
-            from shorts_clipper.core.cache import get_cached
-            from shorts_clipper.core.models import ClipWindow
-
-            vid_match = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})(?:\?|&|/|$)", url)
-            vid = vid_match.group(1) if vid_match else url
-            cached_data = get_cached(vid)
-
             clips = []
-            if cached_data and "selected_clips" in cached_data:
-                clips_data = cached_data["selected_clips"]
-                clips = [
-                    (ClipWindow(start=c["start"], end=c["end"]), c["layout"])
-                    for c in clips_data[:count]
-                ]
-                if clips:
-                    log.info("🔥 Scout V2 Cache Hit: Loaded %d highlights directly!", len(clips))
+            if preselected_clips:
+                clips = preselected_clips[:count]
+                log.info("🔥 Using %d pre-selected clips provided by coordinator!", len(clips))
 
             if len(clips) < count:
                 # ── PASS 1: ROUGH TRANSCRIPT FOR AI SELECTION ────────────────
@@ -127,25 +115,25 @@ def run(
                     download_audio(url, audio_path, start_time=0.0, end_time=300.0)
                     rough_segments = transcribe_clip(audio_path)
 
-                provider = GeminiProvider(api_key=settings.gemini_api_key)
+                from shorts_clipper.editorial.engine import EditorialEngine
+
                 try:
-                    # Enforce highlight quality validation (Phase 1: Remove Blind Fallback)
-                    new_clips = provider.select_multiple_clips(
-                        rough_segments, count=count - len(clips), allow_fallback=False
+                    log.info("🧠 Engaging Editorial Core (V3.2) for clip selection...")
+                    editorial_engine = EditorialEngine(profile_name="default")
+                    new_clip_windows = editorial_engine.select_clips(
+                        rough_segments, count=count - len(clips), window_duration=45.0, step=10.0
                     )
+
+                    if not new_clip_windows:
+                        raise MediaProcessingError(
+                            "Editorial Core rejected all clip candidates (no high-quality hooks/pacing found)."
+                        )
+
+                    new_clips = [(w, "center") for w in new_clip_windows]
                     clips.extend(new_clips)
                 except Exception as exc:
-                    from shorts_clipper.providers.gemini import GeminiQuotaExhaustedError
-
-                    if isinstance(exc, GeminiQuotaExhaustedError):
-                        log.warning("GEMINI QUOTA EXHAUSTED - SWITCHING TO FALLBACK")
-                        new_clips = provider.select_multiple_clips(
-                            rough_segments, count=count - len(clips), allow_fallback=True
-                        )
-                        clips.extend(new_clips)
-                    else:
-                        log.error("AI highlight selection failed: %s", exc)
-                        raise MediaProcessingError("No high-quality highlights found.") from exc
+                    log.error("Editorial Core selection failed: %s", exc)
+                    raise MediaProcessingError("No high-quality highlights found.") from exc
 
             output_paths: list[Path] = []
 
@@ -282,16 +270,9 @@ def run(
                     "publish_error": None,
                 }
 
-                import re
-
-                from shorts_clipper.core.cache import get_cached
-
-                vid_match = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})(?:\?|&|/|$)", url)
-                vid_for_meta = vid_match.group(1) if vid_match else url
-                c_data = get_cached(vid_for_meta) or {}
-                s_title = c_data.get("title", "")
-                s_channel = c_data.get("uploader", "") or c_data.get("channel_title", "")
-                actual_niche = niche or c_data.get("niche") or "tech"
+                s_title = source_title or ""
+                s_channel = source_channel or ""
+                actual_niche = niche or "tech"
 
                 try:
                     provider = GeminiProvider(api_key=settings.gemini_api_key)
@@ -477,14 +458,37 @@ def run_autopilot(
         log.error("Scout returned no suitable video. Aborting.")
         return None
 
+    import re
+
+    from shorts_clipper.core.cache import get_cached
+    from shorts_clipper.core.models import ClipWindow
+
+    vid_match = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})(?:\?|&|/|$)", url)
+    vid = vid_match.group(1) if vid_match else url
+    cached_data = get_cached(vid) or {}
+
+    clips = []
+    if "selected_clips" in cached_data:
+        clips = [
+            (ClipWindow(start=c["start"], end=c["end"]), c["layout"])
+            for c in cached_data["selected_clips"]
+        ]
+
+    s_title = cached_data.get("title", "")
+    s_channel = cached_data.get("uploader", "") or cached_data.get("channel_title", "")
+    actual_niche = niche or cached_data.get("niche") or "tech"
+
     result = run(
         url,
         settings=settings,
         count=count,
         upload=upload,
         privacy=privacy,
-        niche=niche,
+        niche=actual_niche,
         progress_callback=progress_callback,
+        preselected_clips=clips,
+        source_title=s_title,
+        source_channel=s_channel,
     )
 
     if result:

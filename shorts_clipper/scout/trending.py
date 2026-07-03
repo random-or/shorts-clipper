@@ -20,7 +20,6 @@ from shorts_clipper.core.models import TranscriptSegment, TranscriptWord
 from shorts_clipper.core.settings import Settings
 from shorts_clipper.downloader.yt_dlp import fetch_subtitles, get_subtitle_metrics
 from shorts_clipper.highlight_detection.scoring import RuleBasedHighlightScorer
-from shorts_clipper.providers.gemini import GeminiProvider
 from shorts_clipper.scout.keywords import build_queries
 from shorts_clipper.scout.metrics import ScoutMetrics
 from shorts_clipper.scout.youtube_api import YouTubeAPIClient
@@ -870,22 +869,43 @@ def get_trending_link(
                     log.info(
                         "Video %s selected as finalist with Local Score: %.2f", vid, local_score
                     )
-                    log.info("Calling Gemini ONCE for timestamp extraction...")
+                    log.info("Calling Editorial Core for local timestamp extraction...")
 
-                    t_gemini_start = time.time()
-                    highlights = []
-                    provider = GeminiProvider(api_key=settings.gemini_api_key)
-                    gemini_failed = False
+                    t_eval_start = time.time()
+
+                    from shorts_clipper.editorial.engine import EditorialEngine
+
                     try:
-                        highlights = provider.select_multiple_clips_detailed(segments, count=1)
-                    except Exception as gemini_err:
-                        log.warning(
-                            "[SCOUT] Gemini unavailable or failed for %s: %s", vid, gemini_err
+                        editorial_engine = EditorialEngine(profile_name="default")
+                        # Run against segments
+                        decisions = editorial_engine.select_clips_detailed(
+                            segments, count=1, window_duration=45.0, step=10.0
                         )
-                        gemini_failed = True
 
-                    valid_highlights = [h for h in highlights if h.get("virality_score", 0) >= 85]
-                    timing["gemini_s"] = round(time.time() - t_gemini_start, 2)
+                        valid_highlights = []
+                        for d in decisions:
+                            # Map EditorialDecision to valid_highlights format
+                            reasoning = []
+                            for judge_name, r in d.judge_results.items():
+                                reasoning.append(f"{judge_name}: {r.score:.1f} ({r.reasoning})")
+
+                            valid_highlights.append(
+                                {
+                                    "start": d.clip_window.start,
+                                    "end": d.clip_window.end,
+                                    "layout": "crop_center",
+                                    "virality_score": int(d.final_score),
+                                    "reason": "[Editorial Core] " + " | ".join(reasoning),
+                                    "_editorial_decision": d,  # Pass this along for logging
+                                }
+                            )
+
+                        gemini_failed = False
+                    except Exception as err:
+                        log.warning("[SCOUT] Editorial Core failed for %s: %s", vid, err)
+                        valid_highlights = []
+                        gemini_failed = True
+                    timing["eval_s"] = round(time.time() - t_eval_start, 2)
 
                     # PHASE 4: FALLBACK MODE
                     if not valid_highlights:

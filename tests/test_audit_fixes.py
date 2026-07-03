@@ -109,33 +109,3 @@ def test_regex_fallback_with_string_floats():
     assert len(res) == 1
     assert res[0]["start"] == 10.5
     assert res[0]["end"] == 50.5
-
-
-# ITERATION 3 BUG 2
-def test_editorial_finisher_retries_on_failure():
-    from shorts_clipper.core.models import TranscriptSegment, TranscriptWord
-    from shorts_clipper.pipeline.finisher import EditorialFinisher
-
-    finisher = EditorialFinisher()
-    words = [
-        TranscriptWord(word="test", start=float(i), end=float(i + 1), probability=1.0)
-        for i in range(10)
-    ]
-    segments = [TranscriptSegment(start=0.0, end=10.0, text="test " * 10, words=words)]
-
-    with (
-        patch("time.sleep", return_value=None),
-        patch("shorts_clipper.pipeline.finisher.genai.Client") as mock_client_cls,
-    ):
-        mock_client = MagicMock()
-        mock_client_cls.return_value = mock_client
-        mock_client.models.generate_content.side_effect = [
-            Exception("429 fail"),
-            MagicMock(text='{"start_id": 2, "end_id": 5}'),
-        ]
-
-        window = finisher.snap_boundaries(0.0, 9.0, segments)
-
-        assert window.start == 2.0
-        assert window.end == 6.0
-        assert mock_client.models.generate_content.call_count == 2

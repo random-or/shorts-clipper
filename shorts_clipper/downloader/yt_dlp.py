@@ -305,6 +305,10 @@ def download_clip(
 
     if start_time is not None and end_time is not None:
         cmd.extend(["--download-sections", f"*{start_time}-{end_time}"])
+        # ffmpeg doesn't support curl_cffi impersonation, which causes 403s
+        if "--impersonate" in cmd:
+            idx = cmd.index("--impersonate")
+            del cmd[idx : idx + 2]
 
     cmd.append(url)
     try:

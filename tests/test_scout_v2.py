@@ -57,10 +57,10 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
-    @patch("shorts_clipper.scout.trending.GeminiProvider")
+    @patch("shorts_clipper.editorial.engine.EditorialEngine")
     def test_self_healing_pre_evaluation(
         self,
-        mock_gemini_provider_cls,
+        mock_editorial_engine_cls,
         mock_fetch_subs,
         mock_discover_ytdlp,
         mock_gate_cls,
@@ -98,33 +98,35 @@ class ScoutV2Tests(unittest.TestCase):
             TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])
         ]
 
-        # Mock Gemini Provider behavior:
-        # For the first candidate ("vid_bad" which is evaluated first because of sorting/history), Gemini returns highlights scoring < 85
-        # For the second candidate ("vid_good"), Gemini returns highlights scoring >= 85
-        mock_provider = Mock()
-        mock_gemini_provider_cls.return_value = mock_provider
+        from shorts_clipper.core.models import ClipWindow
+        from shorts_clipper.editorial.models import EditorialDecision
 
-        # side_effect to return list of detailed dicts
-        mock_provider.select_multiple_clips_detailed.side_effect = [
-            # First call for vid_good (since view_count is higher, v2 score will sort vid_good first!)
+        # Mock EditorialEngine behavior:
+        # For the first candidate ("vid_good" which is evaluated first because of sorting/history), EditorialEngine returns highlights scoring >= 85
+        # For the second candidate ("vid_bad"), EditorialEngine returns highlights scoring < 85
+        mock_engine = Mock()
+        mock_editorial_engine_cls.return_value = mock_engine
+
+        mock_engine.select_clips_detailed.side_effect = [
+            # First call for vid_good
             [
-                {
-                    "start": 0.0,
-                    "end": 10.0,
-                    "virality_score": 90,
-                    "layout": "crop_center",
-                    "reason": "great hook",
-                }
+                EditorialDecision(
+                    clip_window=ClipWindow(start=0.0, end=10.0),
+                    final_score=90.0,
+                    confidence=1.0,
+                    reasoning="great hook",
+                    rejected=False,
+                )
             ],
             # Second call (if any)
             [
-                {
-                    "start": 0.0,
-                    "end": 10.0,
-                    "virality_score": 80,
-                    "layout": "crop_center",
-                    "reason": "too generic",
-                }
+                EditorialDecision(
+                    clip_window=ClipWindow(start=0.0, end=10.0),
+                    final_score=80.0,
+                    confidence=1.0,
+                    reasoning="too generic",
+                    rejected=False,
+                )
             ],
         ]
 
@@ -150,9 +152,9 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
-    @patch("shorts_clipper.scout.trending.GeminiProvider")
+    @patch("shorts_clipper.editorial.engine.EditorialEngine")
     def test_all_candidates_rejected(
-        self, mock_gemini_provider_cls, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls
+        self, mock_editorial_engine_cls, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls
     ):
         mock_gate = Mock()
         mock_gate.filter_candidates.side_effect = lambda candidates: candidates
@@ -169,11 +171,9 @@ class ScoutV2Tests(unittest.TestCase):
         ]
         mock_fetch_subs.return_value = [TranscriptSegment(start=0, end=10, text="hello")]
 
-        mock_provider = Mock()
-        mock_gemini_provider_cls.return_value = mock_provider
-        mock_provider.select_multiple_clips_detailed.return_value = [
-            {"start": 0, "end": 5, "virality_score": 75}  # Low score
-        ]
+        mock_engine = Mock()
+        mock_editorial_engine_cls.return_value = mock_engine
+        mock_engine.select_clips_detailed.return_value = []
 
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": ""}):
             url = get_trending_link(niche="tech", max_age_days=7)
@@ -185,10 +185,10 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
-    @patch("shorts_clipper.scout.trending.GeminiProvider")
+    @patch("shorts_clipper.editorial.engine.EditorialEngine")
     def test_gemini_quota_exhausted_fail_fast_and_fallback(
         self,
-        mock_gemini_provider_cls,
+        mock_editorial_engine_cls,
         mock_fetch_subs,
         mock_discover_ytdlp,
         mock_gate_cls,
@@ -200,7 +200,6 @@ class ScoutV2Tests(unittest.TestCase):
         mock_gate = Mock()
         mock_gate.filter_candidates.side_effect = lambda candidates: candidates
         mock_gate_cls.return_value = mock_gate
-        from shorts_clipper.providers.gemini import GeminiQuotaExhaustedError
 
         mock_discover_ytdlp.return_value = [
             {
@@ -220,12 +219,10 @@ class ScoutV2Tests(unittest.TestCase):
             )
         ]
 
-        mock_provider = Mock()
-        mock_gemini_provider_cls.return_value = mock_provider
-        # Mock provider raising GeminiQuotaExhaustedError
-        mock_provider.select_multiple_clips_detailed.side_effect = GeminiQuotaExhaustedError(
-            "Quota exceeded"
-        )
+        mock_engine = Mock()
+        mock_editorial_engine_cls.return_value = mock_engine
+        # Mock engine raising Exception to trigger fallback
+        mock_engine.select_clips_detailed.side_effect = Exception("Quota exceeded")
 
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": ""}):
             url = get_trending_link(niche="tech", max_age_days=7)

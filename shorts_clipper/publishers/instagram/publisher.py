@@ -1,10 +1,5 @@
 import logging
-import os
-import shutil
-import threading
 import time
-import urllib.parse
-import uuid
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -35,95 +30,6 @@ class InstagramGraphPublisher(Publisher):
             raise RuntimeError("IG_ACCESS_TOKEN or IG_ACCOUNT_ID not found in settings.")
         log.info("Instagram Graph API credentials verified.")
 
-    def _upload_temp_video(self, video_path: Path) -> str:
-        """Uploads the video to a temporary public host for Meta to download."""
-        log.info("Uploading video to temporary host...")
-
-        # Define multiple fallback upload strategies
-        def try_catbox() -> str:
-            url = "https://catbox.moe/user/api.php"
-            with open(video_path, "rb") as f:
-                res = requests.post(
-                    url, data={"reqtype": "fileupload"}, files={"fileToUpload": f}, timeout=600
-                )
-            if res.status_code != 200:
-                raise RuntimeError(f"Catbox failed: {res.status_code}")
-            return res.text.strip()
-
-        def try_tmpfiles() -> str:
-            url = "https://tmpfiles.org/api/v1/upload"
-            with open(video_path, "rb") as f:
-                res = requests.post(url, files={"file": f}, timeout=600)
-            if res.status_code != 200:
-                raise RuntimeError(f"Tmpfiles failed: {res.status_code}")
-            data = res.json()
-            # Convert https://tmpfiles.org/wiwl0qpA1I9R/test.mp4 to https://tmpfiles.org/dl/wiwl0qpA1I9R/test.mp4
-            return data["data"]["url"].replace("tmpfiles.org/", "tmpfiles.org/dl/")
-
-        def try_uguu() -> str:
-            url = "https://uguu.se/upload.php"
-            with open(video_path, "rb") as f:
-                files = {"files[]": (video_path.name, f, "video/mp4")}
-                res = requests.post(url, files=files, timeout=600)
-            if res.status_code != 200:
-                raise RuntimeError(f"Uguu failed: {res.status_code}")
-            data = res.json()
-            if not data.get("success"):
-                raise RuntimeError(f"Uguu error: {data}")
-            return data["files"][0]["url"]
-
-        hosts = [("catbox.moe", try_catbox), ("tmpfiles.org", try_tmpfiles), ("uguu.se", try_uguu)]
-
-        for name, upload_func in hosts:
-            try:
-                log.info(f"Trying host: {name}")
-                public_url = upload_func()
-                log.info(f"Successfully uploaded to {name}: {public_url}")
-                return public_url
-            except Exception as e:
-                log.warning(f"Failed to upload to {name}: {e}")
-
-        raise RuntimeError("All temporary file hosts failed to upload the video.")
-
-    def _get_video_url(self, video_path: Path) -> str:
-        """Determines the public URL of the video for Meta Graph API."""
-        if self.settings.use_temp_hosts:
-            log.warning(
-                "Using deprecated temporary hosts for Instagram video upload. Set PUBLIC_URL instead."
-            )
-            return self._upload_temp_video(video_path)
-
-        if not self.settings.public_url:
-            raise RuntimeError(
-                "PUBLIC_URL must be set in settings/env to publish to Instagram natively. Alternatively, set SHORTS_USE_TEMP_HOSTS=true to use the legacy temporary hosts."
-            )
-
-        # Create a unique hardlink to prevent collision if the original is overwritten
-        hosted_dir = video_path.parent / "ig_hosted"
-        hosted_dir.mkdir(exist_ok=True)
-        unique_name = f"{video_path.stem}_{uuid.uuid4().hex[:8]}{video_path.suffix}"
-        unique_path = hosted_dir / unique_name
-
-        try:
-            os.link(video_path, unique_path)
-        except OSError:
-            shutil.copy2(video_path, unique_path)
-
-        def _cleanup_link(p: Path) -> None:
-            time.sleep(3600)  # Wait 1 hour for Meta to download
-            try:
-                p.unlink(missing_ok=True)
-            except Exception:
-                pass
-
-        threading.Thread(target=_cleanup_link, args=(unique_path,), daemon=True).start()
-
-        base_url = self.settings.public_url.rstrip("/")
-        encoded_name = urllib.parse.quote(unique_name)
-        url = f"{base_url}/clips/ig_hosted/{encoded_name}"
-        log.info(f"Using self-hosted video URL: {url}")
-        return url
-
     def publish(
         self,
         video_path: Path,
@@ -145,7 +51,10 @@ class InstagramGraphPublisher(Publisher):
 
         try:
             # Step 1: Get the video URL (self-hosted or temporary)
-            video_url = self._get_video_url(video_path)
+            from ..transports import get_storage_provider
+
+            storage_provider = get_storage_provider(self.settings)
+            video_url = storage_provider.upload(video_path)
 
             # Step 2: Create Media Container
             log.info("Initializing Reel upload via Graph API...")
