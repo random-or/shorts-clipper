@@ -27,12 +27,17 @@ class TempHostTransport(StorageProvider):
         log.info("Uploading video to temporary host...")
 
         def try_catbox() -> str:
-            url = os.environ.get("CATBOX_URL", "https://litterbox.catbox.moe/resources/internals/api.php")
+            url = os.environ.get(
+                "CATBOX_URL", "https://litterbox.catbox.moe/resources/internals/api.php"
+            )
             if not url:
                 raise RuntimeError("CATBOX_URL not set")
             with open(video_path, "rb") as f:
                 res = requests.post(
-                    url, data={"reqtype": "fileupload", "time": "1h"}, files={"fileToUpload": f}, timeout=600
+                    url,
+                    data={"reqtype": "fileupload", "time": "1h"},
+                    files={"fileToUpload": f},
+                    timeout=600,
                 )
             if res.status_code != 200:
                 raise RuntimeError(f"Catbox failed: {res.status_code}")
