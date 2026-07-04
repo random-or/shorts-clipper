@@ -75,14 +75,23 @@ class FallbackMetadataTests(unittest.TestCase):
 
         # Run pipeline
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}):
-            with patch("shorts_clipper.editorial.engine.EditorialEngine") as mock_editorial_cls:
-                mock_editorial_engine = MagicMock()
-                mock_editorial_engine.select_clips.return_value = [ClipWindow(0, 15)]
-                mock_editorial_cls.return_value = mock_editorial_engine
+            with patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer") as mock_scorer_cls:
+                mock_scorer = MagicMock()
+                mock_scorer.score_transcript.return_value = (90.0, [MockSegment(0, 15, "test")], "reason")
+                mock_scorer_cls.return_value = mock_scorer
+                
+                with patch("shorts_clipper.attention.engine.SimulationEngine") as mock_sim_cls:
+                    mock_sim = MagicMock()
+                    mock_sim.optimize_clip.return_value = MagicMock(
+                        winner_id="base",
+                        base_variant=MagicMock(start_time=0.0, end_time=15.0),
+                        variants=[MagicMock(variant_id="base", start_time=0.0, end_time=15.0)]
+                    )
+                    mock_sim_cls.return_value = mock_sim
 
-                output = run(
-                    url="https://www.youtube.com/watch?v=fallback123",
-                    settings=settings,
+                    output = run(
+                        url="https://www.youtube.com/watch?v=fallback123",
+                        settings=settings,
                     count=1,
                     upload=True,
                 )

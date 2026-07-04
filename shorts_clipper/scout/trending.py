@@ -19,7 +19,7 @@ from shorts_clipper.core.cache import get_cached, purge_expired, set_cached
 from shorts_clipper.core.models import TranscriptSegment, TranscriptWord
 from shorts_clipper.core.settings import Settings
 from shorts_clipper.downloader.yt_dlp import fetch_subtitles, get_subtitle_metrics
-from shorts_clipper.highlight_detection.scoring import RuleBasedHighlightScorer
+from shorts_clipper.attention.engine import AttentionEngine
 from shorts_clipper.scout.keywords import build_queries
 from shorts_clipper.scout.metrics import ScoutMetrics
 from shorts_clipper.scout.youtube_api import YouTubeAPIClient
@@ -872,142 +872,69 @@ def get_trending_link(
                     log.info("Calling Editorial Core for local timestamp extraction...")
 
                     t_eval_start = time.time()
-
-                    from shorts_clipper.editorial.engine import EditorialEngine
-
-                    try:
-                        editorial_engine = EditorialEngine(profile_name="default")
-                        # Run against segments
-                        decisions = editorial_engine.select_clips_detailed(
-                            segments, count=1, window_duration=45.0, step=10.0
-                        )
-
+                    
+                    if best_local_window:
+                        start_t = best_local_window[0].start
+                        end_t = best_local_window[-1].end
+                        if end_t - start_t < 15.0:
+                            end_t = start_t + 45.0
+                        
+                        valid_highlights = [
+                            {
+                                "start": start_t,
+                                "end": end_t,
+                                "layout": "crop_center",
+                                "virality_score": int(local_score),
+                                "reason": f"[Local Transcript Scorer] {top_candidate.get('local_reasoning', 'Semantic window selected')}",
+                            }
+                        ]
+                    else:
                         valid_highlights = []
-                        for d in decisions:
-                            # Map EditorialDecision to valid_highlights format
-                            reasoning = []
-                            for judge_name, r in d.judge_results.items():
-                                reasoning.append(f"{judge_name}: {r.score:.1f} ({r.reasoning})")
-
-                            valid_highlights.append(
-                                {
-                                    "start": d.clip_window.start,
-                                    "end": d.clip_window.end,
-                                    "layout": "crop_center",
-                                    "virality_score": int(d.final_score),
-                                    "reason": "[Editorial Core] " + " | ".join(reasoning),
-                                    "_editorial_decision": d,  # Pass this along for logging
-                                }
-                            )
-
-                        gemini_failed = False
-                    except Exception as err:
-                        log.warning("[SCOUT] Editorial Core failed for %s: %s", vid, err)
-                        valid_highlights = []
-                        gemini_failed = True
+                        log.warning("[SCOUT] Local Transcript Scorer failed to find a window.")
+                        
                     timing["eval_s"] = round(time.time() - t_eval_start, 2)
 
-                    # PHASE 4: FALLBACK MODE
-                    if not valid_highlights:
-                        if gemini_failed:
-                            if True:
-                                log.warning(
-                                    "[FALLBACK] Local transcript scorer selected clip due to API failure."
-                                )
-                                start_t = best_local_window[0].start if best_local_window else 0.0
-                                end_t = best_local_window[-1].end if best_local_window else 60.0
-                                if end_t - start_t < 15.0:
-                                    end_t = start_t + 45.0
-
-                                valid_highlights = [
-                                    {
-                                        "start": start_t,
-                                        "end": end_t,
-                                        "layout": "crop_center",
-                                        "virality_score": int(local_score),
-                                        "reason": f"[FALLBACK] Local Transcript Scorer: {top_candidate.get('local_reasoning', 'Selected fallback clip')}",
-                                    }
-                                ]
-                            else:
-                                log.warning(
-                                    "Fallback candidate rejected: Local score %.1f is below threshold 75",
-                                    local_score,
-                                )
-                        else:
-                            log.info(
-                                "Top candidate %s rejected: Gemini virality score too low", vid
-                            )
-                    # Calculate final components for reporting
-                    max_ai_score = max(
-                        (h.get("virality_score", 0) for h in valid_highlights), default=0
-                    )
-                    ai_points = max_ai_score * 0.4
-
-                    scorer = RuleBasedHighlightScorer()
-                    max_rule_hook, max_rule_emotion, max_rule_virality, total_caption_density = (
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                    )
-                    for seg in segments:
-                        seg_score = scorer.score_segment(seg)
-                        max_rule_hook = max(max_rule_hook, seg_score.hook)
-                        max_rule_emotion = max(max_rule_emotion, seg_score.emotion)
-                        max_rule_virality = max(max_rule_virality, seg_score.virality)
-                        total_caption_density += seg_score.caption_density
-                    avg_caption_density = total_caption_density / len(segments) if segments else 0.0
-
-                    rule_hook_points = min(10.0, max_rule_hook * 5.0)
-                    rule_emotion_points = min(10.0, max_rule_emotion * 5.0)
-                    rule_virality_points = min(10.0, max_rule_virality * 5.0)
+                    # The final score should be driven entirely by the SimulationEngine's semantic analysis.
+                    from shorts_clipper.attention.engine import SimulationEngine
+                    sim_engine = SimulationEngine()
+                    
+                    try:
+                        clip_segments = best_local_window if best_local_window else segments
+                        if not clip_segments: clip_segments = segments
+                        
+                        sim_result = sim_engine.optimize_clip(clip_segments)
+                        best_report = sim_result.reports[sim_result.winner_id]
+                        
+                        # Simulation Engine owns the probability
+                        final_score = round(best_report.completion_prob * 100.0, 2)
+                        
+                        # Metadata for UI
+                        rule_hook_points = min(10.0, best_report.scroll_stop_prob * 10.0)
+                        rule_emotion_points = min(10.0, best_report.payoff_strength * 10.0)
+                        rule_virality_points = min(10.0, best_report.shareability * 10.0)
+                        
+                        info_density = best_report.judge_results.get("information_density")
+                        avg_caption_density = info_density.score if info_density else 0.5
+                        
+                        log.info("Simulation selected variant '%s': %s", sim_result.winner_id, sim_result.reason)
+                        
+                        winner_variant = next((v for v in sim_result.variants if v.variant_id == sim_result.winner_id), sim_result.base_variant)
+                        if winner_variant and winner_variant.variant_id != "base" and valid_highlights:
+                            valid_highlights[0]["start"] = winner_variant.start_time
+                            valid_highlights[0]["end"] = winner_variant.end_time
+                            valid_highlights[0]["reason"] = valid_highlights[0].get("reason", "") + f" [Optimized: {winner_variant.description}]"
+                        if valid_highlights:
+                            valid_highlights[0]["virality_score"] = int(final_score)
+                            
+                    except Exception as err:
+                        log.warning("Attention Simulation failed: %s", err)
+                        rule_hook_points, rule_emotion_points, rule_virality_points, avg_caption_density = 0.0, 0.0, 0.0, 0.0
+                        final_score = local_score
 
                     views = max(int(v.get("view_count") or 0), 1)
                     likes = int(v.get("like_count") or 0)
-                    comments = int(v.get("comment_count") or 0)
-                    pub_str = v.get("published_at") or v.get("upload_date") or ""
-                    try:
-                        pub_dt = (
-                            datetime.strptime(pub_str, "%Y%m%d").replace(tzinfo=UTC)
-                            if len(pub_str) == 8 and pub_str.isdigit()
-                            else datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                        )
-                    except Exception:
-                        pub_dt = now
-
-                    hours_live = max(
-                        (now.replace(tzinfo=UTC) - pub_dt.replace(tzinfo=UTC)).total_seconds()
-                        / 3600,
-                        1,
-                    )
-                    views_velocity = views / hours_live
-                    velocity_points = min(10.0, math.log1p(views_velocity) * 1.0)
-                    engagement_ratio = (likes + (comments * 2)) / views
-                    engagement_points = min(10.0, engagement_ratio * 100)
-
+                    
                     subtitle_quality = 10.0 if transcript_source in ("native", "cache") else 0.0
-
-                    channel_id = v.get("channel_id", "")
-                    channel_bonus = 0.0
-                    if channel_id in channel_history:
-                        stats = channel_history[channel_id]
-                        channel_bonus = min(
-                            15.0,
-                            stats.get("success_count", 0) * 2.5
-                            + stats.get("avg_virality", 0.0) * 0.1,
-                        )
-
-                    final_score = round(
-                        ai_points
-                        + rule_hook_points
-                        + rule_emotion_points
-                        + rule_virality_points
-                        + velocity_points
-                        + engagement_points
-                        + channel_bonus
-                        + subtitle_quality,
-                        2,
-                    )
                     timing["total_s"] = round(time.time() - candidate_start_time, 2)
 
                     if valid_highlights:

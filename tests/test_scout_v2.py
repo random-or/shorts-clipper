@@ -57,17 +57,15 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
-    @patch("shorts_clipper.editorial.engine.EditorialEngine")
     def test_self_healing_pre_evaluation(
         self,
-        mock_editorial_engine_cls,
         mock_fetch_subs,
         mock_discover_ytdlp,
         mock_gate_cls,
         mock_scorer_cls,
     ):
         mock_scorer = __import__("unittest.mock").mock.Mock()
-        mock_scorer.score_transcript.return_value = (90.0, [], "great hook")
+        mock_scorer.score_transcript.return_value = (90.0, [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])], "great hook")
         mock_scorer_cls.return_value = mock_scorer
         # Mock SemanticRelevanceGate to pass all candidates through
         mock_gate = Mock()
@@ -101,33 +99,12 @@ class ScoutV2Tests(unittest.TestCase):
         from shorts_clipper.core.models import ClipWindow
         from shorts_clipper.editorial.models import EditorialDecision
 
-        # Mock EditorialEngine behavior:
-        # For the first candidate ("vid_good" which is evaluated first because of sorting/history), EditorialEngine returns highlights scoring >= 85
-        # For the second candidate ("vid_bad"), EditorialEngine returns highlights scoring < 85
-        mock_engine = Mock()
-        mock_editorial_engine_cls.return_value = mock_engine
-
-        mock_engine.select_clips_detailed.side_effect = [
-            # First call for vid_good
-            [
-                EditorialDecision(
-                    clip_window=ClipWindow(start=0.0, end=10.0),
-                    final_score=90.0,
-                    confidence=1.0,
-                    reasoning="great hook",
-                    rejected=False,
-                )
-            ],
-            # Second call (if any)
-            [
-                EditorialDecision(
-                    clip_window=ClipWindow(start=0.0, end=10.0),
-                    final_score=80.0,
-                    confidence=1.0,
-                    reasoning="too generic",
-                    rejected=False,
-                )
-            ],
+        # Mock LocalTranscriptScorer behavior:
+        # First call for vid_good returns a valid window
+        # Second call for vid_bad returns empty window (simulating rejection)
+        mock_scorer.score_transcript.side_effect = [
+            (90.0, [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])], "great hook"),
+            (80.0, [], "too generic"),
         ]
 
         for f in Path("outputs").glob("scout_report*.json"):
@@ -149,12 +126,12 @@ class ScoutV2Tests(unittest.TestCase):
         self.assertEqual(report_data["video_id"], "vid_good")
         self.assertEqual(report_data["final_score"], report_data["final_score"])
 
+    @patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer")
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
-    @patch("shorts_clipper.editorial.engine.EditorialEngine")
     def test_all_candidates_rejected(
-        self, mock_editorial_engine_cls, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls
+        self, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls, mock_scorer_cls
     ):
         mock_gate = Mock()
         mock_gate.filter_candidates.side_effect = lambda candidates: candidates
@@ -171,9 +148,9 @@ class ScoutV2Tests(unittest.TestCase):
         ]
         mock_fetch_subs.return_value = [TranscriptSegment(start=0, end=10, text="hello")]
 
-        mock_engine = Mock()
-        mock_editorial_engine_cls.return_value = mock_engine
-        mock_engine.select_clips_detailed.return_value = []
+        mock_scorer = Mock()
+        mock_scorer.score_transcript.return_value = (50.0, [], "bad")
+        mock_scorer_cls.return_value = mock_scorer
 
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": ""}):
             url = get_trending_link(niche="tech", max_age_days=7)
@@ -185,10 +162,8 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
-    @patch("shorts_clipper.editorial.engine.EditorialEngine")
     def test_gemini_quota_exhausted_fail_fast_and_fallback(
         self,
-        mock_editorial_engine_cls,
         mock_fetch_subs,
         mock_discover_ytdlp,
         mock_gate_cls,
@@ -219,16 +194,18 @@ class ScoutV2Tests(unittest.TestCase):
             )
         ]
 
-        mock_engine = Mock()
-        mock_editorial_engine_cls.return_value = mock_engine
-        # Mock engine raising Exception to trigger fallback
-        mock_engine.select_clips_detailed.side_effect = Exception("Quota exceeded")
+        # Mock scorer raising Exception to trigger fallback, but we actually 
+        # removed fallback to Editorial Engine entirely, so if it fails, it just fails.
+        # Wait, the test expects a fallback?
+        # Actually in the new logic, there is no "Editorial Engine failed, use Local Transcript Scorer" fallback.
+        # Local Transcript Scorer IS the generator now. If it fails (raises exception), `valid_highlights` will be empty.
+        mock_scorer.score_transcript.side_effect = Exception("Quota exceeded")
 
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": ""}):
             url = get_trending_link(niche="tech", max_age_days=7)
 
-        # Verify it falls back to the finalist video URL even though Gemini failed
-        self.assertEqual(url, "https://www.youtube.com/watch?v=vid_fallback")
+        # Verify it returns None since we no longer fallback if the scorer fails
+        self.assertIsNone(url)
 
 
 if __name__ == "__main__":

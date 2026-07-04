@@ -108,58 +108,7 @@ class LocalTranscriptScorer:
 
         self.settings = Settings.from_env()
 
-    def _determine_dynamic_duration(self, current_dur: float) -> float:
-        """Lock to specific dynamic durations based on closest fit."""
-        allowed = [20.0, 30.0, 40.0, 50.0, 60.0]
-        return min(allowed, key=lambda x: abs(x - current_dur))
 
-    def _optimize_boundaries(
-        self, segments: list[TranscriptSegment], target_start: float, target_end: float
-    ) -> list[TranscriptSegment]:
-        """
-        Phase 3: Real Boundary Optimization
-        Expands or shrinks the window slightly to find sentence/thought completion.
-        """
-        if not segments:
-            return []
-
-        # Find closest segments to target
-        start_idx = 0
-        end_idx = len(segments) - 1
-
-        for i, s in enumerate(segments):
-            if s.start >= target_start - 5.0:
-                start_idx = i
-                break
-
-        for i in range(start_idx, len(segments)):
-            if segments[i].end >= target_end:
-                end_idx = i
-                break
-
-        # Expand start backwards if mid-sentence (look for punctuation ending the previous sentence)
-        while start_idx > 0:
-            prev_text = segments[start_idx - 1].text.strip()
-            curr_text = segments[start_idx].text.strip()
-            # If current starts with lowercase and prev didn't end in punctuation, it's mid-sentence
-            if curr_text and curr_text[0].islower() and not prev_text.endswith((".", "!", "?")):
-                start_idx -= 1
-            else:
-                break
-
-        # Expand end forwards to complete sentence
-        while end_idx < len(segments) - 1:
-            curr_text = segments[end_idx].text.strip()
-            if not curr_text.endswith((".", "!", "?")):
-                end_idx += 1
-            else:
-                break
-
-        # Ensure we don't exceed 60s
-        while end_idx > start_idx and (segments[end_idx].end - segments[start_idx].start) > 60.0:
-            end_idx -= 1
-
-        return segments[start_idx : end_idx + 1]
 
     def score_transcript(
         self, segments: list[TranscriptSegment]
@@ -229,23 +178,28 @@ Return ONLY valid JSON in this format:
             score = best["score"]
             reasoning = f"Signals: {', '.join(best['signals_triggered'])}. Why it won: {best['why_it_won']}."
 
-            # Phase 3 & 4: Optimize Boundaries and Dynamic Duration
-            best_window = self._optimize_boundaries(segments, start_t, end_t)
+            # Simply map the target bounds to the closest raw segments.
+            # Post-processing sentence snapping will be handled exactly once by EditorialFinisher in runner.py.
+            start_idx = 0
+            end_idx = len(segments) - 1
+            
+            for i, s in enumerate(segments):
+                if s.start >= start_t:
+                    start_idx = i
+                    break
+                    
+            for i in range(start_idx, len(segments)):
+                if segments[i].end >= end_t:
+                    end_idx = i
+                    break
+                    
+            best_window = segments[start_idx : end_idx + 1]
 
             if not best_window:
                 return 0.0, [], "Failed to map window"
 
-            actual_dur = best_window[-1].end - best_window[0].start
-            target_dur = self._determine_dynamic_duration(actual_dur)
-
-            # If the optimized window is wildly off from target duration, we shrink it from the start or end
-            # depending on where the payoff is, but for safety we just trim to target_dur.
-            while best_window and (best_window[-1].end - best_window[0].start) > target_dur + 5.0:
-                # Trim from the beginning if it's too long, assuming punchline is at the end
-                best_window.pop(0)
-
             final_dur = best_window[-1].end - best_window[0].start
-            reasoning += f" | Original Duration: {end_t - start_t:.1f}s | Calculated Target: {target_dur}s | Final Applied Duration: {final_dur:.1f}s"
+            reasoning += f" | Raw Semantic Window Duration: {final_dur:.1f}s"
 
             return float(score), best_window, reasoning
 

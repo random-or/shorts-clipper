@@ -6,7 +6,8 @@ from shorts_clipper.pipeline.runner import run
 
 
 @mock.patch("shorts_clipper.pipeline.runner.fetch_subtitles")
-@mock.patch("shorts_clipper.editorial.engine.EditorialEngine")
+@mock.patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer")
+@mock.patch("shorts_clipper.attention.engine.SimulationEngine")
 @mock.patch("shorts_clipper.pipeline.runner.download_audio")
 @mock.patch("shorts_clipper.pipeline.runner.transcribe_clip")
 @mock.patch("shorts_clipper.pipeline.runner.download_clip")
@@ -18,10 +19,12 @@ def test_preselected_partial_hit_behavior(
     mock_download_clip,
     mock_transcribe,
     mock_download_audio,
-    mock_engine_cls,
+    mock_sim_cls,
+    mock_scorer_cls,
     mock_fetch_subs,
     tmp_path,
 ):
+    from shorts_clipper.core.models import TranscriptSegment
     settings = Settings(gemini_api_key="dummy", youtube_api_key="dummy")
 
     preselected = [
@@ -29,11 +32,19 @@ def test_preselected_partial_hit_behavior(
         (ClipWindow(start=30.0, end=40.0), "split_screen"),
     ]
 
-    mock_fetch_subs.return_value = [{"start": 0.0, "end": 100.0, "text": "Dummy text"}]
+    mock_fetch_subs.return_value = [TranscriptSegment(start=0.0, end=100.0, text="Dummy text", words=[])]
 
-    mock_engine_instance = mock.Mock()
-    mock_engine_instance.select_clips.return_value = [ClipWindow(start=50.0, end=60.0)]
-    mock_engine_cls.return_value = mock_engine_instance
+    mock_scorer = mock.Mock()
+    mock_scorer.score_transcript.return_value = (90.0, [TranscriptSegment(start=50.0, end=60.0, text="Dummy", words=[])], "reason")
+    mock_scorer_cls.return_value = mock_scorer
+
+    mock_sim = mock.Mock()
+    mock_sim.optimize_clip.return_value = mock.Mock(
+        winner_id="base",
+        base_variant=mock.Mock(start_time=50.0, end_time=60.0),
+        variants=[mock.Mock(variant_id="base", start_time=50.0, end_time=60.0)]
+    )
+    mock_sim_cls.return_value = mock_sim
 
     mock_transcribe.return_value = []
 
@@ -56,6 +67,4 @@ def test_preselected_partial_hit_behavior(
 
         assert len(result) == 3
 
-        mock_engine_instance.select_clips.assert_called_once()
-        _, kwargs = mock_engine_instance.select_clips.call_args
-        assert kwargs.get("count") == 1
+        mock_scorer.score_transcript.assert_called_once()

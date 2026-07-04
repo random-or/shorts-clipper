@@ -115,24 +115,28 @@ def run(
                     download_audio(url, audio_path, start_time=0.0, end_time=300.0)
                     rough_segments = transcribe_clip(audio_path)
 
-                from shorts_clipper.editorial.engine import EditorialEngine
+                from shorts_clipper.highlight_detection.scoring import LocalTranscriptScorer
+                from shorts_clipper.attention.engine import SimulationEngine
+                from shorts_clipper.core.models import ClipWindow
 
                 try:
-                    log.info("🧠 Engaging Editorial Core (V3.2) for clip selection...")
-                    editorial_engine = EditorialEngine(profile_name="default")
-                    new_clip_windows = editorial_engine.select_clips(
-                        rough_segments, count=count - len(clips), window_duration=45.0, step=10.0
-                    )
-
-                    if not new_clip_windows:
-                        raise MediaProcessingError(
-                            "Editorial Core rejected all clip candidates (no high-quality hooks/pacing found)."
-                        )
-
-                    new_clips = [(w, "center") for w in new_clip_windows]
-                    clips.extend(new_clips)
+                    log.info("🧠 Engaging Semantic Candidate Generator and Simulation Engine...")
+                    scorer = LocalTranscriptScorer()
+                    score, best_local_window, reasoning = scorer.score_transcript(rough_segments)
+                    
+                    if not best_local_window:
+                        raise MediaProcessingError("Local Transcript Scorer failed to find a valid window.")
+                    
+                    sim_engine = SimulationEngine()
+                    sim_result = sim_engine.optimize_clip(best_local_window)
+                    
+                    winner_variant = next((v for v in sim_result.variants if v.variant_id == sim_result.winner_id), sim_result.base_variant)
+                    
+                    new_clip_window = ClipWindow(start=winner_variant.start_time, end=winner_variant.end_time)
+                    clips.extend([(new_clip_window, "center")])
+                    
                 except Exception as exc:
-                    log.error("Editorial Core selection failed: %s", exc)
+                    log.error("Simulation Engine selection failed: %s", exc)
                     raise MediaProcessingError("No high-quality highlights found.") from exc
 
             output_paths: list[Path] = []
