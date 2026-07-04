@@ -372,6 +372,10 @@ Set `SHORTS_USE_TEMP_HOSTS=true` in `.env`, or better, set `PUBLIC_URL` to a URL
 **YouTube says "channel not connected":**
 You need to complete OAuth linking first. Run `python -m shorts_clipper web`, open the dashboard, and use the sidebar to connect your YouTube account.
 
+**Google Auth shows "No logo nor name" or "Unverified app" warning:**
+This is an expected warning from Google if your Cloud Console OAuth Consent Screen is missing an "App name" and "App logo". To remove this warning for others, upload an app logo and provide an app name in your Google Cloud Console -> APIs & Services -> OAuth consent screen.
+
+
 **Whisper is slow:**
 Default is `tiny.en` on CPU. For production, install CUDA and set `SHORTS_ENABLE_GPU=true`. Use a larger model like `base.en` or `small.en` for better accuracy.
 
