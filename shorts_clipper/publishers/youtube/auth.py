@@ -22,8 +22,9 @@ def get_youtube_service(client_secret_file: Path | str = "client_secret.json"):
                 with open(token_path, "wb") as token:
                     pickle.dump(creds, token)
             except Exception as e:
+                token_path.unlink(missing_ok=True)
                 raise RuntimeError(
-                    f"YouTube credentials expired and could not be refreshed: {e}"
+                    "YouTube channel is not connected. Please link your YouTube account from the Web UI sidebar first!"
                 ) from e
         else:
             raise RuntimeError(
