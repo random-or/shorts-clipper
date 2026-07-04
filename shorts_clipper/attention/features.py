@@ -1,10 +1,9 @@
 """Feature extraction pipeline for the Semantic Attention Engine."""
 
 import re
-from typing import List
 
+from shorts_clipper.attention.models import FeatureSet, NarrativeState, SemanticSegment
 from shorts_clipper.core.models import TranscriptSegment
-from shorts_clipper.attention.models import FeatureSet, SemanticSegment, NarrativeState
 
 # Constants for naive parsing
 EMOTION_WORDS = {"amazing", "insane", "crazy", "shocking", "unbelievable", "love", "hate", "angry", "terrified"}
@@ -19,7 +18,7 @@ class FeatureExtractor:
     """Extracts semantic features from segments exactly once (Agent G)."""
     
     @classmethod
-    def extract(cls, segments: List[TranscriptSegment]) -> FeatureSet:
+    def extract(cls, segments: list[TranscriptSegment]) -> FeatureSet:
         if not segments:
             return cls._empty_feature_set()
             

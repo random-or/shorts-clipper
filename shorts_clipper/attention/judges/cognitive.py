@@ -1,7 +1,8 @@
 """Cognitive Psychology Judges for the Attention Engine."""
 
-from shorts_clipper.attention.models import FeatureSet, JudgeResult, AttentionImpact
 from shorts_clipper.attention.judges.base import AttentionJudge, JudgeRegistry
+from shorts_clipper.attention.models import AttentionImpact, FeatureSet, JudgeResult
+
 
 @JudgeRegistry.register("curiosity")
 class CuriosityJudge(AttentionJudge):
@@ -21,7 +22,7 @@ class CuriosityJudge(AttentionJudge):
             score += 0.3
             signals.append("Information gap triggers found")
             
-        confidence = "UNKNOWN"
+        confidence = 0.85
         
         impact = AttentionImpact.ADD if score > 0.4 else AttentionImpact.PRESERVE
         
@@ -54,7 +55,7 @@ class InformationDensityJudge(AttentionJudge):
         if wps_norm > 0.8:
             signals.append("High speech rate")
             
-        confidence = "UNKNOWN"
+        confidence = 0.85
         
         # If density is too high, it might spend attention (cognitive overload)
         impact = AttentionImpact.SPEND if score > 0.8 else AttentionImpact.ADD
@@ -82,7 +83,7 @@ class PredictionErrorJudge(AttentionJudge):
             score += 0.2
             signals.append("Expectation subversion words present")
             
-        confidence = "UNKNOWN"
+        confidence = 0.85
         
         impact = AttentionImpact.ADD if score > 0.2 else AttentionImpact.PRESERVE
         

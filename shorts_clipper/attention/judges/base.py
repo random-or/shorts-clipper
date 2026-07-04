@@ -1,9 +1,9 @@
 """Base class and Registry for Attention Judges."""
 
 from abc import ABC, abstractmethod
-from typing import Type
 
 from shorts_clipper.attention.models import FeatureSet, JudgeResult
+
 
 class AttentionJudge(ABC):
     """Abstract base class for all attention judges."""
@@ -16,11 +16,11 @@ class AttentionJudge(ABC):
 class JudgeRegistry:
     """Registry pattern for composable judges (Agent F)."""
     
-    _judges: dict[str, Type[AttentionJudge]] = {}
+    _judges: dict[str, type[AttentionJudge]] = {}
     
     @classmethod
     def register(cls, name: str):
-        def wrapper(judge_cls: Type[AttentionJudge]):
+        def wrapper(judge_cls: type[AttentionJudge]):
             cls._judges[name] = judge_cls
             return judge_cls
         return wrapper

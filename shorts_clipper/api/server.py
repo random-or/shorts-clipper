@@ -376,14 +376,35 @@ def list_clips() -> list[dict[str, Any]]:
         out_dir.mkdir(parents=True, exist_ok=True)
 
     clips = []
-    for path in sorted(out_dir.glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True):
+    import re
+    for path in sorted(out_dir.rglob("rendered_clip*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if "ig_hosted" in path.parts:
+            continue
+            
+        if path.name == "rendered_clip.mp4" and path.with_name("rendered_clip_1.mp4").exists():
+            continue
+
         stat = path.stat()
         mtime = datetime.fromtimestamp(stat.st_mtime).isoformat()
+        
         # Check for thumbnail
         thumb = path.with_suffix(".jpg")
+        match = re.match(r"rendered_clip_(\d+)\.mp4", path.name)
+        if match:
+            alt_thumb = path.with_name(f"thumbnail_{match.group(1)}.jpg")
+            legacy_thumb = path.with_name("rendered_clip.jpg")
+            if alt_thumb.exists():
+                thumb = alt_thumb
+            elif legacy_thumb.exists():
+                thumb = legacy_thumb
 
         # Load or generate sidecar metadata
         json_path = path.with_suffix(".json")
+        if match:
+            alt_json = path.with_name(f"final_metadata_{match.group(1)}.json")
+            if alt_json.exists():
+                json_path = alt_json
+
         meta = {}
         if json_path.exists():
             try:
@@ -407,11 +428,13 @@ def list_clips() -> list[dict[str, Any]]:
             except Exception:
                 pass
 
+        rel_path = path.relative_to(out_dir).as_posix()
+        rel_thumb = thumb.relative_to(out_dir).as_posix()
         clips.append(
             {
-                "name": path.name,
-                "path": f"/clips/{path.name}",
-                "thumbnail": f"/clips/{thumb.name}" if thumb.exists() else None,
+                "name": rel_path,
+                "path": f"/clips/{rel_path}",
+                "thumbnail": f"/clips/{rel_thumb}" if thumb.exists() else None,
                 "size": stat.st_size,
                 "created_at": mtime,
                 "metadata": meta,
@@ -420,7 +443,7 @@ def list_clips() -> list[dict[str, Any]]:
     return clips
 
 
-@app.delete("/api/clips/{clip_name}")
+@app.delete("/api/clips/{clip_name:path}")
 def delete_clip(clip_name: str) -> dict[str, str]:
     settings = Settings.from_env()
     path = Path(settings.output_dir) / clip_name
@@ -442,7 +465,7 @@ def delete_clip(clip_name: str) -> dict[str, str]:
     return {"status": "deleted"}
 
 
-@app.post("/api/clips/{clip_name}/metadata")
+@app.post("/api/clips/{clip_name:path}/metadata")
 def update_clip_metadata(clip_name: str, payload: ClipMetadataUpdate) -> dict[str, str]:
     """Update sidecar metadata for a clip."""
     settings = Settings.from_env()
@@ -472,7 +495,7 @@ def update_clip_metadata(clip_name: str, payload: ClipMetadataUpdate) -> dict[st
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/api/clips/{clip_name}/publish")
+@app.post("/api/clips/{clip_name:path}/publish")
 def publish_clip(
     clip_name: str,
     background_tasks: BackgroundTasks,
@@ -607,7 +630,7 @@ def publish_clip(
     }
 
 
-@app.post("/api/clips/{clip_name}/autogen-title")
+@app.post("/api/clips/{clip_name:path}/autogen-title")
 def autogen_clip_title(clip_name: str) -> dict[str, Any]:
     """Transcribe clip (if missing segments) and call Gemini to generate viral titles & hashtags."""
     settings = Settings.from_env()
@@ -1264,7 +1287,7 @@ def list_feedback(limit: int = 50) -> list[dict[str, Any]]:
     return [fb.to_dict() for fb in _feedback_store.list_all(limit=limit)]
 
 
-@app.get("/api/feedback/{clip_name}")
+@app.get("/api/feedback/{clip_name:path}")
 def get_feedback(clip_name: str) -> dict[str, Any]:
     """Get feedback for a specific clip."""
     fb = _feedback_store.get(clip_name)
@@ -1294,7 +1317,7 @@ def submit_feedback(payload: FeedbackModel) -> dict[str, Any]:
     }
 
 
-@app.delete("/api/feedback/{clip_name}")
+@app.delete("/api/feedback/{clip_name:path}")
 def delete_feedback(clip_name: str) -> dict[str, str]:
     """Delete feedback for a clip."""
     if _feedback_store.delete(clip_name):

@@ -1,24 +1,23 @@
 """Core Attention Optimization and Simulation Engine for Shorts Clipper V3.3."""
 
-import statistics
-import copy
-from typing import List
 import dataclasses
+import statistics
 
-from shorts_clipper.core.models import TranscriptSegment
-from shorts_clipper.attention.models import (
-    AttentionReport, 
-    AttentionState,
-    AttentionTimeline,
-    EditorialRecommendation,
-    FeatureSet,
-    CounterfactualVariant,
-    SimulationResult,
-    NarrativeState,
-    SemanticSegment
-)
 from shorts_clipper.attention.features import FeatureExtractor
 from shorts_clipper.attention.judges import JudgeRegistry
+from shorts_clipper.attention.models import (
+    AttentionReport,
+    AttentionState,
+    AttentionTimeline,
+    CounterfactualVariant,
+    EditorialRecommendation,
+    FeatureSet,
+    NarrativeState,
+    SemanticSegment,
+    SimulationResult,
+)
+from shorts_clipper.core.models import TranscriptSegment
+
 
 class AttentionEngine:
     """Orchestrates feature extraction and modular judges to predict human attention."""
@@ -54,7 +53,6 @@ class AttentionEngine:
         if timeline.states:
             final_attention = timeline.states[-1].attention_level
             min_attention = min(st.attention_level for st in timeline.states)
-            max_attention = max(st.attention_level for st in timeline.states)
             max_fatigue = max(st.fatigue for st in timeline.states)
             
             timeline_scroll = max(0.01, min(0.99, timeline.states[0].attention_level))
@@ -79,7 +77,7 @@ class AttentionEngine:
         
         # Average confidence of all judges
         confidences = [r.confidence for r in results.values() if isinstance(r.confidence, (int, float))]
-        overall_confidence = statistics.mean(confidences) if confidences else "UNKNOWN"
+        overall_confidence = statistics.mean(confidences) if confidences else 0.5
         
         # Editorial Recommendations (Agent C)
         recommendations = self._generate_recommendations(features, results, timeline)
@@ -103,7 +101,7 @@ class AttentionEngine:
             timeline=timeline
         )
         
-    def _generate_timeline(self, semantic_segments: List[SemanticSegment]) -> AttentionTimeline:
+    def _generate_timeline(self, semantic_segments: list[SemanticSegment]) -> AttentionTimeline:
         """Generates a dynamic attention state over time based on semantic state."""
         states = []
         high_risk_moments = []
@@ -210,7 +208,7 @@ class AttentionEngine:
             boring_regions=boring_regions
         )
         
-    def _generate_recommendations(self, features: FeatureSet, results: dict, timeline: AttentionTimeline) -> List[EditorialRecommendation]:
+    def _generate_recommendations(self, features: FeatureSet, results: dict, timeline: AttentionTimeline) -> list[EditorialRecommendation]:
         recs = []
         if features.pause_density > 0.1:
             recs.append(EditorialRecommendation(
@@ -239,7 +237,7 @@ class SimulationEngine:
     def __init__(self):
         self.engine = AttentionEngine()
         
-    def _generate_counterfactuals(self, base_segments: List[TranscriptSegment]) -> List[CounterfactualVariant]:
+    def _generate_counterfactuals(self, base_segments: list[TranscriptSegment]) -> list[CounterfactualVariant]:
         """Generates semantic alternatives to compare against."""
         variants = []
         
@@ -324,7 +322,7 @@ class SimulationEngine:
         
         return variants
         
-    def optimize_clip(self, base_segments: List[TranscriptSegment]) -> SimulationResult:
+    def optimize_clip(self, base_segments: list[TranscriptSegment]) -> SimulationResult:
         """Run simulation over counterfactuals and return the strongest."""
         variants = self._generate_counterfactuals(base_segments)
         reports = {}
@@ -333,6 +331,7 @@ class SimulationEngine:
         winner_id = "base"
         reason = "Base variant remained optimal."
         
+        variant_scores = []
         for v in variants:
             report = self.engine.evaluate_variant(v)
             reports[v.variant_id] = report
@@ -340,6 +339,7 @@ class SimulationEngine:
             # Ranking objective (Agent E)
             # Completion prob is now heavily weighted as it directly factors in fatigue and minimum attention.
             overall_perf = (report.scroll_stop_prob * 0.4) + (report.completion_prob * 0.6)
+            variant_scores.append((v.variant_id, overall_perf))
             
             if overall_perf > best_score:
                 best_score = overall_perf
@@ -347,10 +347,18 @@ class SimulationEngine:
                 if v.variant_id != "base":
                     reason = f"Variant '{v.variant_id}' outperformed base due to higher completion probability ({report.completion_prob:.2f})."
                     
+        variant_scores.sort(key=lambda x: x[1], reverse=True)
+        runner_up_id = variant_scores[1][0] if len(variant_scores) > 1 else None
+        
+        base_score = next((score for vid, score in variant_scores if vid == "base"), 0.0)
+        improvement_percentage = ((best_score - base_score) / base_score * 100.0) if base_score > 0 else 0.0
+
         return SimulationResult(
             base_variant=variants[0] if variants else None,
             variants=variants,
             reports=reports,
             winner_id=winner_id,
-            reason=reason
+            reason=reason,
+            runner_up_id=runner_up_id,
+            improvement_percentage=improvement_percentage
         )

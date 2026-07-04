@@ -75,3 +75,14 @@ test_*.html
 video*.json
 dataset/
 test_output*.json
+
+downloads/
+logs/
+cache/
+*.ass
+*.srt
+*.jpg
+*.png
+*.part
+*.ytdl
+*.tmp

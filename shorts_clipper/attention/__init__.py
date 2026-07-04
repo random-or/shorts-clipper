@@ -1,17 +1,17 @@
 """V3.3 Attention Optimization Engine."""
 
+from shorts_clipper.attention.engine import AttentionEngine, SimulationEngine
+from shorts_clipper.attention.features import FeatureExtractor
 from shorts_clipper.attention.models import (
     AttentionReport,
-    FeatureSet,
-    JudgeResult,
     AttentionState,
     AttentionTimeline,
+    CounterfactualVariant,
     EditorialRecommendation,
+    FeatureSet,
+    JudgeResult,
     SimulationResult,
-    CounterfactualVariant
 )
-from shorts_clipper.attention.features import FeatureExtractor
-from shorts_clipper.attention.engine import AttentionEngine, SimulationEngine
 
 __all__ = [
     "AttentionReport",

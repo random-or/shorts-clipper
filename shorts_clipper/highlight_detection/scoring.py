@@ -100,20 +100,18 @@ class AttentionScore:
         self.window = window
 
 
-class LocalTranscriptScorer:
-    """Evaluates transcripts using Gemini Flash for true semantic attention scoring."""
+class SemanticCandidateGenerator:
+    """Analyzes transcripts using Gemini Flash to generate candidate semantic windows."""
 
     def __init__(self):
         from shorts_clipper.core.settings import Settings
 
         self.settings = Settings.from_env()
 
-
-
-    def score_transcript(
+    def generate_candidate(
         self, segments: list[TranscriptSegment]
     ) -> tuple[float, list[TranscriptSegment], str]:
-        """Scores transcript using LLM for true semantic understanding."""
+        """Identifies the best semantic window and returns its generation score, the window, and reasoning."""
         if not segments:
             return 0.0, [], "Empty transcript"
 

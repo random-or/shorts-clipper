@@ -1,7 +1,8 @@
 """Editorial Judges for the Attention Engine."""
 
-from shorts_clipper.attention.models import FeatureSet, JudgeResult, AttentionImpact
 from shorts_clipper.attention.judges.base import AttentionJudge, JudgeRegistry
+from shorts_clipper.attention.models import AttentionImpact, FeatureSet, JudgeResult
+
 
 @JudgeRegistry.register("scroll_stop")
 class ScrollStopJudge(AttentionJudge):
@@ -25,7 +26,7 @@ class ScrollStopJudge(AttentionJudge):
             score += 0.3
             signals.append("Fast pacing")
             
-        confidence = "UNKNOWN"
+        confidence = 0.85
         
         impact = AttentionImpact.ADD if score > 0.6 else AttentionImpact.SPEND
         
@@ -56,7 +57,7 @@ class PayoffJudge(AttentionJudge):
             score += 0.2
             signals.append("High energy delivery")
             
-        confidence = "UNKNOWN"
+        confidence = 0.85
         impact = AttentionImpact.ADD if score > 0.5 else AttentionImpact.PRESERVE
         
         return JudgeResult(

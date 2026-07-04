@@ -51,7 +51,6 @@ class FallbackMetadataTests(unittest.TestCase):
 
         # Scenario 1: Gemini Provider throws Exception (429 or Timeout) during Metadata
         mock_provider = MagicMock()
-        from shorts_clipper.core.models import ClipWindow
 
         # For Pass 2 metadata generation
         mock_provider.generate_clip_metadata.side_effect = Exception("429 RESOURCE_EXHAUSTED")
@@ -75,18 +74,29 @@ class FallbackMetadataTests(unittest.TestCase):
 
         # Run pipeline
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}):
-            with patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer") as mock_scorer_cls:
+            with patch("shorts_clipper.highlight_detection.scoring.SemanticCandidateGenerator") as mock_scorer_cls:
                 mock_scorer = MagicMock()
-                mock_scorer.score_transcript.return_value = (90.0, [MockSegment(0, 15, "test")], "reason")
+                mock_scorer.generate_candidate.return_value = (90.0, [MockSegment(0, 15, "test")], "reason")
                 mock_scorer_cls.return_value = mock_scorer
                 
                 with patch("shorts_clipper.attention.engine.SimulationEngine") as mock_sim_cls:
                     mock_sim = MagicMock()
-                    mock_sim.optimize_clip.return_value = MagicMock(
-                        winner_id="base",
-                        base_variant=MagicMock(start_time=0.0, end_time=15.0),
-                        variants=[MagicMock(variant_id="base", start_time=0.0, end_time=15.0)]
-                    )
+                    class FakeReport:
+                        completion_prob = 0.85
+                        scroll_stop_prob = 0.75
+                        payoff_strength = 0.90
+                        overall_confidence = 80
+                        judge_results = {}
+                    class FakeResult:
+                        winner_id = "base"
+                        runner_up_id = "none"
+                        improvement_percentage = 10.0
+                        reason = "test reasoning"
+                        base_variant = MagicMock(start_time=0.0, end_time=15.0)
+                        variants = [MagicMock(variant_id="base", start_time=0.0, end_time=15.0)]
+                        reports = {"base": FakeReport()}
+                    mock_sim_result = FakeResult()
+                    mock_sim.optimize_clip.return_value = mock_sim_result
                     mock_sim_cls.return_value = mock_sim
 
                     output = run(

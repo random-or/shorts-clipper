@@ -1,9 +1,8 @@
 import logging
-import time
-from copy import deepcopy
-from shorts_clipper.core.models import TranscriptSegment, TranscriptWord
-from shorts_clipper.attention.engine import SimulationEngine, AttentionEngine
+
+from shorts_clipper.attention.engine import AttentionEngine, SimulationEngine
 from shorts_clipper.attention.models import CounterfactualVariant
+from shorts_clipper.core.models import TranscriptSegment
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("IVV_Audit")

@@ -19,7 +19,6 @@ from shorts_clipper.core.cache import get_cached, purge_expired, set_cached
 from shorts_clipper.core.models import TranscriptSegment, TranscriptWord
 from shorts_clipper.core.settings import Settings
 from shorts_clipper.downloader.yt_dlp import fetch_subtitles, get_subtitle_metrics
-from shorts_clipper.attention.engine import AttentionEngine
 from shorts_clipper.scout.keywords import build_queries
 from shorts_clipper.scout.metrics import ScoutMetrics
 from shorts_clipper.scout.youtube_api import YouTubeAPIClient
@@ -709,7 +708,7 @@ def get_trending_link(
             import tempfile
             from pathlib import Path
 
-            from shorts_clipper.highlight_detection.scoring import LocalTranscriptScorer
+            from shorts_clipper.highlight_detection.scoring import SemanticCandidateGenerator
 
             with tempfile.TemporaryDirectory(prefix="scout_eval_") as temp_dir:
                 temp_path = Path(temp_dir)
@@ -827,18 +826,18 @@ def get_trending_link(
                         metrics.rejected_low_quality += 1
                         continue
 
-                    # Score transcript locally
+                    # Generate candidate semantic window
                     evaluated_count += 1
-                    local_scorer = LocalTranscriptScorer()
-                    local_score, best_local_window, local_reasoning = local_scorer.score_transcript(
+                    generator = SemanticCandidateGenerator()
+                    candidate_generation_score, best_local_window, local_reasoning = generator.generate_candidate(
                         segments
                     )
-                    log.info("Candidate %s local transcript score: %.2f", vid, local_score)
+                    log.info("Candidate %s generation score: %.2f", vid, candidate_generation_score)
 
                     local_scored_candidates.append(
                         {
                             "video": v,
-                            "local_score": local_score,
+                            "candidate_generation_score": candidate_generation_score,
                             "local_reasoning": local_reasoning,
                             "segments": segments,
                             "transcript_source": transcript_source,
@@ -852,13 +851,13 @@ def get_trending_link(
                 # PHASE 2: Gemini ONLY on highest scoring local candidate
                 passing_candidates = []
                 if local_scored_candidates:
-                    local_scored_candidates.sort(key=lambda x: x["local_score"], reverse=True)
+                    local_scored_candidates.sort(key=lambda x: x["candidate_generation_score"], reverse=True)
                     top_candidate = local_scored_candidates[0]
 
                     v = top_candidate["video"]
                     vid = v.get("id")
                     segments = top_candidate["segments"]
-                    local_score = top_candidate["local_score"]
+                    candidate_generation_score = top_candidate["candidate_generation_score"]
                     best_local_window = top_candidate["best_local_window"]
                     timing = top_candidate["timing"]
                     candidate_start_time = top_candidate["candidate_start_time"]
@@ -867,9 +866,9 @@ def get_trending_link(
 
                     log.info("\n========== FINALIST SELECTED ==========")
                     log.info(
-                        "Video %s selected as finalist with Local Score: %.2f", vid, local_score
+                        "Video %s selected as finalist with Candidate Generation Score: %.2f", vid, candidate_generation_score
                     )
-                    log.info("Calling Editorial Core for local timestamp extraction...")
+                    log.info("Generating semantic candidates and counterfactual variants...")
 
                     t_eval_start = time.time()
                     
@@ -884,8 +883,8 @@ def get_trending_link(
                                 "start": start_t,
                                 "end": end_t,
                                 "layout": "crop_center",
-                                "virality_score": int(local_score),
-                                "reason": f"[Local Transcript Scorer] {top_candidate.get('local_reasoning', 'Semantic window selected')}",
+                                "virality_score": int(candidate_generation_score),
+                                "reason": f"[Semantic Candidate Generator] {top_candidate.get('local_reasoning', 'Semantic window selected')}",
                             }
                         ]
                     else:
@@ -900,11 +899,59 @@ def get_trending_link(
                     
                     try:
                         clip_segments = best_local_window if best_local_window else segments
-                        if not clip_segments: clip_segments = segments
+                        if not clip_segments:
+                            clip_segments = segments
                         
                         sim_result = sim_engine.optimize_clip(clip_segments)
                         best_report = sim_result.reports[sim_result.winner_id]
                         
+                        # Populate Observability Artifacts
+                        from shorts_clipper.core.observability import get_run_context
+                        run_ctx = get_run_context()
+                        
+                        from dataclasses import asdict
+                        def safe_asdict(obj):
+                            try:
+                                data = asdict(obj)
+                                def recursive_enum_to_str(d):
+                                    if isinstance(d, dict):
+                                        for k, v in d.items():
+                                            if hasattr(v, 'value'):
+                                                d[k] = v.value
+                                            else:
+                                                recursive_enum_to_str(v)
+                                    elif isinstance(d, list):
+                                        for i in range(len(d)):
+                                            if hasattr(d[i], 'value'):
+                                                d[i] = d[i].value
+                                            else:
+                                                recursive_enum_to_str(d[i])
+                                recursive_enum_to_str(data)
+                                return data
+                            except Exception:
+                                return str(obj)
+
+                        run_ctx.add_decision_trace({
+                            "video_id": v.get("id"),
+                            "candidate_windows": [{"start": s.start, "end": s.end} for s in best_local_window] if best_local_window else [],
+                            "semantic_score": candidate_generation_score,
+                            "winner_variant_id": sim_result.winner_id,
+                            "winner_reason": sim_result.reason,
+                            "confidence": best_report.overall_confidence
+                        })
+                        
+                        run_ctx.add_attention_report(f"candidate_{v.get('id')}", safe_asdict(best_report))
+                        run_ctx.add_variant(safe_asdict(sim_result))
+                        
+                        from shorts_clipper.core.stats import get_optimizer_stats
+                        get_optimizer_stats().record_run(
+                            sim_result.winner_id, 
+                            best_report.overall_confidence, 
+                            len(sim_result.variants),
+                            sim_result.runner_up_id,
+                            sim_result.improvement_percentage
+                        )
+
                         # Simulation Engine owns the probability
                         final_score = round(best_report.completion_prob * 100.0, 2)
                         
@@ -916,6 +963,19 @@ def get_trending_link(
                         info_density = best_report.judge_results.get("information_density")
                         avg_caption_density = info_density.score if info_density else 0.5
                         
+                        run_ctx.add_score_breakdown(f"candidate_{v.get('id')}", {
+                            "candidate_generation_score": candidate_generation_score,
+                            "sim_completion_prob": best_report.completion_prob,
+                            "final_score": final_score,
+                            "components": {
+                                "hook": rule_hook_points,
+                                "emotion": rule_emotion_points,
+                                "virality": rule_virality_points,
+                                "density": avg_caption_density
+                            }
+                        })
+                        
+                        log.info("Selecting optimal narrative")
                         log.info("Simulation selected variant '%s': %s", sim_result.winner_id, sim_result.reason)
                         
                         winner_variant = next((v for v in sim_result.variants if v.variant_id == sim_result.winner_id), sim_result.base_variant)
@@ -929,7 +989,7 @@ def get_trending_link(
                     except Exception as err:
                         log.warning("Attention Simulation failed: %s", err)
                         rule_hook_points, rule_emotion_points, rule_virality_points, avg_caption_density = 0.0, 0.0, 0.0, 0.0
-                        final_score = local_score
+                        final_score = candidate_generation_score
 
                     views = max(int(v.get("view_count") or 0), 1)
                     likes = int(v.get("like_count") or 0)

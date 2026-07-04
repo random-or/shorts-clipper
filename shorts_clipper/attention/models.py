@@ -1,9 +1,11 @@
 """Data models for the Semantic Attention Optimization Engine."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union
 from enum import Enum
+from typing import Any
+
 
 class AttentionImpact(Enum):
     """Attention Economy: Attention as a limited resource."""
@@ -51,20 +53,20 @@ class FeatureSet:
     sentiment: float
     repetition: int
     visual_dependency_markers: int
-    raw_words: List[str]
+    raw_words: list[str]
     duration: float
     start_time: float
     end_time: float
-    semantic_segments: List[SemanticSegment]
+    semantic_segments: list[SemanticSegment]
 
 @dataclass
 class JudgeResult:
     """Output from a single modular Judge. No silent failures."""
     score: float 
-    confidence: Union[float, str]
+    confidence: float | str
     reason: str
-    signals: List[str]
-    evidence: List[str]
+    signals: list[str]
+    evidence: list[str]
     impact: AttentionImpact
 
 @dataclass
@@ -87,10 +89,10 @@ class AttentionState:
 @dataclass
 class AttentionTimeline:
     """Time-varying attention signal across the entire clip."""
-    states: List[AttentionState]
+    states: list[AttentionState]
     peak_interest_time: float
-    high_risk_moments: List[float]
-    boring_regions: List[tuple[float, float]]
+    high_risk_moments: list[float]
+    boring_regions: list[tuple[float, float]]
 
 @dataclass
 class EditorialRecommendation:
@@ -100,7 +102,7 @@ class EditorialRecommendation:
     expected_retention_improvement: float
     expected_scroll_stop_improvement: float
     confidence: float
-    target_time: Optional[float] = None
+    target_time: float | None = None
 
 @dataclass
 class CounterfactualVariant:
@@ -109,7 +111,7 @@ class CounterfactualVariant:
     description: str
     start_time: float
     end_time: float
-    modified_segments: List[Any]  # List[TranscriptSegment]
+    modified_segments: list[Any]  # List[TranscriptSegment]
 
 @dataclass
 class AttentionReport:
@@ -128,17 +130,19 @@ class AttentionReport:
     memorability: float
     novelty: float
     curiosity: float
-    overall_confidence: Union[float, str]
+    overall_confidence: float
     
     timeline: AttentionTimeline
-    judge_results: Dict[str, JudgeResult] = field(default_factory=dict)
-    recommendations: List[EditorialRecommendation] = field(default_factory=list)
+    judge_results: dict[str, JudgeResult] = field(default_factory=dict)
+    recommendations: list[EditorialRecommendation] = field(default_factory=list)
 
 @dataclass
 class SimulationResult:
     """Final output from Simulation Engine comparing variants."""
     base_variant: CounterfactualVariant
-    variants: List[CounterfactualVariant]
-    reports: Dict[str, AttentionReport]
+    variants: list[CounterfactualVariant]
+    reports: dict[str, AttentionReport]
     winner_id: str
     reason: str
+    runner_up_id: str | None = None
+    improvement_percentage: float = 0.0

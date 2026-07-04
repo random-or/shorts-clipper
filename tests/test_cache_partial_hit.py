@@ -6,7 +6,7 @@ from shorts_clipper.pipeline.runner import run
 
 
 @mock.patch("shorts_clipper.pipeline.runner.fetch_subtitles")
-@mock.patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer")
+@mock.patch("shorts_clipper.highlight_detection.scoring.SemanticCandidateGenerator")
 @mock.patch("shorts_clipper.attention.engine.SimulationEngine")
 @mock.patch("shorts_clipper.pipeline.runner.download_audio")
 @mock.patch("shorts_clipper.pipeline.runner.transcribe_clip")
@@ -35,15 +35,26 @@ def test_preselected_partial_hit_behavior(
     mock_fetch_subs.return_value = [TranscriptSegment(start=0.0, end=100.0, text="Dummy text", words=[])]
 
     mock_scorer = mock.Mock()
-    mock_scorer.score_transcript.return_value = (90.0, [TranscriptSegment(start=50.0, end=60.0, text="Dummy", words=[])], "reason")
+    mock_scorer.generate_candidate.return_value = (90.0, [TranscriptSegment(start=50.0, end=60.0, text="Dummy", words=[])], "reason")
     mock_scorer_cls.return_value = mock_scorer
 
     mock_sim = mock.Mock()
-    mock_sim.optimize_clip.return_value = mock.Mock(
-        winner_id="base",
-        base_variant=mock.Mock(start_time=50.0, end_time=60.0),
-        variants=[mock.Mock(variant_id="base", start_time=50.0, end_time=60.0)]
-    )
+    class FakeReport:
+        completion_prob = 0.85
+        scroll_stop_prob = 0.75
+        payoff_strength = 0.90
+        overall_confidence = 80
+        judge_results = {}
+    class FakeResult:
+        winner_id = "base"
+        runner_up_id = "none"
+        improvement_percentage = 10.0
+        reason = "test reasoning"
+        base_variant = mock.Mock(start_time=50.0, end_time=60.0)
+        variants = [mock.Mock(variant_id="base", start_time=50.0, end_time=60.0)]
+        reports = {"base": FakeReport()}
+    mock_sim_result = FakeResult()
+    mock_sim.optimize_clip.return_value = mock_sim_result
     mock_sim_cls.return_value = mock_sim
 
     mock_transcribe.return_value = []
@@ -67,4 +78,4 @@ def test_preselected_partial_hit_behavior(
 
         assert len(result) == 3
 
-        mock_scorer.score_transcript.assert_called_once()
+        mock_scorer.generate_candidate.assert_called_once()

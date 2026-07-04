@@ -53,7 +53,7 @@ class ScoutV2Tests(unittest.TestCase):
         # Verify it doesn't fail on missing fields
         self.assertTrue(compute_scout_v2_intermediate_score({}, now, {}) == 0.0)
 
-    @patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer")
+    @patch("shorts_clipper.highlight_detection.scoring.SemanticCandidateGenerator")
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
@@ -65,7 +65,7 @@ class ScoutV2Tests(unittest.TestCase):
         mock_scorer_cls,
     ):
         mock_scorer = __import__("unittest.mock").mock.Mock()
-        mock_scorer.score_transcript.return_value = (90.0, [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])], "great hook")
+        mock_scorer.generate_candidate.return_value = (90.0, [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])], "great hook")
         mock_scorer_cls.return_value = mock_scorer
         # Mock SemanticRelevanceGate to pass all candidates through
         mock_gate = Mock()
@@ -96,13 +96,11 @@ class ScoutV2Tests(unittest.TestCase):
             TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])
         ]
 
-        from shorts_clipper.core.models import ClipWindow
-        from shorts_clipper.editorial.models import EditorialDecision
 
-        # Mock LocalTranscriptScorer behavior:
+        # Mock SemanticCandidateGenerator behavior:
         # First call for vid_good returns a valid window
         # Second call for vid_bad returns empty window (simulating rejection)
-        mock_scorer.score_transcript.side_effect = [
+        mock_scorer.generate_candidate.side_effect = [
             (90.0, [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])], "great hook"),
             (80.0, [], "too generic"),
         ]
@@ -126,7 +124,7 @@ class ScoutV2Tests(unittest.TestCase):
         self.assertEqual(report_data["video_id"], "vid_good")
         self.assertEqual(report_data["final_score"], report_data["final_score"])
 
-    @patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer")
+    @patch("shorts_clipper.highlight_detection.scoring.SemanticCandidateGenerator")
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
@@ -149,7 +147,7 @@ class ScoutV2Tests(unittest.TestCase):
         mock_fetch_subs.return_value = [TranscriptSegment(start=0, end=10, text="hello")]
 
         mock_scorer = Mock()
-        mock_scorer.score_transcript.return_value = (50.0, [], "bad")
+        mock_scorer.generate_candidate.return_value = (50.0, [], "bad")
         mock_scorer_cls.return_value = mock_scorer
 
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": ""}):
@@ -158,7 +156,7 @@ class ScoutV2Tests(unittest.TestCase):
         # Verify None is returned when all candidates are rejected
         self.assertIsNone(url)
 
-    @patch("shorts_clipper.highlight_detection.scoring.LocalTranscriptScorer")
+    @patch("shorts_clipper.highlight_detection.scoring.SemanticCandidateGenerator")
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
@@ -170,7 +168,7 @@ class ScoutV2Tests(unittest.TestCase):
         mock_scorer_cls,
     ):
         mock_scorer = Mock()
-        mock_scorer.score_transcript.return_value = (100.0, [], "Perfect score")
+        mock_scorer.generate_candidate.return_value = (100.0, [], "Perfect score")
         mock_scorer_cls.return_value = mock_scorer
         mock_gate = Mock()
         mock_gate.filter_candidates.side_effect = lambda candidates: candidates
@@ -199,7 +197,7 @@ class ScoutV2Tests(unittest.TestCase):
         # Wait, the test expects a fallback?
         # Actually in the new logic, there is no "Editorial Engine failed, use Local Transcript Scorer" fallback.
         # Local Transcript Scorer IS the generator now. If it fails (raises exception), `valid_highlights` will be empty.
-        mock_scorer.score_transcript.side_effect = Exception("Quota exceeded")
+        mock_scorer.generate_candidate.side_effect = Exception("Quota exceeded")
 
         with patch.dict("os.environ", {"YOUTUBE_API_KEY": ""}):
             url = get_trending_link(niche="tech", max_age_days=7)
