@@ -9,12 +9,15 @@ from typing import Any
 
 class AttentionImpact(Enum):
     """Attention Economy: Attention as a limited resource."""
+
     ADD = "add"
     PRESERVE = "preserve"
     SPEND = "spend"
 
+
 class NarrativeState(Enum):
     """Semantic states of a story."""
+
     SETUP = "setup"
     QUESTION = "question"
     CONFLICT = "conflict"
@@ -24,17 +27,21 @@ class NarrativeState(Enum):
     PAYOFF = "payoff"
     REFLECTION = "reflection"
 
+
 @dataclass
 class SemanticSegment:
     """A transcript segment mapped to a narrative state."""
-    segment: Any # TranscriptSegment
+
+    segment: Any  # TranscriptSegment
     state: NarrativeState
     is_hook: bool
     is_dead_narrative: bool
 
+
 @dataclass
 class FeatureSet:
     """Centralized feature extraction output. Extracted exactly once."""
+
     text: str
     word_count: int
     words_per_second: float
@@ -59,19 +66,23 @@ class FeatureSet:
     end_time: float
     semantic_segments: list[SemanticSegment]
 
+
 @dataclass
 class JudgeResult:
     """Output from a single modular Judge. No silent failures."""
-    score: float 
+
+    score: float
     confidence: float | str
     reason: str
     signals: list[str]
     evidence: list[str]
     impact: AttentionImpact
 
+
 @dataclass
 class AttentionState:
     """State of attention at a specific segment/second."""
+
     time: float
     attention_level: float
     gain: float
@@ -86,17 +97,21 @@ class AttentionState:
     is_spike: bool
     is_valley: bool
 
+
 @dataclass
 class AttentionTimeline:
     """Time-varying attention signal across the entire clip."""
+
     states: list[AttentionState]
     peak_interest_time: float
     high_risk_moments: list[float]
     boring_regions: list[tuple[float, float]]
 
+
 @dataclass
 class EditorialRecommendation:
     """Exact, quantifiable editorial edits."""
+
     action: str
     reason: str
     expected_retention_improvement: float
@@ -104,21 +119,25 @@ class EditorialRecommendation:
     confidence: float
     target_time: float | None = None
 
+
 @dataclass
 class CounterfactualVariant:
     """A simulated clip alternative."""
+
     variant_id: str
     description: str
     start_time: float
     end_time: float
     modified_segments: list[Any]  # List[TranscriptSegment]
 
+
 @dataclass
 class AttentionReport:
     """Explainable prediction report for a specific variant."""
+
     start_time: float
     end_time: float
-    
+
     # Core independently estimated metrics (Agent E)
     scroll_stop_prob: float
     retention_3s_prob: float
@@ -131,14 +150,16 @@ class AttentionReport:
     novelty: float
     curiosity: float
     overall_confidence: float
-    
+
     timeline: AttentionTimeline
     judge_results: dict[str, JudgeResult] = field(default_factory=dict)
     recommendations: list[EditorialRecommendation] = field(default_factory=list)
 
+
 @dataclass
 class SimulationResult:
     """Final output from Simulation Engine comparing variants."""
+
     base_variant: CounterfactualVariant
     variants: list[CounterfactualVariant]
     reports: dict[str, AttentionReport]

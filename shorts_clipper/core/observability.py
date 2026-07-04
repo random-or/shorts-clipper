@@ -6,8 +6,10 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
+
 class RunContext:
     """Singleton tracking context and artifacts for a single pipeline run."""
+
     _instance = None
 
     def __new__(cls):
@@ -38,7 +40,7 @@ class RunContext:
 
     def add_attention_report(self, clip_id: str, report_data: dict):
         self.attention_reports[clip_id] = report_data
-        
+
     def add_variant(self, variant_data: dict):
         self.variant_reports.append(variant_data)
 
@@ -47,7 +49,7 @@ class RunContext:
 
     def add_pipeline_metrics(self, metrics: dict):
         self.pipeline_metrics.update(metrics)
-        
+
     def add_final_metadata(self, clip_id: str, metadata: dict):
         self.final_metadata[clip_id] = metadata
 
@@ -67,7 +69,9 @@ class RunContext:
                 if isinstance(data, str):
                     path.write_text(data, encoding="utf-8")
                 else:
-                    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+                    path.write_text(
+                        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+                    )
             except Exception as e:
                 log.error(f"Failed to write {filename}: {e}")
 
@@ -77,15 +81,21 @@ class RunContext:
         _dump("score_breakdown.json", self.score_breakdowns)
         _dump("pipeline_metrics.json", self.pipeline_metrics)
         _dump("final_metadata.json", self.final_metadata)
-        
+
         try:
             from shorts_clipper.core.stats import get_optimizer_stats
+
             _dump("benchmark_summary.json", get_optimizer_stats().stats)
         except Exception as e:
             log.warning("Could not export benchmark summary: %s", e)
-        
+
         for clip_id, summary in self.editorial_summaries.items():
-            _dump(f"editorial_summary_{clip_id}.md" if len(self.editorial_summaries) > 1 else "editorial_summary.md", summary)
+            _dump(
+                f"editorial_summary_{clip_id}.md"
+                if len(self.editorial_summaries) > 1
+                else "editorial_summary.md",
+                summary,
+            )
 
     def verify_run(self) -> bool:
         """Self verification hook."""
@@ -96,29 +106,39 @@ class RunContext:
             issues.append("No decision trace recorded.")
         if not self.score_breakdowns:
             issues.append("Score transformations not recorded.")
-        
+
         if issues:
             log.error("❌ RUN UNVERIFIED. Issues: %s", ", ".join(issues))
             if self.run_dir:
                 (self.run_dir / "UNVERIFIED").touch()
             return False
-            
+
         # Automated regression detection
         try:
             from shorts_clipper.core.stats import get_optimizer_stats
+
             stats_obj = get_optimizer_stats()
             avg_confidence = stats_obj.stats.get("average_confidence", 0.0)
             if avg_confidence > 0:
                 current_conf = self.decision_trace.get("confidence", 0)
-                if isinstance(current_conf, (int, float)) and current_conf > 0 and current_conf < avg_confidence * 0.8:
-                    log.warning("📉 REGRESSION DETECTED: Confidence (%.2f) is significantly below historical average (%.2f)", current_conf, avg_confidence)
+                if (
+                    isinstance(current_conf, (int, float))
+                    and current_conf > 0
+                    and current_conf < avg_confidence * 0.8
+                ):
+                    log.warning(
+                        "📉 REGRESSION DETECTED: Confidence (%.2f) is significantly below historical average (%.2f)",
+                        current_conf,
+                        avg_confidence,
+                    )
                     if self.run_dir:
                         (self.run_dir / "REGRESSION").touch()
         except Exception as e:
             log.warning("Regression detection failed: %s", e)
-            
+
         log.info("✅ Run self-verification passed.")
         return True
+
 
 def get_run_context() -> RunContext:
     return RunContext()

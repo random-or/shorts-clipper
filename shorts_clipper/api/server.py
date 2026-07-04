@@ -377,16 +377,19 @@ def list_clips() -> list[dict[str, Any]]:
 
     clips = []
     import re
-    for path in sorted(out_dir.rglob("rendered_clip*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True):
+
+    for path in sorted(
+        out_dir.rglob("rendered_clip*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
         if "ig_hosted" in path.parts:
             continue
-            
+
         if path.name == "rendered_clip.mp4" and path.with_name("rendered_clip_1.mp4").exists():
             continue
 
         stat = path.stat()
         mtime = datetime.fromtimestamp(stat.st_mtime).isoformat()
-        
+
         # Check for thumbnail
         thumb = path.with_suffix(".jpg")
         match = re.match(r"rendered_clip_(\d+)\.mp4", path.name)

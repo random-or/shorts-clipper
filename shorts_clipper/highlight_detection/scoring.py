@@ -180,17 +180,17 @@ Return ONLY valid JSON in this format:
             # Post-processing sentence snapping will be handled exactly once by EditorialFinisher in runner.py.
             start_idx = 0
             end_idx = len(segments) - 1
-            
+
             for i, s in enumerate(segments):
                 if s.start >= start_t:
                     start_idx = i
                     break
-                    
+
             for i in range(start_idx, len(segments)):
                 if segments[i].end >= end_t:
                     end_idx = i
                     break
-                    
+
             best_window = segments[start_idx : end_idx + 1]
 
             if not best_window:

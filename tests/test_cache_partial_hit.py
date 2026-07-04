@@ -25,6 +25,7 @@ def test_preselected_partial_hit_behavior(
     tmp_path,
 ):
     from shorts_clipper.core.models import TranscriptSegment
+
     settings = Settings(gemini_api_key="dummy", youtube_api_key="dummy")
 
     preselected = [
@@ -32,19 +33,27 @@ def test_preselected_partial_hit_behavior(
         (ClipWindow(start=30.0, end=40.0), "split_screen"),
     ]
 
-    mock_fetch_subs.return_value = [TranscriptSegment(start=0.0, end=100.0, text="Dummy text", words=[])]
+    mock_fetch_subs.return_value = [
+        TranscriptSegment(start=0.0, end=100.0, text="Dummy text", words=[])
+    ]
 
     mock_scorer = mock.Mock()
-    mock_scorer.generate_candidate.return_value = (90.0, [TranscriptSegment(start=50.0, end=60.0, text="Dummy", words=[])], "reason")
+    mock_scorer.generate_candidate.return_value = (
+        90.0,
+        [TranscriptSegment(start=50.0, end=60.0, text="Dummy", words=[])],
+        "reason",
+    )
     mock_scorer_cls.return_value = mock_scorer
 
     mock_sim = mock.Mock()
+
     class FakeReport:
         completion_prob = 0.85
         scroll_stop_prob = 0.75
         payoff_strength = 0.90
         overall_confidence = 80
         judge_results = {}
+
     class FakeResult:
         winner_id = "base"
         runner_up_id = "none"
@@ -53,6 +62,7 @@ def test_preselected_partial_hit_behavior(
         base_variant = mock.Mock(start_time=50.0, end_time=60.0)
         variants = [mock.Mock(variant_id="base", start_time=50.0, end_time=60.0)]
         reports = {"base": FakeReport()}
+
     mock_sim_result = FakeResult()
     mock_sim.optimize_clip.return_value = mock_sim_result
     mock_sim_cls.return_value = mock_sim

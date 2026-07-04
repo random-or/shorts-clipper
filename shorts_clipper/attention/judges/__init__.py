@@ -15,5 +15,5 @@ __all__ = [
     "InformationDensityJudge",
     "PredictionErrorJudge",
     "ScrollStopJudge",
-    "PayoffJudge"
+    "PayoffJudge",
 ]

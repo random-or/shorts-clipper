@@ -65,7 +65,11 @@ class ScoutV2Tests(unittest.TestCase):
         mock_scorer_cls,
     ):
         mock_scorer = __import__("unittest.mock").mock.Mock()
-        mock_scorer.generate_candidate.return_value = (90.0, [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])], "great hook")
+        mock_scorer.generate_candidate.return_value = (
+            90.0,
+            [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])],
+            "great hook",
+        )
         mock_scorer_cls.return_value = mock_scorer
         # Mock SemanticRelevanceGate to pass all candidates through
         mock_gate = Mock()
@@ -96,12 +100,15 @@ class ScoutV2Tests(unittest.TestCase):
             TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])
         ]
 
-
         # Mock SemanticCandidateGenerator behavior:
         # First call for vid_good returns a valid window
         # Second call for vid_bad returns empty window (simulating rejection)
         mock_scorer.generate_candidate.side_effect = [
-            (90.0, [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])], "great hook"),
+            (
+                90.0,
+                [TranscriptSegment(start=0.0, end=10.0, text="hello world", words=[])],
+                "great hook",
+            ),
             (80.0, [], "too generic"),
         ]
 
@@ -192,7 +199,7 @@ class ScoutV2Tests(unittest.TestCase):
             )
         ]
 
-        # Mock scorer raising Exception to trigger fallback, but we actually 
+        # Mock scorer raising Exception to trigger fallback, but we actually
         # removed fallback to Editorial Engine entirely, so if it fails, it just fails.
         # Wait, the test expects a fallback?
         # Actually in the new logic, there is no "Editorial Engine failed, use Local Transcript Scorer" fallback.

@@ -829,8 +829,8 @@ def get_trending_link(
                     # Generate candidate semantic window
                     evaluated_count += 1
                     generator = SemanticCandidateGenerator()
-                    candidate_generation_score, best_local_window, local_reasoning = generator.generate_candidate(
-                        segments
+                    candidate_generation_score, best_local_window, local_reasoning = (
+                        generator.generate_candidate(segments)
                     )
                     log.info("Candidate %s generation score: %.2f", vid, candidate_generation_score)
 
@@ -851,7 +851,9 @@ def get_trending_link(
                 # PHASE 2: Gemini ONLY on highest scoring local candidate
                 passing_candidates = []
                 if local_scored_candidates:
-                    local_scored_candidates.sort(key=lambda x: x["candidate_generation_score"], reverse=True)
+                    local_scored_candidates.sort(
+                        key=lambda x: x["candidate_generation_score"], reverse=True
+                    )
                     top_candidate = local_scored_candidates[0]
 
                     v = top_candidate["video"]
@@ -866,18 +868,20 @@ def get_trending_link(
 
                     log.info("\n========== FINALIST SELECTED ==========")
                     log.info(
-                        "Video %s selected as finalist with Candidate Generation Score: %.2f", vid, candidate_generation_score
+                        "Video %s selected as finalist with Candidate Generation Score: %.2f",
+                        vid,
+                        candidate_generation_score,
                     )
                     log.info("Generating semantic candidates and counterfactual variants...")
 
                     t_eval_start = time.time()
-                    
+
                     if best_local_window:
                         start_t = best_local_window[0].start
                         end_t = best_local_window[-1].end
                         if end_t - start_t < 15.0:
                             end_t = start_t + 45.0
-                        
+
                         valid_highlights = [
                             {
                                 "start": start_t,
@@ -890,110 +894,150 @@ def get_trending_link(
                     else:
                         valid_highlights = []
                         log.warning("[SCOUT] Local Transcript Scorer failed to find a window.")
-                        
+
                     timing["eval_s"] = round(time.time() - t_eval_start, 2)
 
                     # The final score should be driven entirely by the SimulationEngine's semantic analysis.
                     from shorts_clipper.attention.engine import SimulationEngine
+
                     sim_engine = SimulationEngine()
-                    
+
                     try:
                         clip_segments = best_local_window if best_local_window else segments
                         if not clip_segments:
                             clip_segments = segments
-                        
+
                         sim_result = sim_engine.optimize_clip(clip_segments)
                         best_report = sim_result.reports[sim_result.winner_id]
-                        
+
                         # Populate Observability Artifacts
                         from shorts_clipper.core.observability import get_run_context
+
                         run_ctx = get_run_context()
-                        
+
                         from dataclasses import asdict
+
                         def safe_asdict(obj):
                             try:
                                 data = asdict(obj)
+
                                 def recursive_enum_to_str(d):
                                     if isinstance(d, dict):
                                         for k, v in d.items():
-                                            if hasattr(v, 'value'):
+                                            if hasattr(v, "value"):
                                                 d[k] = v.value
                                             else:
                                                 recursive_enum_to_str(v)
                                     elif isinstance(d, list):
                                         for i in range(len(d)):
-                                            if hasattr(d[i], 'value'):
+                                            if hasattr(d[i], "value"):
                                                 d[i] = d[i].value
                                             else:
                                                 recursive_enum_to_str(d[i])
+
                                 recursive_enum_to_str(data)
                                 return data
                             except Exception:
                                 return str(obj)
 
-                        run_ctx.add_decision_trace({
-                            "video_id": v.get("id"),
-                            "candidate_windows": [{"start": s.start, "end": s.end} for s in best_local_window] if best_local_window else [],
-                            "semantic_score": candidate_generation_score,
-                            "winner_variant_id": sim_result.winner_id,
-                            "winner_reason": sim_result.reason,
-                            "confidence": best_report.overall_confidence
-                        })
-                        
-                        run_ctx.add_attention_report(f"candidate_{v.get('id')}", safe_asdict(best_report))
+                        run_ctx.add_decision_trace(
+                            {
+                                "video_id": v.get("id"),
+                                "candidate_windows": [
+                                    {"start": s.start, "end": s.end} for s in best_local_window
+                                ]
+                                if best_local_window
+                                else [],
+                                "semantic_score": candidate_generation_score,
+                                "winner_variant_id": sim_result.winner_id,
+                                "winner_reason": sim_result.reason,
+                                "confidence": best_report.overall_confidence,
+                            }
+                        )
+
+                        run_ctx.add_attention_report(
+                            f"candidate_{v.get('id')}", safe_asdict(best_report)
+                        )
                         run_ctx.add_variant(safe_asdict(sim_result))
-                        
+
                         from shorts_clipper.core.stats import get_optimizer_stats
+
                         get_optimizer_stats().record_run(
-                            sim_result.winner_id, 
-                            best_report.overall_confidence, 
+                            sim_result.winner_id,
+                            best_report.overall_confidence,
                             len(sim_result.variants),
                             sim_result.runner_up_id,
-                            sim_result.improvement_percentage
+                            sim_result.improvement_percentage,
                         )
 
                         # Simulation Engine owns the probability
                         final_score = round(best_report.completion_prob * 100.0, 2)
-                        
+
                         # Metadata for UI
                         rule_hook_points = min(10.0, best_report.scroll_stop_prob * 10.0)
                         rule_emotion_points = min(10.0, best_report.payoff_strength * 10.0)
                         rule_virality_points = min(10.0, best_report.shareability * 10.0)
-                        
+
                         info_density = best_report.judge_results.get("information_density")
                         avg_caption_density = info_density.score if info_density else 0.5
-                        
-                        run_ctx.add_score_breakdown(f"candidate_{v.get('id')}", {
-                            "candidate_generation_score": candidate_generation_score,
-                            "sim_completion_prob": best_report.completion_prob,
-                            "final_score": final_score,
-                            "components": {
-                                "hook": rule_hook_points,
-                                "emotion": rule_emotion_points,
-                                "virality": rule_virality_points,
-                                "density": avg_caption_density
-                            }
-                        })
-                        
+
+                        run_ctx.add_score_breakdown(
+                            f"candidate_{v.get('id')}",
+                            {
+                                "candidate_generation_score": candidate_generation_score,
+                                "sim_completion_prob": best_report.completion_prob,
+                                "final_score": final_score,
+                                "components": {
+                                    "hook": rule_hook_points,
+                                    "emotion": rule_emotion_points,
+                                    "virality": rule_virality_points,
+                                    "density": avg_caption_density,
+                                },
+                            },
+                        )
+
                         log.info("Selecting optimal narrative")
-                        log.info("Simulation selected variant '%s': %s", sim_result.winner_id, sim_result.reason)
-                        
-                        winner_variant = next((v for v in sim_result.variants if v.variant_id == sim_result.winner_id), sim_result.base_variant)
-                        if winner_variant and winner_variant.variant_id != "base" and valid_highlights:
+                        log.info(
+                            "Simulation selected variant '%s': %s",
+                            sim_result.winner_id,
+                            sim_result.reason,
+                        )
+
+                        winner_variant = next(
+                            (
+                                v
+                                for v in sim_result.variants
+                                if v.variant_id == sim_result.winner_id
+                            ),
+                            sim_result.base_variant,
+                        )
+                        if (
+                            winner_variant
+                            and winner_variant.variant_id != "base"
+                            and valid_highlights
+                        ):
                             valid_highlights[0]["start"] = winner_variant.start_time
                             valid_highlights[0]["end"] = winner_variant.end_time
-                            valid_highlights[0]["reason"] = valid_highlights[0].get("reason", "") + f" [Optimized: {winner_variant.description}]"
+                            valid_highlights[0]["reason"] = (
+                                valid_highlights[0].get("reason", "")
+                                + f" [Optimized: {winner_variant.description}]"
+                            )
                         if valid_highlights:
                             valid_highlights[0]["virality_score"] = int(final_score)
-                            
+
                     except Exception as err:
                         log.warning("Attention Simulation failed: %s", err)
-                        rule_hook_points, rule_emotion_points, rule_virality_points, avg_caption_density = 0.0, 0.0, 0.0, 0.0
+                        (
+                            rule_hook_points,
+                            rule_emotion_points,
+                            rule_virality_points,
+                            avg_caption_density,
+                        ) = 0.0, 0.0, 0.0, 0.0
                         final_score = candidate_generation_score
 
                     views = max(int(v.get("view_count") or 0), 1)
                     likes = int(v.get("like_count") or 0)
-                    
+
                     subtitle_quality = 10.0 if transcript_source in ("native", "cache") else 0.0
                     timing["total_s"] = round(time.time() - candidate_start_time, 2)
 

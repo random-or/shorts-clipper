@@ -89,8 +89,9 @@ def run(
     log.info("🚀 PIPELINE START: %s (extracting %d clip(s))", url, count)
 
     settings.output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     from shorts_clipper.core.observability import get_run_context
+
     run_ctx = get_run_context()
     # Ensure run context has the directory set.
     run_dir = run_ctx.set_run_dir(settings.output_dir)
@@ -126,73 +127,102 @@ def run(
                 try:
                     log.info("Generating semantic candidates")
                     generator = SemanticCandidateGenerator()
-                    candidate_generation_score, best_local_window, reasoning = generator.generate_candidate(rough_segments)
-                    
+                    candidate_generation_score, best_local_window, reasoning = (
+                        generator.generate_candidate(rough_segments)
+                    )
+
                     if not best_local_window:
-                        raise MediaProcessingError("Semantic Candidate Generator failed to find a valid window.")
-                    
+                        raise MediaProcessingError(
+                            "Semantic Candidate Generator failed to find a valid window."
+                        )
+
                     log.info("Generating counterfactual variants")
                     sim_engine = SimulationEngine()
                     log.info("Running attention simulation")
                     sim_result = sim_engine.optimize_clip(best_local_window)
-                    
+
                     log.info("Selecting optimal narrative")
-                    winner_variant = next((v for v in sim_result.variants if v.variant_id == sim_result.winner_id), sim_result.base_variant)
-                    
+                    winner_variant = next(
+                        (v for v in sim_result.variants if v.variant_id == sim_result.winner_id),
+                        sim_result.base_variant,
+                    )
+
                     # Log artifacts
                     from dataclasses import asdict
-                    
+
                     def safe_asdict(obj):
                         try:
                             # Convert enums to string
                             data = asdict(obj)
+
                             def recursive_enum_to_str(d):
                                 if isinstance(d, dict):
                                     for k, v in d.items():
-                                        if hasattr(v, 'value'):
+                                        if hasattr(v, "value"):
                                             d[k] = v.value
                                         else:
                                             recursive_enum_to_str(v)
                                 elif isinstance(d, list):
                                     for i in range(len(d)):
-                                        if hasattr(d[i], 'value'):
+                                        if hasattr(d[i], "value"):
                                             d[i] = d[i].value
                                         else:
                                             recursive_enum_to_str(d[i])
+
                             recursive_enum_to_str(data)
                             return data
                         except Exception:
                             return str(obj)
 
-                    run_ctx.add_decision_trace({
-                        "video_url": url,
-                        "candidate_windows": [{"start": s.start, "end": s.end} for s in best_local_window],
-                        "semantic_score": candidate_generation_score,
-                        "winner_variant_id": sim_result.winner_id,
-                        "winner_reason": sim_result.reason,
-                        "runner_up": None, # Could extract if needed
-                        "confidence": sim_result.reports[sim_result.winner_id].overall_confidence
-                    })
-                    
+                    run_ctx.add_decision_trace(
+                        {
+                            "video_url": url,
+                            "candidate_windows": [
+                                {"start": s.start, "end": s.end} for s in best_local_window
+                            ],
+                            "semantic_score": candidate_generation_score,
+                            "winner_variant_id": sim_result.winner_id,
+                            "winner_reason": sim_result.reason,
+                            "runner_up": None,  # Could extract if needed
+                            "confidence": sim_result.reports[
+                                sim_result.winner_id
+                            ].overall_confidence,
+                        }
+                    )
+
                     from shorts_clipper.core.stats import get_optimizer_stats
+
                     optimizer_stats = get_optimizer_stats()
                     optimizer_stats.record_run(
-                        sim_result.winner_id, 
+                        sim_result.winner_id,
                         sim_result.reports[sim_result.winner_id].overall_confidence,
                         len(sim_result.variants),
                         sim_result.runner_up_id,
-                        sim_result.improvement_percentage
+                        sim_result.improvement_percentage,
                     )
-                    
-                    run_ctx.add_attention_report("clip_1", safe_asdict(sim_result.reports[sim_result.winner_id]))
+
+                    run_ctx.add_attention_report(
+                        "clip_1", safe_asdict(sim_result.reports[sim_result.winner_id])
+                    )
                     run_ctx.add_variant(safe_asdict(sim_result))
-                    
+
                     # Score Breakdown
-                    run_ctx.add_score_breakdown("clip_1", {
-                        "Narrative Score": candidate_generation_score,
-                        "Final Editorial Score": sim_result.reports[sim_result.winner_id].completion_prob * 100.0,
-                        "judge_results": {k: v.score for k, v in sim_result.reports[sim_result.winner_id].judge_results.items()}
-                    })
+                    run_ctx.add_score_breakdown(
+                        "clip_1",
+                        {
+                            "Narrative Score": candidate_generation_score,
+                            "Final Editorial Score": sim_result.reports[
+                                sim_result.winner_id
+                            ].completion_prob
+                            * 100.0,
+                            "judge_results": {
+                                k: v.score
+                                for k, v in sim_result.reports[
+                                    sim_result.winner_id
+                                ].judge_results.items()
+                            },
+                        },
+                    )
 
                     # Editorial Summary Markdown
                     editorial_md = f"""# Editorial Decision for Clip 1
@@ -205,10 +235,12 @@ def run(
 - **Payoff Strength:** {sim_result.reports[sim_result.winner_id].payoff_strength:.2f}
 """
                     run_ctx.set_editorial_summary("clip_1", editorial_md)
-                    
-                    new_clip_window = ClipWindow(start=winner_variant.start_time, end=winner_variant.end_time)
+
+                    new_clip_window = ClipWindow(
+                        start=winner_variant.start_time, end=winner_variant.end_time
+                    )
                     clips.extend([(new_clip_window, "center")])
-                    
+
                 except Exception as exc:
                     log.error("Simulation Engine selection failed: %s", exc)
                     raise MediaProcessingError("No high-quality highlights found.") from exc
@@ -327,15 +359,16 @@ def run(
                     progress_callback(85)
                 # Save subtitle.ass artifact
                 from shorts_clipper.captions.generator import generate_ass_file
+
                 ass_artifact_path = run_dir / f"subtitle_{idx}.ass"
                 generate_ass_file(
                     precision_segments,
                     start_offset=0.0,
                     output_path=ass_artifact_path,
                     pacing=1.15,
-                    style_name=settings.subtitle_style
+                    style_name=settings.subtitle_style,
                 )
-                
+
                 burn_subtitles(
                     cropped_path,
                     precision_segments,
@@ -413,6 +446,7 @@ def run(
 
                 # Copy artifacts to run directory
                 import shutil
+
                 if current_output_path.exists():
                     shutil.copy2(current_output_path, run_dir / f"rendered_clip_{idx}.mp4")
                 thumb_path = current_output_path.with_suffix(".jpg")
@@ -507,13 +541,15 @@ def run(
             log.exception("❌ PIPELINE FAILED")
             raise MediaProcessingError(str(exc)) from exc
 
-    run_ctx.add_pipeline_metrics({
-        "url": url,
-        "count_requested": count,
-        "count_generated": len(output_paths),
-        "job_status": "SUCCESS" if output_paths else "FAILED"
-    })
-    
+    run_ctx.add_pipeline_metrics(
+        {
+            "url": url,
+            "count_requested": count,
+            "count_generated": len(output_paths),
+            "job_status": "SUCCESS" if output_paths else "FAILED",
+        }
+    )
+
     # Export observability artifacts and verify
     run_ctx.export_all()
     run_ctx.verify_run()
@@ -631,7 +667,7 @@ def run_autopilot(
                 discovered = last_m.get("video_ids_discovered", 0)
                 rejected_low_quality = last_m.get("rejected_low_quality", 0)
                 filtered_out = max(0, discovered - rejected_low_quality - 1)
-                
+
                 reason = "Strong structural hook and narrative velocity."
                 report_file = Path(f"outputs/scout_report_{job_id}.json")
                 if report_file.exists():
@@ -655,9 +691,10 @@ def run_autopilot(
                 )
                 log.info(f"\n{report_str}")
                 from shorts_clipper.core.observability import get_run_context
+
                 get_run_context().set_editorial_summary(vid, report_str)
                 get_run_context().export_all()
-                
+
         except Exception as e:
             log.warning("Failed to record learning success: %s", e)
 
