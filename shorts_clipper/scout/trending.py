@@ -36,7 +36,11 @@ def compute_scout_v2_intermediate_score(
 ) -> float:
     try:
         pub_str = video.get("published_at") or video.get("upload_date") or ""
-        if pub_str and len(pub_str) == 8 and pub_str.isdigit():
+        timestamp = video.get("timestamp")
+        
+        if timestamp is not None:
+            published = datetime.fromtimestamp(float(timestamp), tz=UTC)
+        elif pub_str and len(pub_str) == 8 and pub_str.isdigit():
             published = datetime.strptime(pub_str, "%Y%m%d").replace(tzinfo=UTC)
         elif pub_str:
             published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
@@ -549,6 +553,26 @@ def get_trending_link(
                 log.warning("Semantic Relevance Gate rejected all candidates.")
                 continue
 
+            # --- HYDRATION: Fetch full metadata (timestamps, likes, etc.) ---
+            vid_list = [v.get("id") for v in discovered if v.get("id")]
+            if vid_list:
+                log.info(f"Hydrating full metadata for {len(vid_list)} candidates...")
+                full_metadata = fetch_metadata_batch(vid_list)
+                # Map back to discovered
+                metadata_map = {m.get("id"): m for m in full_metadata if m.get("id")}
+                hydrated_discovered = []
+                for v in discovered:
+                    vid = v.get("id")
+                    if vid and vid in metadata_map:
+                        # Merge full metadata, keeping original source tracking
+                        merged = metadata_map[vid].copy()
+                        merged["_source"] = v.get("_source", "youtube_api")
+                        merged["_source_query"] = v.get("_source_query", "")
+                        hydrated_discovered.append(merged)
+                discovered = hydrated_discovered
+                log.info(f"Successfully hydrated {len(discovered)} candidates.")
+            # -----------------------------------------------------------------
+
             survivors = []
 
             # Stages 2 & 3: Freshness & Quality
@@ -637,6 +661,7 @@ def get_trending_link(
             # Stage 4: Intermediate Virality Scoring (Capped Multi-Dimensional)
             for v in survivors:
                 v["_score"] = compute_scout_v2_intermediate_score(v, now, channel_history)
+
             survivors.sort(key=lambda x: x["_score"], reverse=True)
 
             # ══════════════════════════════════════════════════════════════

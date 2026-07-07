@@ -109,3 +109,30 @@ def test_regex_fallback_with_string_floats():
     assert len(res) == 1
     assert res[0]["start"] == 10.5
     assert res[0]["end"] == 50.5
+
+# ITERATION 2 BUG 5: Hydration of flat-playlist
+@patch("shorts_clipper.scout.trending.fetch_metadata_batch")
+def test_trending_hydration_metadata(mock_fetch):
+    now = datetime.now(UTC)
+    video_no_timestamp = {
+        "id": "abc",
+        "view_count": 1000,
+        "like_count": 100,
+        "comment_count": 10,
+    }
+    # It should score 0.0 without timestamp
+    assert compute_scout_v2_intermediate_score(video_no_timestamp, now, {}) == 0.0
+
+    # Mock fetch_metadata_batch returning full info
+    mock_fetch.return_value = [{
+        "id": "abc",
+        "timestamp": now.timestamp() - 3600, # 1 hour ago
+        "view_count": 1000,
+        "like_count": 100,
+        "comment_count": 10,
+    }]
+    full_info = mock_fetch.return_value[0]
+    
+    # It should score > 0.0 with full info
+    score = compute_scout_v2_intermediate_score(full_info, now, {})
+    assert score > 0.0
