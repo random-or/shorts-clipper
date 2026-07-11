@@ -2,7 +2,11 @@
 
 Finds trending YouTube videos, selects an engaging segment, crops to vertical 9:16, burns word-level subtitles, generates metadata, and publishes to YouTube Shorts and Instagram Reels.
 
-The segment selection is deterministic — no LLM is involved in choosing _what_ to clip. An ensemble of 8 scoring judges evaluates transcript features (hooks, silence gaps, narrative arc, information density, etc.) to pick the segment. Gemini is used only for metadata generation and upstream semantic filtering during discovery.
+## What is this and what problem does it solve?
+Creating short-form content from long-form video traditionally requires hours of manual scouting, clipping, and editing. Shorts Clipper automates the entire pipeline. It discovers trending videos, finds the most engaging segment, edits it for vertical viewing, and publishes it autonomously.
+
+## What is different from other projects?
+Most AI video clippers rely heavily on Large Language Models (LLMs) to choose where to clip. This is slow, expensive, and non-deterministic. Shorts Clipper’s segment selection is **deterministic** — no LLM is involved in choosing *what* to clip. An ensemble of 8 scoring judges evaluates transcript features (hooks, silence gaps, narrative arc, information density, etc.) to pick the best segment locally. Gemini is used only for metadata generation (titles/tags) and upstream semantic filtering during discovery.
 
 ## Architecture
 
@@ -270,6 +274,25 @@ ruff check . && ruff format --check .
 3. Run `python -m pytest tests/ -v` — all tests must pass.
 4. Run `ruff check . && ruff format --check .` — no lint errors.
 5. Open a pull request.
+
+## Explainability Reports
+Because segment selection relies on deterministic heuristics rather than LLMs, every autopilot run generates a JSON observability artifact in `outputs/`. This report contains the complete decision trace, attention matrices, and score breakdowns for every stage of the pipeline so you know exactly *why* a specific timestamp was selected.
+
+## Roadmap
+- **V4.0 (SaaS Transition):** Replace SQLite with PostgreSQL, migrate local worker queue to Celery/Redis, and secure the FastAPI interface with JWT authentication for multi-tenant deployment.
+- **Smart Cropping:** Integrate OpenCV/MediaPipe for face and active-speaker tracking during cropping.
+- **Multi-Platform Discovery:** Add Scout support for TikTok and Instagram.
+- **Learned Variant Models:** Train heuristics for counterfactual simulation instead of using static rules.
+
+## FAQ
+**Q: Can I run this without a GPU?**
+A: Yes. `faster-whisper` falls back to CPU by default. Expect transcription to be slower (e.g., ~1 minute for 2 minutes of audio).
+
+**Q: Do I need to pay for Gemini?**
+A: The pipeline uses the free tier of Gemini 1.5 Flash (via Google AI Studio) for metadata generation, so the API cost per clip is effectively zero.
+
+**Q: Why doesn't the YouTube uploader resume uploads?**
+A: The current `google-api-python-client` integration resets the upload cursor on timeout. A true chunked resume implementation is planned for a future release.
 
 ## License
 
