@@ -1,56 +1,54 @@
-# System Architecture: Shorts Clipper V3.2
+# System Architecture
 
-## 1. High-Level Topology
+## High-level pipeline
 
-Shorts Clipper is built as a highly modular, decoupled system designed to ingest long-form videos and autonomously produce viral short-form content.
-
-```text
-[ Scout V2 ] --> [ Editorial Engine ] --> [ Media Render ] --> [ Publisher ]
+```
+Scout V2 → Editorial Engine → Download → Transcription → Rendering → Metadata → Publishing
 ```
 
-## 2. Core Modules
+## Core modules
 
-### 2.1 Scout (Discovery)
-Located in `shorts_clipper/scout/`.
-Responsible for polling YouTube data APIs and niche keyword mappings to discover trending content. Evaluates momentum, engagement, and recency.
-- **Semantic Gating:** Uses Gemini to ensure the discovered content aligns with the user's target niche before proceeding.
+### Scout (`shorts_clipper/scout/`)
+Discovers trending YouTube videos by keyword or niche. Uses yt-dlp flat search (and optionally the YouTube Data API). Evaluates candidates across two stages:
+- **Stage A:** Metadata ranking by views, recency, engagement ratio, and channel diversity.
+- **Stage B:** Subtitle fetch and Gemini-based clip generation scoring for the top candidates.
+- **Semantic gating:** Gemini filters candidates for niche relevance before ranking.
+- **Counterfactual simulation:** Generates variant clips (e.g., trimmed pauses, alternate start points) and picks the best.
 
-### 2.2 Editorial Engine (The Brains)
-Located in `shorts_clipper/editorial/`.
-The major addition in V3.2. This module replaces previous LLM-heavy editing with a deterministic local pipeline:
-- **Feature Store:** Parses `TranscriptSegment` lists to compute metrics (speech rate, pauses).
-- **Pipeline:** Runs candidates through 6 stages:
-  1. Feature Extraction
-  2. Stage 1 (Hard Rejections)
-  3. Stage 2 (Plugin Scoring - Hook, Silence, Emotion, Context)
-  4. Stage 3 (Confidence Aggregation)
-  5. Stage 4 (Ranking)
-  6. Final Selection
-- **Resilience:** Operates locally. If a single plugin crashes, it is disabled for that run, and confidence math redistributes the weights.
+### Editorial Engine (`shorts_clipper/editorial/`)
+Deterministic segment selection using 8 plugin judges:
+1. Hook quality
+2. Silence/dead-air detection
+3. Length fitness
+4. Topical context coherence
+5. Emotional intensity
+6. Narrative arc
+7. Information density
+8. Question-answer structure
 
-### 2.3 Rendering Engine
-Located in `shorts_clipper/rendering/`.
-- **Cropping:** Determines geometry boundaries to convert 16:9 to 9:16.
-- **Transcription:** Uses `faster-whisper` (running locally on CPU/GPU) to get highly accurate, word-level timestamps.
-- **FFmpeg Integration:** Performs pass 1 (video crop) and pass 2 (subtitle burn with `.ass` files, applying pacing adjustments).
+A feature store pre-computes transcript metrics (speech rate, pause distribution, sentence boundaries). Each judge scores independently. Confidence aggregation combines scores with weighted profiles that vary by niche.
 
-### 2.4 Publisher
-Located in `shorts_clipper/publishers/`.
-- Pluggable architecture.
-- **YouTube:** Uses standard Google OAuth2 flow.
-- **Instagram:** Uses session ID injection and staging via tmpfiles.org for Graph API uploads.
+If a single plugin crashes, it is disabled for that run and confidence math redistributes the weights.
 
-### 2.5 Job Management & API
-- **Worker:** Decoupled `worker.py` loops over a persistent SQLite-backed job queue.
-- **API Server:** FastAPI production server providing the Vanguard Console UI, exposing real-time SSE logs.
+### Rendering (`shorts_clipper/rendering/`)
+Two-pass FFmpeg pipeline:
+- Pass 1: Vertical crop (16:9 → 9:16, center crop).
+- Pass 2: Subtitle burn with ASS styling and configurable pacing multiplier.
 
-## 3. Data Persistence
-Currently optimized for local power-user operation:
-- **Queue/Jobs:** SQLite (`core/queue.py`)
-- **Cache:** SQLite (`core/cache.py`) for caching metadata, AI selections, and transcription artifacts to save time and API quota.
+Transcription uses `faster-whisper` running locally (CPU or GPU) for word-level timestamps.
 
-## 4. Path to SaaS (V4.0)
-To transition to a multi-tenant SaaS architecture, the following architectural shifts are mapped out:
-1. Replace SQLite with PostgreSQL.
-2. Replace local queue loop with Redis + Celery workers.
-3. Secure the FastAPI interface with JWT authentication.
+### Publishing (`shorts_clipper/publishers/`)
+Registry-based architecture. Ships with:
+- **YouTube:** OAuth2 with resumable chunked upload.
+- **Instagram:** Graph API using `IG_ACCESS_TOKEN` and `IG_ACCOUNT_ID`. Requires `PUBLIC_URL` or temp file hosting for media staging.
+
+Adding a new platform requires implementing the `Publisher` interface and registering it. No pipeline changes needed.
+
+### Job queue and API (`shorts_clipper/core/`, `shorts_clipper/api/`)
+- SQLite-backed job queue (`core/queue.py`) with a decoupled worker (`core/worker.py`).
+- FastAPI web dashboard (Vanguard Console) with SSE live logs.
+
+## Data persistence
+- **Queue and jobs:** SQLite
+- **Cache:** SQLite for metadata, AI selections, and transcription artifacts
+- **Tokens:** Pickle file for YouTube OAuth2 credentials

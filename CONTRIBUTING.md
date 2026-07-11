@@ -1,54 +1,36 @@
 # Contributing to Shorts Clipper
 
-First off, thank you for considering contributing to Shorts Clipper! It's people like you that make this tool incredible.
+## Design principles
 
-## 🧠 Architectural Philosophy
+1. **Local-first and deterministic.** Core logic (segment selection, scoring) runs locally without LLM calls. Gemini is used only for metadata generation and semantic validation.
+2. **Decoupled architecture.** Scout, Editorial Engine, Rendering, and Publishing are independent domains. Changes to one should not break another.
+3. **Resilience.** Handle network failures, quota exhaustion, and API timeouts gracefully. Never let a single failed candidate block the pipeline.
 
-Before writing code, please understand the core tenets of Shorts Clipper:
+## Development setup
 
-1. **Local-First & Deterministic:** We believe that core logic (like selecting a good video clip) should be mathematically sound, deterministic, and run locally. LLMs (like Gemini) are used only for semantic understanding (e.g., SEO metadata or verifying context), NOT as the core processing engine.
-2. **Zero Regression:** Every PR must pass all existing tests. If you add a new feature, add a test. We maintain 100% reliability on the core pipeline.
-3. **Decoupled Architecture:** The system is split into independent domains (Scout, Editorial Engine, Rendering, Publishing). If you modify the Scout, it should not break Rendering. 
-4. **Resilience & Fallbacks:** Always handle network failures, quota exhaustion, and API timeouts gracefully.
-
-## 🛠 Setup for Development
-
-1. **Clone the repo:**
-   ```bash
-   git clone https://github.com/your-org/shorts-clipper.git
-   cd shorts-clipper
-   ```
-
-2. **Set up a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-3. **Install Pre-commit Hooks (Optional but recommended):**
-   ```bash
-   pip install pre-commit
-   pre-commit install
-   ```
-
-## 🧪 Testing
-
-We use `pytest` for all unit and integration testing.
-
-Run the test suite:
 ```bash
-pytest tests/
+git clone https://github.com/random-or/shorts-clipper.git
+cd shorts-clipper
+python -m venv env
+source env/bin/activate
+pip install -e ".[dev]"
 ```
 
-Ensure you have a 100% pass rate before submitting a pull request.
+## Running tests
 
-## 🚀 Submitting a Pull Request
+```bash
+# Unit tests + benchmarks
+python -m pytest tests/ -v
 
-1. Fork the repository and create your branch from `main`.
-2. Write clean, heavily-documented code. We love type hints (`typing`) and docstrings.
-3. Ensure the test suite passes.
-4. Update any relevant documentation (README, Architecture docs).
-5. Submit your PR with a clear, detailed description of the problem solved and the implementation details.
+# Lint
+ruff check . && ruff format --check .
+```
 
-Welcome to the team!
+All tests must pass and linting must be clean before submitting a PR.
+
+## Submitting a pull request
+
+1. Fork the repo and create a branch from `main`.
+2. Make your changes. Add tests for new functionality.
+3. Run the full test suite and linter.
+4. Submit a PR with a clear description of what changed and why.
