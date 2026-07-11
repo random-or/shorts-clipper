@@ -4,6 +4,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from shorts_clipper.core.exceptions import ConfigurationError
+
 from .models import ClipMetadata, PublishResult
 from .registry import PublisherRegistry
 
@@ -93,6 +95,15 @@ class PublishingEngine:
                         log.warning(
                             f"⚠️ Publishing to {platform_name} returned failure: {result.error_message}"
                         )
+                except ConfigurationError as e:
+                    log.warning(f"⚠️ Configuration Error for {platform_name}: {e}")
+                    result = PublishResult(
+                        platform=platform_name,
+                        success=False,
+                        retry_count=attempt - 1,
+                        error_message=str(e),
+                    )
+                    break
                 except Exception as e:
                     log.warning(
                         f"⚠️ Publishing attempt {attempt} to {platform_name} threw an error: {e}"

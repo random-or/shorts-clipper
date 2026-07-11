@@ -27,7 +27,9 @@ def test_transports_get_provider_requires_public_url():
     mock_settings.use_temp_hosts = False
     mock_settings.public_url = None
 
-    with pytest.raises(RuntimeError) as exc_info:
+    from shorts_clipper.core.exceptions import ConfigurationError
+
+    with pytest.raises(ConfigurationError) as exc_info:
         get_storage_provider(mock_settings)
 
     assert "PUBLIC_URL must be set" in str(exc_info.value)

@@ -57,8 +57,10 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
+    @patch("shorts_clipper.scout.trending.fetch_metadata_batch")
     def test_self_healing_pre_evaluation(
         self,
+        mock_fetch_meta,
         mock_fetch_subs,
         mock_discover_ytdlp,
         mock_gate_cls,
@@ -93,6 +95,10 @@ class ScoutV2Tests(unittest.TestCase):
                 "published_at": datetime.now(UTC).isoformat(),
                 "automatic_captions": {"en": []},
             },
+        ]
+
+        mock_fetch_meta.side_effect = lambda vids: [
+            v for v in mock_discover_ytdlp.return_value if v["id"] in vids
         ]
 
         # Mock subtitles fetching successfully
@@ -135,8 +141,9 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
+    @patch("shorts_clipper.scout.trending.fetch_metadata_batch")
     def test_all_candidates_rejected(
-        self, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls, mock_scorer_cls
+        self, mock_fetch_meta, mock_fetch_subs, mock_discover_ytdlp, mock_gate_cls, mock_scorer_cls
     ):
         mock_gate = Mock()
         mock_gate.filter_candidates.side_effect = lambda candidates: candidates
@@ -150,6 +157,9 @@ class ScoutV2Tests(unittest.TestCase):
                 "published_at": datetime.now(UTC).isoformat(),
                 "automatic_captions": {"en": []},
             }
+        ]
+        mock_fetch_meta.side_effect = lambda vids: [
+            v for v in mock_discover_ytdlp.return_value if v["id"] in vids
         ]
         mock_fetch_subs.return_value = [TranscriptSegment(start=0, end=10, text="hello")]
 
@@ -167,8 +177,10 @@ class ScoutV2Tests(unittest.TestCase):
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
     @patch("shorts_clipper.scout.trending.fetch_subtitles")
+    @patch("shorts_clipper.scout.trending.fetch_metadata_batch")
     def test_gemini_quota_exhausted_fail_fast_and_fallback(
         self,
+        mock_fetch_meta,
         mock_fetch_subs,
         mock_discover_ytdlp,
         mock_gate_cls,
@@ -190,6 +202,9 @@ class ScoutV2Tests(unittest.TestCase):
                 "published_at": datetime.now(UTC).isoformat(),
                 "automatic_captions": {"en": []},
             }
+        ]
+        mock_fetch_meta.side_effect = lambda vids: [
+            v for v in mock_discover_ytdlp.return_value if v["id"] in vids
         ]
         mock_fetch_subs.return_value = [
             TranscriptSegment(

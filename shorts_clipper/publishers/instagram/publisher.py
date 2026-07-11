@@ -6,6 +6,7 @@ from pathlib import Path
 
 import requests
 
+from shorts_clipper.core.exceptions import ConfigurationError
 from shorts_clipper.core.settings import Settings
 
 from ..base import Publisher
@@ -27,7 +28,7 @@ class InstagramGraphPublisher(Publisher):
     def authenticate(self) -> None:
         """Verify Graph API credentials exist."""
         if not self.settings.ig_access_token or not self.settings.ig_account_id:
-            raise RuntimeError("IG_ACCESS_TOKEN or IG_ACCOUNT_ID not found in settings.")
+            raise ConfigurationError("IG_ACCESS_TOKEN or IG_ACCOUNT_ID not found in settings.")
         log.info("Instagram Graph API credentials verified.")
 
     def publish(
@@ -122,6 +123,8 @@ class InstagramGraphPublisher(Publisher):
                 published_at=datetime.utcnow().isoformat() + "Z",
             )
 
+        except ConfigurationError:
+            raise
         except Exception as e:
             log.error(f"Graph API Publishing failed: {e}")
             return PublishResult(platform=self.platform_name, success=False, error_message=str(e))

@@ -161,6 +161,36 @@ def test_publishing_engine_retry_logic(tmp_path):
     assert results["instagram"].retry_count == 2  # 0-indexed, so 0,1,2 = 3rd attempt
 
 
+def test_publishing_engine_configuration_error(tmp_path):
+    from shorts_clipper.core.exceptions import ConfigurationError
+
+    class ConfigFailPublisher(Publisher):
+        @property
+        def platform_name(self) -> str:
+            return "config_fail"
+
+        def authenticate(self) -> None:
+            pass
+
+        def publish(self, vp, meta, cb=None):
+            raise ConfigurationError("PUBLIC_URL must be set")
+
+        def verify(self, pid: str) -> bool:
+            return True
+
+    PublisherRegistry.register(ConfigFailPublisher)
+    engine = PublishingEngine(max_retries=3, base_backoff=0)
+    video_path = tmp_path / "test_config_fail.mp4"
+    video_path.touch()
+
+    meta = ClipMetadata(title="Test", description="Test desc")
+    results = engine.publish(video_path, meta, ["config_fail"])
+
+    assert results["config_fail"].success is False
+    assert results["config_fail"].retry_count == 0
+    assert "PUBLIC_URL must be set" in results["config_fail"].error_message
+
+
 def test_failure_isolation(tmp_path):
     # Make youtube auth fail
     yt = PublisherRegistry.get_publisher("youtube")

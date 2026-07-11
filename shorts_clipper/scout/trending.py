@@ -37,7 +37,7 @@ def compute_scout_v2_intermediate_score(
     try:
         pub_str = video.get("published_at") or video.get("upload_date") or ""
         timestamp = video.get("timestamp")
-        
+
         if timestamp is not None:
             published = datetime.fromtimestamp(float(timestamp), tz=UTC)
         elif pub_str and len(pub_str) == 8 and pub_str.isdigit():

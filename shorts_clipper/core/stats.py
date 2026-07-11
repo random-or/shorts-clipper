@@ -22,6 +22,11 @@ class OptimizerStats:
                     data["coverage"] = 0.0
                     data["variants_generated"] = 0
                     data["detailed_wins"] = {}
+                if data.get("total_confidence", 0.0) > data.get("numeric_samples", 0):
+                    log.warning("Historical confidence statistics corrupted. Invalidating.")
+                    data["total_confidence"] = 0.0
+                    data["average_confidence"] = 0.0
+                    data["numeric_samples"] = 0
                 return data
             except Exception as e:
                 log.warning("Failed to load optimizer stats: %s", e)

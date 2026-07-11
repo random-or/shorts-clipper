@@ -51,7 +51,7 @@ def test_preselected_partial_hit_behavior(
         completion_prob = 0.85
         scroll_stop_prob = 0.75
         payoff_strength = 0.90
-        overall_confidence = 80
+        overall_confidence = 0.80
         judge_results = {}
 
     class FakeResult:

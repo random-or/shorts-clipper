@@ -10,6 +10,7 @@ from pathlib import Path
 
 import requests
 
+from shorts_clipper.core.exceptions import ConfigurationError
 from shorts_clipper.core.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -119,7 +120,7 @@ def get_storage_provider(settings: Settings) -> StorageProvider:
         return TempHostTransport()
 
     if not settings.public_url:
-        raise RuntimeError(
+        raise ConfigurationError(
             "PUBLIC_URL must be set in settings/env to publish natively, or set SHORTS_USE_TEMP_HOSTS=true."
         )
     return LocalTunnelTransport(public_url=settings.public_url)
