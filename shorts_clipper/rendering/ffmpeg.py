@@ -18,7 +18,7 @@ class FfmpegRenderOptions:
     target_height: int = 1920
     video_codec: str = "libx264"
     audio_codec: str = "aac"
-    crf: int = 18
+    crf: int = 28
     preset: str = "medium"
     overwrite: bool = True
     extra_input_args: tuple[str, ...] = ()

@@ -35,6 +35,7 @@ class InstagramGraphPublisher(Publisher):
         self,
         video_path: Path,
         metadata: ClipMetadata,
+        signed_url: str | None = None,
         progress_callback: Callable[[int], None] | None = None,
     ) -> PublishResult:
         token = self.settings.ig_access_token
@@ -51,18 +52,15 @@ class InstagramGraphPublisher(Publisher):
         caption = f"{metadata.title}\n\n{metadata.description}\n\n{tags_str}"
 
         try:
-            # Step 1: Get the video URL (self-hosted or temporary)
-            from ..transports import get_storage_provider
+            if not signed_url:
+                raise ValueError("Instagram publishing requires a signed URL.")
 
-            storage_provider = get_storage_provider(self.settings)
-            video_url = storage_provider.upload(video_path)
-
-            # Step 2: Create Media Container
+            # Step 1: Create Media Container
             log.info("Initializing Reel upload via Graph API...")
             url = f"https://graph.instagram.com/v19.0/{ig_id}/media"
             payload = {
                 "media_type": "REELS",
-                "video_url": video_url,
+                "video_url": signed_url,
                 "caption": caption,
                 "access_token": token,
             }
@@ -130,4 +128,21 @@ class InstagramGraphPublisher(Publisher):
             return PublishResult(platform=self.platform_name, success=False, error_message=str(e))
 
     def verify(self, platform_id: str) -> bool:
-        return True
+        """Verify that the Instagram Reel exists and is accessible."""
+        token = self.settings.ig_access_token
+        if not token:
+            return False
+
+        try:
+            # Check the published media ID
+            url = f"https://graph.instagram.com/v19.0/{platform_id}?fields=id,media_type&access_token={token}"
+            res = requests.get(url, timeout=30)
+            data = res.json()
+            if res.status_code == 200 and data.get("id") == platform_id:
+                log.info("Successfully verified Instagram Reel exists.")
+                return True
+            log.warning("Verification failed for Instagram Reel %s: %s", platform_id, data)
+            return False
+        except Exception as e:
+            log.error("Failed to verify Instagram Reel %s: %s", platform_id, e)
+            return False

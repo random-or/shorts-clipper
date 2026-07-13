@@ -439,7 +439,7 @@ def stream_render_pipeline(
         ]
 
         if video_codec == "libx264":
-            ffmpeg_cmd.extend(["-crf", "18", "-preset", preset])
+            ffmpeg_cmd.extend(["-crf", "28", "-preset", preset])
         elif video_codec == "h264_nvenc":
             ffmpeg_cmd.extend(["-rc:v", "vbr", "-cq", "18", "-preset", preset])
         else:

@@ -101,6 +101,8 @@ def fetch_subtitles(url: str, work_dir: Path, max_retries: int = 3) -> list[Tran
                 "--sub-lang",
                 "en,en-orig,en-US,en-GB,en-CA,en-AU,en-NZ,en-IE,en-ZA",
                 "--sub-format",
+                "srt/best",
+                "--convert-subs",
                 "srt",
                 "--skip-download",
                 "--socket-timeout",
@@ -109,6 +111,7 @@ def fetch_subtitles(url: str, work_dir: Path, max_retries: int = 3) -> list[Tran
                 "3",
                 "-o",
                 str(output_base),
+                "--",
                 url,
             ]
         )
@@ -210,8 +213,8 @@ def download_audio(
             "--socket-timeout",
             "15",
             "--extract-audio",
-            "--audio-format",
-            "m4a",
+            "-f",
+            "ba[ext=m4a]/ba[ext=mp3]/ba",
             "-o",
             str(output_path),
         ]
@@ -220,7 +223,8 @@ def download_audio(
     if start_time is not None and end_time is not None:
         cmd.extend(["--download-sections", f"*{start_time}-{end_time}"])
 
-    cmd.append(url)
+    cmd.extend(["--", url])
+
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=600)
     except subprocess.TimeoutExpired:
@@ -280,10 +284,6 @@ def download_clip(
     else:
         log.info("⬇ Downloading full video from %s", url)
 
-    fmt = (
-        f"bestvideo[ext=mp4][height<={max_height}][vcodec^=avc1]"
-        f"+bestaudio[ext=m4a]/best[ext=mp4]/best"
-    )
     cmd = get_base_yt_dlp_cmd()
     cmd.extend(
         [
@@ -295,9 +295,7 @@ def download_clip(
             "15",
             "--no-part",
             "-f",
-            fmt,
-            "--merge-output-format",
-            "mp4",
+            "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4] / bv*+ba/b",
             "-o",
             str(output_path),
         ]
@@ -310,7 +308,7 @@ def download_clip(
             idx = cmd.index("--impersonate")
             del cmd[idx : idx + 2]
 
-    cmd.append(url)
+    cmd.extend(["--", url])
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=600)
     except subprocess.TimeoutExpired:

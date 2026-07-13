@@ -27,6 +27,7 @@ class YouTubePublisher(Publisher):
         self,
         video_path: Path,
         metadata: ClipMetadata,
+        signed_url: str | None = None,
         progress_callback: Callable[[int], None] | None = None,
     ) -> PublishResult:
         try:
@@ -54,15 +55,21 @@ class YouTubePublisher(Publisher):
             )
 
     def verify(self, platform_id: str) -> bool:
-        """Verify that the YouTube video is accessible."""
+        """Verify that the YouTube video is accessible and processed."""
         try:
             youtube = get_youtube_service()
             request = youtube.videos().list(part="status", id=platform_id)
             response = request.execute()
             items = response.get("items", [])
             if items:
-                return True
+                status = items[0].get("status", {})
+                upload_status = status.get("uploadStatus")
+                if upload_status in ("uploaded", "processed"):
+                    log.info("Successfully verified YouTube video status: %s", upload_status)
+                    return True
+                else:
+                    log.warning("YouTube video exists but status is: %s", upload_status)
             return False
         except Exception as e:
-            log.error(f"Failed to verify YouTube upload: {e}")
+            log.error("Failed to verify YouTube upload %s: %s", platform_id, e)
             return False

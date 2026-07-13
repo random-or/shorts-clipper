@@ -297,13 +297,13 @@ def run(
                 log.info("Applying editorial validation")
                 finisher = EditorialFinisher()
                 final_window = finisher.snap_boundaries(
-                    window.start, window.end, precision_segments
+                    window.start - buffered_start, window.end - buffered_start, precision_segments
                 )
                 log.info(
                     "EditorialFinisher adjusted timestamps deterministically: start %.2f -> %.2f, end %.2f -> %.2f",
-                    window.start,
+                    window.start - buffered_start,
                     final_window.start,
-                    window.end,
+                    window.end - buffered_start,
                     final_window.end,
                 )
 
@@ -455,6 +455,7 @@ def run(
                 json_artifact_path = run_dir / f"final_metadata_{idx}.json"
                 if json_path.exists():
                     shutil.copy2(json_path, json_artifact_path)
+                    json_path = json_artifact_path  # Update json_path so publish_status writes to the artifact
 
                 output_paths.append(current_output_path)
                 log.info("✅ Clip %d ready at: %s", idx, current_output_path)

@@ -28,9 +28,36 @@ def _cmd_clip(args: argparse.Namespace, settings: Settings) -> int:
     out = Path(args.output) if args.output else None
     count = getattr(args, "count", 1)
     upload = getattr(args, "upload", False)
+
+    source_title = None
+    source_channel = None
+    try:
+        import subprocess
+
+        from shorts_clipper.downloader.yt_dlp import get_base_yt_dlp_cmd
+
+        cmd = get_base_yt_dlp_cmd()
+        cmd.extend(["--skip-download", "--print", "%(title)s\n%(uploader)s", "--", args.url])
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=15)
+        lines = res.stdout.strip().split("\n")
+        source_title = lines[0] if len(lines) > 0 else "YouTube Video"
+        source_channel = lines[1] if len(lines) > 1 else ""
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "Failed to fetch video details via yt-dlp: %s. Using placeholders.", e
+        )
+        source_title = "Unknown Video"
+        source_channel = "Unknown Channel"
+
     try:
         path_or_paths = run(
-            args.url, settings=settings, output_path=out, count=count, upload=upload
+            args.url,
+            settings=settings,
+            output_path=out,
+            count=count,
+            upload=upload,
+            source_title=source_title,
+            source_channel=source_channel,
         )
         if isinstance(path_or_paths, list):
             print("\n🔥 Clips ready:")

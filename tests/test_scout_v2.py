@@ -53,6 +53,7 @@ class ScoutV2Tests(unittest.TestCase):
         # Verify it doesn't fail on missing fields
         self.assertTrue(compute_scout_v2_intermediate_score({}, now, {}) == 0.0)
 
+    @patch("shorts_clipper.attention.engine.SimulationEngine")
     @patch("shorts_clipper.highlight_detection.scoring.SemanticCandidateGenerator")
     @patch("shorts_clipper.scout.relevance.SemanticRelevanceGate")
     @patch("shorts_clipper.scout.trending._discover_via_ytdlp")
@@ -65,6 +66,7 @@ class ScoutV2Tests(unittest.TestCase):
         mock_discover_ytdlp,
         mock_gate_cls,
         mock_scorer_cls,
+        mock_sim_cls,
     ):
         mock_scorer = __import__("unittest.mock").mock.Mock()
         mock_scorer.generate_candidate.return_value = (
@@ -77,6 +79,14 @@ class ScoutV2Tests(unittest.TestCase):
         mock_gate = Mock()
         mock_gate.filter_candidates.side_effect = lambda candidates: candidates
         mock_gate_cls.return_value = mock_gate
+        mock_sim = Mock()
+        mock_sim_result = Mock()
+        mock_sim_result.winner_id = "base"
+        mock_report = Mock()
+        mock_report.overall_confidence = 0.90
+        mock_sim_result.reports = {"base": mock_report}
+        mock_sim.optimize_clip.return_value = mock_sim_result
+        mock_sim_cls.return_value = mock_sim
         # Mock discover returning 2 candidates
         mock_discover_ytdlp.return_value = [
             {

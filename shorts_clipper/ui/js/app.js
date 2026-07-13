@@ -1456,9 +1456,9 @@
                 // Filter clips based on current active tab
                 let filteredClips = clips;
                 if (currentLibraryTab === 'local') {
-                    filteredClips = clips.filter(c => !c.metadata || c.metadata.publish_status !== 'success');
+                    filteredClips = clips.filter(c => !c.metadata || (c.metadata.publish_status !== 'success' && c.metadata.publish_status !== 'partial_success'));
                 } else {
-                    filteredClips = clips.filter(c => c.metadata && c.metadata.publish_status === 'success');
+                    filteredClips = clips.filter(c => c.metadata && (c.metadata.publish_status === 'success' || c.metadata.publish_status === 'partial_success'));
                 }
                 
                 // Prevent focus-stealing re-renders by signature matching
@@ -1509,7 +1509,10 @@
                     const getPublishBadge = (meta, clipName) => {
                         if (!meta) return '';
                         if (meta.publish_status === 'success') {
-                            return `<span id="badge-${clipName}" class="badge" style="font-size: 0.72rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600;"><i class="fa-solid fa-circle-check"></i> LIVE</span>`;
+                            return `<span id="badge-${clipName}" class="badge" style="font-size: 0.72rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600;"><i class="fa-solid fa-check-circle"></i> PUBLISHED</span>`;
+                        }
+                        if (meta.publish_status === 'partial_success') {
+                            return `<span id="badge-${clipName}" class="badge" style="font-size: 0.72rem; background: rgba(245,158,11,0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600; cursor: help;" title="${meta.publish_error || 'Partial upload'}"><i class="fa-solid fa-triangle-exclamation"></i> PARTIAL</span>`;
                         }
                         if (meta.publish_status === 'uploading') {
                             return `<span id="badge-${clipName}" class="badge" style="font-size: 0.72rem; background: rgba(201,168,76,0.15); color: var(--gold); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight:600;"><i class="fa-solid fa-circle-notch fa-spin"></i> UPLOADING (${meta.publish_progress || 0}%)</span>`;

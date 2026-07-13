@@ -116,7 +116,7 @@ class FallbackMetadataTests(unittest.TestCase):
                     )
 
         # Verify Fallback was used
-        json_path = output.with_suffix(".json")
+        json_path = output.parent / "final_metadata_1.json"
         self.assertTrue(json_path.exists())
 
         with open(json_path, encoding="utf-8") as f:

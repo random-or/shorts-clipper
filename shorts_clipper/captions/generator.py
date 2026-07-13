@@ -280,8 +280,13 @@ def generate_ass_file(
                 colored_words.append(w)
         text = " ".join(colored_words)
 
-        # Micro scale pop, fade in, and slight blur for premium feel
-        effect = "{\\blur0.5\\fad(50,50)\\fscx110\\fscy110\\t(0,50,\\fscx100\\fscy100)}"
+        # Calculate character density to prevent overflow on long lines
+        char_count = sum(len(w) for w in words)
+        if char_count > 15:
+            effect = "{\\blur0.5\\fad(50,50)}"
+        else:
+            # Micro scale pop, fade in, and slight blur for premium feel
+            effect = "{\\blur0.5\\fad(50,50)\\fscx110\\fscy110\\t(0,50,\\fscx100\\fscy100)}"
         lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{effect}{text}")
 
     out.write_text("\n".join(lines), encoding="utf-8")

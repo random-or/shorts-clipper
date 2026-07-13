@@ -55,7 +55,7 @@ def process_to_vertical(
     output_path: str | Path,
     *,
     layout: str = "crop_center",
-    crf: int = 18,
+    crf: int = 28,
     preset: str = "ultrafast",
     video_codec: str = "libx264",
     start_time: float | None = None,

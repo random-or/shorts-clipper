@@ -27,6 +27,7 @@ class Publisher(ABC):
         self,
         video_path: Path,
         metadata: ClipMetadata,
+        signed_url: str | None = None,
         progress_callback: Callable[[int], None] | None = None,
     ) -> PublishResult:
         """
@@ -35,6 +36,7 @@ class Publisher(ABC):
         Args:
             video_path: Path to the MP4 file to upload.
             metadata: ClipMetadata object containing title, description, etc.
+            signed_url: Optional presigned URL for platforms that require pulling from a public URL.
             progress_callback: Optional callback for reporting upload progress.
 
         Returns:

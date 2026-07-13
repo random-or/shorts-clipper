@@ -363,7 +363,6 @@ def _discover_via_ytdlp(query: str, max_age_days: int, metrics: ScoutMetrics) ->
         cmd.extend(["--dateafter", f"now-{max_age_days}days"])
     cmd.extend(
         [
-            query,
             "--dump-json",
             "--skip-download",
             "--flat-playlist",
@@ -372,6 +371,8 @@ def _discover_via_ytdlp(query: str, max_age_days: int, metrics: ScoutMetrics) ->
             "--socket-timeout",
             "15",
             "--quiet",
+            "--",
+            query,
         ]
     )
     try:
@@ -662,7 +663,9 @@ def get_trending_link(
             for v in survivors:
                 v["_score"] = compute_scout_v2_intermediate_score(v, now, channel_history)
 
-            survivors.sort(key=lambda x: x["_score"], reverse=True)
+            survivors.sort(
+                key=lambda x: (x["_score"], int(x.get("view_count", 0) or 0)), reverse=True
+            )
 
             # ══════════════════════════════════════════════════════════════
             # STAGE A: Cheap metadata-only ranking (no transcription)
@@ -738,436 +741,456 @@ def get_trending_link(
             with tempfile.TemporaryDirectory(prefix="scout_eval_") as temp_dir:
                 temp_path = Path(temp_dir)
 
-                local_scored_candidates = []
                 stage_b_target = int(os.getenv("SCOUT_STAGE_B_LIMIT", "3"))
 
-                # Iterate through all finalists until we successfully score enough
-                for v in all_finalists:
-                    if len(local_scored_candidates) >= stage_b_target:
+                for batch_start in range(0, len(all_finalists), stage_b_target):
+                    if winner:
                         break
 
-                    vid = v.get("id")
-                    candidate_start_time = time.time()
-                    timing = {
-                        "subtitle_fetch_s": 0.0,
-                        "transcript_s": 0.0,
-                        "gemini_s": 0.0,
-                        "total_s": 0.0,
-                    }
-                    log.info(
-                        "Fetching subtitles for candidate (Video ID: %s): %s", vid, v.get("title")
-                    )
+                    batch_finalists = all_finalists[batch_start : batch_start + stage_b_target]
+                    local_scored_candidates = []
 
-                    # ── PHASE 4: SUBTITLE-FIRST FILTER ──────────────────
-                    has_native_subs = False
-                    segments = []
-                    transcript_source = "none"
-
-                    cached_data = get_cached(vid)
-                    if cached_data and "transcript_segments" in cached_data:
-                        segments_data = cached_data["transcript_segments"]
-                        for s in segments_data:
-                            words = [TranscriptWord(**w) for w in s.get("words", [])]
-                            segments.append(
-                                TranscriptSegment(
-                                    start=s["start"],
-                                    end=s["end"],
-                                    text=s["text"],
-                                    words=words,
-                                    speaker=s.get("speaker"),
-                                )
-                            )
-                        log.info("Loaded transcript from cache for video %s", vid)
-                        transcript_source = "cache"
-                        has_native_subs = cached_data.get("has_native_subs", True)
-                    else:
-                        metrics.cache_misses += 1
-                        t_sub_start = time.time()
-                        from shorts_clipper.core.exceptions import (
-                            SUBTITLE_NOT_AVAILABLE,
-                            YOUTUBE_RATE_LIMIT_429,
-                        )
-                        # (Import moved to top of function)
-
-                        cache_status = get_status(vid)
-                        if cache_status == "RATE_LIMITED":
-                            log.warning(
-                                "[429 CACHED] %s queued, score=%.2f, retry in 60s",
-                                vid,
-                                v.get("_score", 0),
-                            )
-                            continue
-
-                        try:
-                            segments = fetch_subtitles(
-                                f"https://www.youtube.com/watch?v={vid}", temp_path
-                            )
-                            set_status(vid, "AVAILABLE")
-                            has_native_subs = True
-                            transcript_source = "native"
-                        except YOUTUBE_RATE_LIMIT_429:
-                            set_status(vid, "RATE_LIMITED")
-                            log.warning(
-                                "[429 QUARANTINE] %s queued, score=%.2f, retry in 60s",
-                                vid,
-                                v.get("_score", 0),
-                            )
-                            time.sleep(15)  # Cooldown API to prevent cascading limits
-                            continue
-                        except SUBTITLE_NOT_AVAILABLE:
-                            set_status(vid, "MISSING")
-                            log.info(
-                                "[SCOUT] skipped: no subtitles for %s — TRANSCRIPT_UNAVAILABLE", vid
-                            )
-                            metrics.rejected_no_subtitles += 1
-                            continue
-                        timing["subtitle_fetch_s"] = round(time.time() - t_sub_start, 2)
-
-                        if segments:
-                            v_copy = v.copy()
-                            v_copy["has_native_subs"] = has_native_subs
-                            v_copy["transcript_segments"] = [
-                                {
-                                    "start": s.start,
-                                    "end": s.end,
-                                    "text": s.text,
-                                    "words": [
-                                        {
-                                            "start": w.start,
-                                            "end": w.end,
-                                            "word": w.word,
-                                            "probability": w.probability,
-                                        }
-                                        for w in s.words
-                                    ],
-                                    "speaker": s.speaker,
-                                }
-                                for s in segments
-                            ]
-                            set_cached(vid, v_copy, int(os.getenv("SCOUT_METADATA_CACHE_TTL", "6")))
-
-                    if not segments:
-                        log.warning("Candidate %s rejected: Empty or failed transcript.", vid)
-                        metrics.rejected_low_quality += 1
-                        continue
-
-                    # Generate candidate semantic window
-                    evaluated_count += 1
-                    generator = SemanticCandidateGenerator()
-                    candidate_generation_score, best_local_window, local_reasoning = (
-                        generator.generate_candidate(segments)
-                    )
-                    log.info("Candidate %s generation score: %.2f", vid, candidate_generation_score)
-
-                    local_scored_candidates.append(
-                        {
-                            "video": v,
-                            "candidate_generation_score": candidate_generation_score,
-                            "local_reasoning": local_reasoning,
-                            "segments": segments,
-                            "transcript_source": transcript_source,
-                            "has_native_subs": has_native_subs,
-                            "best_local_window": best_local_window,
-                            "timing": timing,
-                            "candidate_start_time": candidate_start_time,
+                    for v in batch_finalists:
+                        vid = v.get("id")
+                        candidate_start_time = time.time()
+                        timing = {
+                            "subtitle_fetch_s": 0.0,
+                            "transcript_s": 0.0,
+                            "gemini_s": 0.0,
+                            "total_s": 0.0,
                         }
-                    )
-
-                # PHASE 2: Gemini ONLY on highest scoring local candidate
-                passing_candidates = []
-                if local_scored_candidates:
-                    local_scored_candidates.sort(
-                        key=lambda x: x["candidate_generation_score"], reverse=True
-                    )
-                    top_candidate = local_scored_candidates[0]
-
-                    v = top_candidate["video"]
-                    vid = v.get("id")
-                    segments = top_candidate["segments"]
-                    candidate_generation_score = top_candidate["candidate_generation_score"]
-                    best_local_window = top_candidate["best_local_window"]
-                    timing = top_candidate["timing"]
-                    candidate_start_time = top_candidate["candidate_start_time"]
-                    transcript_source = top_candidate["transcript_source"]
-                    has_native_subs = top_candidate["has_native_subs"]
-
-                    log.info("\n========== FINALIST SELECTED ==========")
-                    log.info(
-                        "Video %s selected as finalist with Candidate Generation Score: %.2f",
-                        vid,
-                        candidate_generation_score,
-                    )
-                    log.info("Generating semantic candidates and counterfactual variants...")
-
-                    t_eval_start = time.time()
-
-                    if best_local_window:
-                        start_t = best_local_window[0].start
-                        end_t = best_local_window[-1].end
-                        if end_t - start_t < 15.0:
-                            end_t = start_t + 45.0
-
-                        valid_highlights = [
-                            {
-                                "start": start_t,
-                                "end": end_t,
-                                "layout": "crop_center",
-                                "virality_score": int(candidate_generation_score),
-                                "reason": f"[Semantic Candidate Generator] {top_candidate.get('local_reasoning', 'Semantic window selected')}",
-                            }
-                        ]
-                    else:
-                        valid_highlights = []
-                        log.warning("[SCOUT] Local Transcript Scorer failed to find a window.")
-
-                    timing["eval_s"] = round(time.time() - t_eval_start, 2)
-
-                    # The final score should be driven entirely by the SimulationEngine's semantic analysis.
-                    from shorts_clipper.attention.engine import SimulationEngine
-
-                    sim_engine = SimulationEngine()
-
-                    try:
-                        clip_segments = best_local_window if best_local_window else segments
-                        if not clip_segments:
-                            clip_segments = segments
-
-                        sim_result = sim_engine.optimize_clip(clip_segments)
-                        best_report = sim_result.reports[sim_result.winner_id]
-
-                        # Populate Observability Artifacts
-                        from shorts_clipper.core.observability import get_run_context
-
-                        run_ctx = get_run_context()
-
-                        from dataclasses import asdict
-
-                        def safe_asdict(obj):
-                            try:
-                                data = asdict(obj)
-
-                                def recursive_enum_to_str(d):
-                                    if isinstance(d, dict):
-                                        for k, v in d.items():
-                                            if hasattr(v, "value"):
-                                                d[k] = v.value
-                                            else:
-                                                recursive_enum_to_str(v)
-                                    elif isinstance(d, list):
-                                        for i in range(len(d)):
-                                            if hasattr(d[i], "value"):
-                                                d[i] = d[i].value
-                                            else:
-                                                recursive_enum_to_str(d[i])
-
-                                recursive_enum_to_str(data)
-                                return data
-                            except Exception:
-                                return str(obj)
-
-                        run_ctx.add_decision_trace(
-                            {
-                                "video_id": v.get("id"),
-                                "candidate_windows": [
-                                    {"start": s.start, "end": s.end} for s in best_local_window
-                                ]
-                                if best_local_window
-                                else [],
-                                "semantic_score": candidate_generation_score,
-                                "winner_variant_id": sim_result.winner_id,
-                                "winner_reason": sim_result.reason,
-                                "confidence": best_report.overall_confidence,
-                            }
-                        )
-
-                        run_ctx.add_attention_report(
-                            f"candidate_{v.get('id')}", safe_asdict(best_report)
-                        )
-                        run_ctx.add_variant(safe_asdict(sim_result))
-
-                        from shorts_clipper.core.stats import get_optimizer_stats
-
-                        get_optimizer_stats().record_run(
-                            sim_result.winner_id,
-                            best_report.overall_confidence,
-                            len(sim_result.variants),
-                            sim_result.runner_up_id,
-                            sim_result.improvement_percentage,
-                        )
-
-                        # Simulation Engine owns the probability
-                        final_score = round(best_report.completion_prob * 100.0, 2)
-
-                        # Metadata for UI
-                        rule_hook_points = min(10.0, best_report.scroll_stop_prob * 10.0)
-                        rule_emotion_points = min(10.0, best_report.payoff_strength * 10.0)
-                        rule_virality_points = min(10.0, best_report.shareability * 10.0)
-
-                        info_density = best_report.judge_results.get("information_density")
-                        avg_caption_density = info_density.score if info_density else 0.5
-
-                        run_ctx.add_score_breakdown(
-                            f"candidate_{v.get('id')}",
-                            {
-                                "candidate_generation_score": candidate_generation_score,
-                                "sim_completion_prob": best_report.completion_prob,
-                                "final_score": final_score,
-                                "components": {
-                                    "hook": rule_hook_points,
-                                    "emotion": rule_emotion_points,
-                                    "virality": rule_virality_points,
-                                    "density": avg_caption_density,
-                                },
-                            },
-                        )
-
-                        log.info("Selecting optimal narrative")
                         log.info(
-                            "Simulation selected variant '%s': %s",
-                            sim_result.winner_id,
-                            sim_result.reason,
+                            "Fetching subtitles for candidate (Video ID: %s): %s",
+                            vid,
+                            v.get("title"),
                         )
 
-                        winner_variant = next(
-                            (
-                                v
-                                for v in sim_result.variants
-                                if v.variant_id == sim_result.winner_id
-                            ),
-                            sim_result.base_variant,
-                        )
-                        if (
-                            winner_variant
-                            and winner_variant.variant_id != "base"
-                            and valid_highlights
-                        ):
-                            valid_highlights[0]["start"] = winner_variant.start_time
-                            valid_highlights[0]["end"] = winner_variant.end_time
-                            valid_highlights[0]["reason"] = (
-                                valid_highlights[0].get("reason", "")
-                                + f" [Optimized: {winner_variant.description}]"
+                        # ── PHASE 4: SUBTITLE-FIRST FILTER ──────────────────
+                        has_native_subs = False
+                        segments = []
+                        transcript_source = "none"
+
+                        cached_data = get_cached(vid)
+                        if cached_data and "transcript_segments" in cached_data:
+                            segments_data = cached_data["transcript_segments"]
+                            for s in segments_data:
+                                words = [TranscriptWord(**w) for w in s.get("words", [])]
+                                segments.append(
+                                    TranscriptSegment(
+                                        start=s["start"],
+                                        end=s["end"],
+                                        text=s["text"],
+                                        words=words,
+                                        speaker=s.get("speaker"),
+                                    )
+                                )
+                            log.info("Loaded transcript from cache for video %s", vid)
+                            transcript_source = "cache"
+                            has_native_subs = cached_data.get("has_native_subs", True)
+                        else:
+                            metrics.cache_misses += 1
+                            t_sub_start = time.time()
+                            from shorts_clipper.core.exceptions import (
+                                SUBTITLE_NOT_AVAILABLE,
+                                YOUTUBE_RATE_LIMIT_429,
                             )
-                        if valid_highlights:
-                            valid_highlights[0]["virality_score"] = int(final_score)
 
-                    except Exception as err:
-                        log.warning("Attention Simulation failed: %s", err)
-                        (
-                            rule_hook_points,
-                            rule_emotion_points,
-                            rule_virality_points,
-                            avg_caption_density,
-                        ) = 0.0, 0.0, 0.0, 0.0
-                        final_score = candidate_generation_score
+                            cache_status = get_status(vid)
+                            if cache_status == "RATE_LIMITED":
+                                log.warning(
+                                    "[429 CACHED] %s queued, score=%.2f, retry in 60s",
+                                    vid,
+                                    v.get("_score", 0),
+                                )
+                                continue
 
-                    views = max(int(v.get("view_count") or 0), 1)
-                    likes = int(v.get("like_count") or 0)
+                            try:
+                                segments = fetch_subtitles(
+                                    f"https://www.youtube.com/watch?v={vid}", temp_path
+                                )
+                                set_status(vid, "AVAILABLE")
+                                has_native_subs = True
+                                transcript_source = "native"
+                            except YOUTUBE_RATE_LIMIT_429:
+                                set_status(vid, "RATE_LIMITED")
+                                log.warning(
+                                    "[429 QUARANTINE] %s queued, score=%.2f, retry in 60s",
+                                    vid,
+                                    v.get("_score", 0),
+                                )
+                                time.sleep(15)
+                                continue
+                            except SUBTITLE_NOT_AVAILABLE:
+                                set_status(vid, "MISSING")
+                                log.info(
+                                    "[SCOUT] skipped: no subtitles for %s — TRANSCRIPT_UNAVAILABLE",
+                                    vid,
+                                )
+                                metrics.rejected_no_subtitles += 1
+                                continue
+                            timing["subtitle_fetch_s"] = round(time.time() - t_sub_start, 2)
 
-                    subtitle_quality = 10.0 if transcript_source in ("native", "cache") else 0.0
-                    timing["total_s"] = round(time.time() - candidate_start_time, 2)
+                            if segments:
+                                v_copy = v.copy()
+                                v_copy["has_native_subs"] = has_native_subs
+                                v_copy["transcript_segments"] = [
+                                    {
+                                        "start": s.start,
+                                        "end": s.end,
+                                        "text": s.text,
+                                        "words": [
+                                            {
+                                                "start": w.start,
+                                                "end": w.end,
+                                                "word": w.word,
+                                                "probability": w.probability,
+                                            }
+                                            for w in s.words
+                                        ],
+                                        "speaker": s.speaker,
+                                    }
+                                    for s in segments
+                                ]
+                                set_cached(
+                                    vid, v_copy, int(os.getenv("SCOUT_METADATA_CACHE_TTL", "6"))
+                                )
 
-                    if valid_highlights:
-                        passing_candidates.append(
+                        if not segments:
+                            log.warning("Candidate %s rejected: Empty or failed transcript.", vid)
+                            metrics.rejected_low_quality += 1
+                            continue
+
+                        evaluated_count += 1
+                        generator = SemanticCandidateGenerator()
+                        candidate_generation_score, best_local_window, local_reasoning = (
+                            generator.generate_candidate(segments)
+                        )
+                        log.info(
+                            "Candidate %s generation score: %.2f", vid, candidate_generation_score
+                        )
+
+                        local_scored_candidates.append(
                             {
                                 "video": v,
-                                "final_score": final_score,
-                                "valid_highlights": valid_highlights,
-                                "rule_virality_points": rule_virality_points,
-                                "rule_hook_points": rule_hook_points,
-                                "rule_emotion_points": rule_emotion_points,
-                                "avg_caption_density": avg_caption_density,
-                                "subtitle_quality": subtitle_quality,
-                                "momentum_score": min(
-                                    5.0, math.log1p(likes) / math.log1p(10_000) * 5
-                                ),
-                                "likes": likes,
+                                "candidate_generation_score": candidate_generation_score,
+                                "local_reasoning": local_reasoning,
+                                "segments": segments,
+                                "transcript_source": transcript_source,
                                 "has_native_subs": has_native_subs,
+                                "best_local_window": best_local_window,
                                 "timing": timing,
+                                "candidate_start_time": candidate_start_time,
                             }
                         )
 
-                if passing_candidates:
-                    passing_candidates.sort(key=lambda x: x["final_score"], reverse=True)
-                    best = passing_candidates[0]
-                    v = best["video"]
-                    vid = v.get("id")
-
-                    log.info("\n========== EVALUATION RESULTS ==========\n")
-                    log.info(f"{'Rank':<5} | {'Video':<12} | {'Final Score':<11}\n")
-                    for rank_idx, pc in enumerate(passing_candidates, 1):
-                        log.info(
-                            f"{rank_idx:<5} | {pc['video'].get('id', ''):<12} | {pc['final_score']:<11}"
+                    # Now process the batch with Gemini in order of local score
+                    passing_candidates = []
+                    if local_scored_candidates:
+                        local_scored_candidates.sort(
+                            key=lambda x: x["candidate_generation_score"], reverse=True
                         )
-                    log.info(f"\nWinner: {vid}\n")
 
-                    eval_times = [
-                        pc["timing"]["total_s"] for pc in passing_candidates if "timing" in pc
-                    ]
-                    if eval_times:
-                        log.info("PERFORMANCE SUMMARY:")
-                        log.info("  Slowest candidate: %.1fs", max(eval_times))
-                        log.info("  Fastest candidate: %.1fs", min(eval_times))
-                        log.info("  Average eval time: %.1fs", sum(eval_times) / len(eval_times))
+                        for top_candidate in local_scored_candidates:
+                            v = top_candidate["video"]
+                            vid = v.get("id")
+                            segments = top_candidate["segments"]
+                            candidate_generation_score = top_candidate["candidate_generation_score"]
+                            best_local_window = top_candidate["best_local_window"]
+                            timing = top_candidate["timing"]
+                            candidate_start_time = top_candidate["candidate_start_time"]
+                            transcript_source = top_candidate["transcript_source"]
+                            has_native_subs = top_candidate["has_native_subs"]
 
-                    final_score = best["final_score"]
-                    valid_highlights = best["valid_highlights"]
-                    rule_virality_points = best["rule_virality_points"]
-                    rule_hook_points = best["rule_hook_points"]
-                    rule_emotion_points = best["rule_emotion_points"]
-                    avg_caption_density = best["avg_caption_density"]
-                    subtitle_quality = best["subtitle_quality"]
-                    momentum_score = best["momentum_score"]
-                    likes = best["likes"]
-                    has_native_subs = best["has_native_subs"]
+                            log.info("\n========== FINALIST SELECTED ==========")
+                            log.info(
+                                "Video %s selected as finalist with Candidate Generation Score: %.2f",
+                                vid,
+                                candidate_generation_score,
+                            )
+                            log.info(
+                                "Generating semantic candidates and counterfactual variants..."
+                            )
 
-                    # Cache the selected clips under video ID
-                    v_cached = get_cached(vid) or v.copy()
-                    if niche:
-                        v_cached["niche"] = niche
-                    v_cached["selected_clips"] = [
-                        {
-                            "start": h["start"],
-                            "end": h["end"],
-                            "layout": h["layout"],
-                            "virality_score": h["virality_score"],
-                            "reason": h.get("reason", ""),
+                            t_eval_start = time.time()
+
+                            if best_local_window:
+                                start_t = best_local_window[0].start
+                                end_t = best_local_window[-1].end
+                                if end_t - start_t < 15.0:
+                                    end_t = start_t + 45.0
+
+                                valid_highlights = [
+                                    {
+                                        "start": start_t,
+                                        "end": end_t,
+                                        "layout": "crop_center",
+                                        "virality_score": int(candidate_generation_score),
+                                        "reason": f"[Semantic Candidate Generator] {top_candidate.get('local_reasoning', 'Semantic window selected')}",
+                                    }
+                                ]
+                            else:
+                                valid_highlights = []
+                                log.warning(
+                                    "[SCOUT] Local Transcript Scorer failed to find a window."
+                                )
+
+                            timing["eval_s"] = round(time.time() - t_eval_start, 2)
+
+                            from shorts_clipper.attention.engine import SimulationEngine
+
+                            sim_engine = SimulationEngine()
+
+                            try:
+                                clip_segments = best_local_window if best_local_window else segments
+                                if not clip_segments:
+                                    clip_segments = segments
+
+                                sim_result = sim_engine.optimize_clip(clip_segments)
+                                best_report = sim_result.reports[sim_result.winner_id]
+
+                                from shorts_clipper.core.observability import get_run_context
+
+                                run_ctx = get_run_context()
+                                from dataclasses import asdict
+
+                                def safe_asdict(obj):
+                                    try:
+                                        data = asdict(obj)
+
+                                        def recursive_enum_to_str(d):
+                                            if isinstance(d, dict):
+                                                for k, val in d.items():
+                                                    if hasattr(val, "value"):
+                                                        d[k] = val.value
+                                                    else:
+                                                        recursive_enum_to_str(val)
+                                            elif isinstance(d, list):
+                                                for i in range(len(d)):
+                                                    if hasattr(d[i], "value"):
+                                                        d[i] = d[i].value
+                                                    else:
+                                                        recursive_enum_to_str(d[i])
+
+                                        recursive_enum_to_str(data)
+                                        return data
+                                    except Exception:
+                                        return str(obj)
+
+                                run_ctx.add_decision_trace(
+                                    {
+                                        "video_id": v.get("id"),
+                                        "candidate_windows": [
+                                            {"start": s.start, "end": s.end}
+                                            for s in best_local_window
+                                        ]
+                                        if best_local_window
+                                        else [],
+                                        "semantic_score": candidate_generation_score,
+                                        "winner_variant_id": sim_result.winner_id,
+                                        "winner_reason": sim_result.reason,
+                                        "confidence": best_report.overall_confidence,
+                                    }
+                                )
+
+                                run_ctx.add_attention_report(
+                                    f"candidate_{v.get('id')}", safe_asdict(best_report)
+                                )
+                                run_ctx.add_variant(safe_asdict(sim_result))
+
+                                from shorts_clipper.core.stats import get_optimizer_stats
+
+                                get_optimizer_stats().record_run(
+                                    sim_result.winner_id,
+                                    best_report.overall_confidence,
+                                    len(sim_result.variants),
+                                    sim_result.runner_up_id,
+                                    sim_result.improvement_percentage,
+                                )
+
+                                final_score = round(best_report.completion_prob * 100.0, 2)
+
+                                rule_hook_points = min(10.0, best_report.scroll_stop_prob * 10.0)
+                                rule_emotion_points = min(10.0, best_report.payoff_strength * 10.0)
+                                rule_virality_points = min(10.0, best_report.shareability * 10.0)
+
+                                info_density = best_report.judge_results.get("information_density")
+                                avg_caption_density = info_density.score if info_density else 0.5
+
+                                run_ctx.add_score_breakdown(
+                                    f"candidate_{v.get('id')}",
+                                    {
+                                        "candidate_generation_score": candidate_generation_score,
+                                        "sim_completion_prob": best_report.completion_prob,
+                                        "final_score": final_score,
+                                        "components": {
+                                            "hook": rule_hook_points,
+                                            "emotion": rule_emotion_points,
+                                            "virality": rule_virality_points,
+                                            "density": avg_caption_density,
+                                        },
+                                    },
+                                )
+
+                                log.info("Selecting optimal narrative")
+                                log.info(
+                                    "Simulation selected variant '%s': %s",
+                                    sim_result.winner_id,
+                                    sim_result.reason,
+                                )
+
+                                winner_variant = next(
+                                    (
+                                        vari
+                                        for vari in sim_result.variants
+                                        if vari.variant_id == sim_result.winner_id
+                                    ),
+                                    sim_result.base_variant,
+                                )
+                                if (
+                                    winner_variant
+                                    and winner_variant.variant_id != "base"
+                                    and valid_highlights
+                                ):
+                                    valid_highlights[0]["start"] = winner_variant.start_time
+                                    valid_highlights[0]["end"] = winner_variant.end_time
+                                    valid_highlights[0]["reason"] = (
+                                        valid_highlights[0].get("reason", "")
+                                        + f" [Optimized: {winner_variant.description}]"
+                                    )
+                                if valid_highlights:
+                                    valid_highlights[0]["virality_score"] = int(final_score)
+
+                            except Exception as err:
+                                log.warning("Attention Simulation failed: %s", err)
+                                (
+                                    rule_hook_points,
+                                    rule_emotion_points,
+                                    rule_virality_points,
+                                    avg_caption_density,
+                                ) = 0.0, 0.0, 0.0, 0.0
+                                final_score = candidate_generation_score
+
+                            views = max(int(v.get("view_count") or 0), 1)
+                            likes = int(v.get("like_count") or 0)
+
+                            subtitle_quality = (
+                                10.0 if transcript_source in ("native", "cache") else 0.0
+                            )
+                            timing["total_s"] = round(time.time() - candidate_start_time, 2)
+
+                            if valid_highlights and final_score >= winning_threshold:
+                                passing_candidates.append(
+                                    {
+                                        "video": v,
+                                        "final_score": final_score,
+                                        "valid_highlights": valid_highlights,
+                                        "rule_virality_points": rule_virality_points,
+                                        "rule_hook_points": rule_hook_points,
+                                        "rule_emotion_points": rule_emotion_points,
+                                        "avg_caption_density": avg_caption_density,
+                                        "subtitle_quality": subtitle_quality,
+                                        "momentum_score": min(
+                                            5.0, math.log1p(likes) / math.log1p(10_000) * 5
+                                        ),
+                                        "likes": likes,
+                                        "has_native_subs": has_native_subs,
+                                        "timing": timing,
+                                    }
+                                )
+                                break  # We found a candidate in this batch that passes!
+                            else:
+                                log.warning(
+                                    "Candidate %s scored %.2f, failed to meet threshold %.2f",
+                                    vid,
+                                    final_score,
+                                    winning_threshold,
+                                )
+
+                    if passing_candidates:
+                        passing_candidates.sort(key=lambda x: x["final_score"], reverse=True)
+                        best = passing_candidates[0]
+                        v = best["video"]
+                        vid = v.get("id")
+
+                        log.info("\n========== EVALUATION RESULTS ==========\n")
+                        log.info(f"{'Rank':<5} | {'Video':<12} | {'Final Score':<11}\n")
+                        for rank_idx, pc in enumerate(passing_candidates, 1):
+                            log.info(
+                                f"{rank_idx:<5} | {pc['video'].get('id', ''):<12} | {pc['final_score']:<11}"
+                            )
+                        log.info(f"\nWinner: {vid}\n")
+
+                        eval_times = [
+                            pc["timing"]["total_s"] for pc in passing_candidates if "timing" in pc
+                        ]
+                        if eval_times:
+                            log.info("PERFORMANCE SUMMARY:")
+                            log.info("  Slowest candidate: %.1fs", max(eval_times))
+                            log.info("  Fastest candidate: %.1fs", min(eval_times))
+                            log.info(
+                                "  Average eval time: %.1fs", sum(eval_times) / len(eval_times)
+                            )
+
+                        final_score = best["final_score"]
+                        valid_highlights = best["valid_highlights"]
+                        rule_virality_points = best["rule_virality_points"]
+                        rule_hook_points = best["rule_hook_points"]
+                        rule_emotion_points = best["rule_emotion_points"]
+                        avg_caption_density = best["avg_caption_density"]
+                        subtitle_quality = best["subtitle_quality"]
+                        momentum_score = best["momentum_score"]
+                        likes = best["likes"]
+                        has_native_subs = best["has_native_subs"]
+
+                        # Cache the selected clips under video ID
+                        v_cached = get_cached(vid) or v.copy()
+                        if niche:
+                            v_cached["niche"] = niche
+                        v_cached["selected_clips"] = [
+                            {
+                                "start": h["start"],
+                                "end": h["end"],
+                                "layout": h["layout"],
+                                "virality_score": h["virality_score"],
+                                "reason": h.get("reason", ""),
+                            }
+                            for h in valid_highlights
+                        ]
+                        set_cached(vid, v_cached, int(os.getenv("SCOUT_METADATA_CACHE_TTL", "6")))
+
+                        import json
+
+                        # Generate scout_report.json
+                        report = {
+                            "video_id": vid,
+                            "title": v.get("title", ""),
+                            "relevance": round(rule_virality_points, 1),
+                            "hook_score": round(rule_hook_points, 1),
+                            "emotion_score": round(rule_emotion_points, 1),
+                            "story_score": round(avg_caption_density * 10.0, 1),
+                            "subtitle_quality": round(subtitle_quality, 1),
+                            "momentum": round(momentum_score * 2.0, 1),
+                            "final_score": final_score,
+                            "selected_reason": valid_highlights[0].get(
+                                "reason", "Strong structural hook and conversational velocity."
+                            ),
                         }
-                        for h in valid_highlights
-                    ]
-                    set_cached(vid, v_cached, int(os.getenv("SCOUT_METADATA_CACHE_TTL", "6")))
 
-                    # Generate scout_report.json
-                    report = {
-                        "video_id": vid,
-                        "title": v.get("title", ""),
-                        "relevance": round(rule_virality_points, 1),
-                        "hook_score": round(rule_hook_points, 1),
-                        "emotion_score": round(rule_emotion_points, 1),
-                        "story_score": round(avg_caption_density * 10.0, 1),
-                        "subtitle_quality": round(subtitle_quality, 1),
-                        "momentum": round(momentum_score * 2.0, 1),
-                        "final_score": final_score,
-                        "selected_reason": valid_highlights[0].get(
-                            "reason", "Strong structural hook and conversational velocity."
-                        ),
-                    }
+                        try:
+                            import uuid
 
-                    try:
-                        import uuid
+                            job_suffix = f"_{job_id}" if job_id else f"_{uuid.uuid4().hex[:8]}"
+                            report_path = Path(f"outputs/scout_report{job_suffix}.json")
+                            report_path.parent.mkdir(parents=True, exist_ok=True)
+                            report_path.write_text(
+                                json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+                            )
+                            log.info("💾 Saved Scout V2 Explainability Report: %s", report_path)
+                        except Exception as report_err:
+                            log.warning("Failed to write scout_report.json: %s", report_err)
 
-                        job_suffix = f"_{job_id}" if job_id else f"_{uuid.uuid4().hex[:8]}"
-                        report_path = Path(f"outputs/scout_report{job_suffix}.json")
-                        report_path.parent.mkdir(parents=True, exist_ok=True)
-                        report_path.write_text(
-                            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
-                        )
-                        log.info("💾 Saved Scout V2 Explainability Report: %s", report_path)
-                    except Exception as report_err:
-                        log.warning("Failed to write scout_report.json: %s", report_err)
-
-                    winner = v
-                    winner["_score"] = final_score
-
+                        winner = v
+                        winner["_score"] = final_score
             if winner:
                 sub_metrics = get_subtitle_metrics()
                 metrics.subtitle_fetch_success = sub_metrics.get("fetch_success", 0)

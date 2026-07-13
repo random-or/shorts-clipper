@@ -1266,6 +1266,9 @@ class GeminiProvider(HighlightProvider):
             ProviderError: If metadata generation fails completely.
         """
         transcript_text = format_transcript(segments)
+        import datetime
+
+        current_year = datetime.datetime.now().year
         prompt = f"""\
 SYSTEM ROLE
 
@@ -1280,8 +1283,9 @@ Your titles consistently outperform generic titles by 300-500%.
 SOURCE CONTEXT
 Original Video Title: {source_title}
 Original Channel: {source_channel}
+Current Year: {current_year}
 
-Use this context to accurately align the short's title and description with the broader topic. Do not just use generic words if specific entities are implied.
+Use this context to accurately align the short's title and description with the broader topic. Do not hallucinate dates or years relative to the current year. Do not just use generic words if specific entities are implied.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

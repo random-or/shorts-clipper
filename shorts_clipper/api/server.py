@@ -510,6 +510,13 @@ def publish_clip(
         raise HTTPException(status_code=404, detail="Clip not found")
 
     json_path = path.with_suffix(".json")
+    import re
+
+    match = re.match(r"rendered_clip_(\d+)\.mp4", path.name)
+    if match:
+        alt_json = path.with_name(f"final_metadata_{match.group(1)}.json")
+        if alt_json.exists():
+            json_path = alt_json
 
     meta = {}
     if json_path.exists():
@@ -527,14 +534,11 @@ def publish_clip(
             status_code=400, detail="Publishing is already in progress for this clip."
         )
 
-    if not title or not desc:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot publish: clip metadata is missing or incomplete. "
-            f"Title={'present' if title else 'MISSING'}, "
-            f"Description={'present' if desc else 'MISSING'}. "
-            "Use the AI Title Generator or set metadata manually before publishing.",
-        )
+    if not title:
+        title = path.stem.replace("_", " ").title()
+
+    if not desc:
+        desc = "Auto-generated clip from Shorts Clipper. #shorts #trending"
 
     def _upload() -> None:
         try:
@@ -596,10 +600,21 @@ def publish_clip(
                 if p == "instagram" and not meta.get("instagram_video_id"):
                     all_successful = False
 
+            any_successful = False
+            if meta.get("youtube_video_id") or meta.get("instagram_video_id"):
+                any_successful = True
+
             if all_successful:
                 meta["publish_status"] = "success"
                 meta["publish_error"] = None
                 logger.info("✅ Clip %s uploaded successfully to requested platforms!", clip_name)
+            elif any_successful:
+                meta["publish_status"] = "partial_success"
+                errors = "; ".join(
+                    [f"{p}: {r.error_message}" for p, r in results.items() if not r.success]
+                )
+                meta["publish_error"] = errors
+                logger.warning("⚠️ Clip %s uploaded partially. Errors: %s", clip_name, errors)
             else:
                 meta["publish_status"] = "failed"
                 errors = "; ".join(
@@ -754,6 +769,15 @@ def get_youtube_status() -> dict[str, Any]:
 def get_instagram_status() -> dict[str, Any]:
     """Check connection status for Instagram Graph API based on .env credentials."""
     now = time.time()
+    if "instagram_error" in _status_cache and now - _status_cache["instagram_error"] < 30:
+        return _status_cache.get("instagram", {}).get(
+            "data",
+            {
+                "connected": True,
+                "channel_name": "Instagram Pro",
+                "message": "Connected but API is degraded.",
+            },
+        )
     if "instagram" in _status_cache and now - _status_cache["instagram"]["time"] < 60:
         return _status_cache["instagram"]["data"]
 
@@ -767,8 +791,9 @@ def get_instagram_status() -> dict[str, Any]:
 
     if token and acc_id:
         try:
-            url = f"https://graph.instagram.com/v19.0/{acc_id}?fields=username,profile_picture_url,followers_count&access_token={token}"
-            res = requests.get(url, timeout=5)
+            url = f"https://graph.instagram.com/v19.0/{acc_id}?fields=username,profile_picture_url,followers_count"
+            headers = {"Authorization": f"Bearer {token}"}
+            res = requests.get(url, headers=headers, timeout=5)
             data = res.json()
 
             if "error" not in data:
@@ -784,8 +809,10 @@ def get_instagram_status() -> dict[str, Any]:
                 return res_data
             else:
                 logger.warning("Instagram Graph API error: %s", data["error"])
+                _status_cache["instagram_error"] = time.time()
         except Exception as e:
-            logger.warning("Instagram fetch error: %s", e)
+            logger.warning("Instagram fetch error: %s", type(e).__name__)
+            _status_cache["instagram_error"] = time.time()
 
         # Fallback to last known good data if available
         if "instagram" in _status_cache:
@@ -799,6 +826,8 @@ def get_instagram_status() -> dict[str, Any]:
             "subscriber_count": "0",
             "message": "Connected but couldn't fetch live data.",
         }
+        # Cache the fallback data for 30 seconds (60 - 30) to prevent thundering herds on timeout
+        _status_cache["instagram"] = {"time": time.time() - 30, "data": res_data}
         return res_data
 
     return {
@@ -1149,7 +1178,7 @@ def get_video_details(payload: TranscriptRequest) -> dict[str, str]:
         from shorts_clipper.downloader.yt_dlp import get_base_yt_dlp_cmd
 
         cmd = get_base_yt_dlp_cmd()
-        cmd.extend(["--skip-download", "--print", "%(title)s\n%(thumbnail)s", payload.url])
+        cmd.extend(["--skip-download", "--print", "%(title)s\n%(thumbnail)s", "--", payload.url])
         res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=15)
         lines = res.stdout.strip().split("\n")
         title = lines[0] if len(lines) > 0 else "YouTube Video"

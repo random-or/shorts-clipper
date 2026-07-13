@@ -53,8 +53,10 @@ class Settings:
     scout_max_age_days: int = 90
     subtitle_style: str = "default"
     proxy: str | None = None
-    public_url: str | None = None
-    use_temp_hosts: bool = False
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket_name: str | None = None
     publish_platforms: list[str] = field(default_factory=lambda: ["youtube", "instagram"])
 
     @classmethod
@@ -93,7 +95,6 @@ class Settings:
             scout_max_age_days = int(_env("SHORTS_SCOUT_MAX_AGE_DAYS", file_values, "90") or "90")
         except ValueError:
             scout_max_age_days = 90
-        subtitle_style = _env("SHORTS_SUBTITLE_STYLE", file_values, "default") or "default"
         proxy = _env("SHORTS_PROXY", file_values)
 
         platforms_raw = (
@@ -108,9 +109,6 @@ class Settings:
         youtube_api_key = _env("YOUTUBE_API_KEY", file_values)
         if youtube_api_key:
             os.environ["YOUTUBE_API_KEY"] = youtube_api_key
-
-        use_temp_hosts_env = _env("SHORTS_USE_TEMP_HOSTS", file_values, "false") or "false"
-        use_temp_hosts = use_temp_hosts_env.lower() in {"1", "true", "yes", "on"}
 
         return cls(
             gemini_api_key=_env("GEMINI_API_KEY", file_values),
@@ -138,9 +136,10 @@ class Settings:
             video_codec=video_codec,
             video_preset=video_preset,
             scout_max_age_days=scout_max_age_days,
-            subtitle_style=subtitle_style,
             proxy=proxy,
-            public_url=_env("PUBLIC_URL", file_values),
-            use_temp_hosts=use_temp_hosts,
+            r2_account_id=_env("R2_ACCOUNT_ID", file_values),
+            r2_access_key_id=_env("R2_ACCESS_KEY_ID", file_values),
+            r2_secret_access_key=_env("R2_SECRET_ACCESS_KEY", file_values),
+            r2_bucket_name=_env("R2_BUCKET_NAME", file_values),
             publish_platforms=publish_platforms,
         )

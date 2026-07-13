@@ -28,7 +28,7 @@ class MockYouTubePublisher(Publisher):
         if self.should_fail:
             raise RuntimeError("YouTube auth failed")
 
-    def publish(self, video_path, metadata, progress_callback=None):
+    def publish(self, video_path, metadata, signed_url=None, progress_callback=None):
         self.publish_called = True
         if self.should_fail:
             return PublishResult(self.platform_name, False, error_message="Upload failed")
@@ -57,11 +57,13 @@ class MockInstagramPublisher(Publisher):
     def authenticate(self) -> None:
         self.auth_called = True
 
-    def publish(self, video_path, metadata, progress_callback=None):
+    def publish(self, video_path, metadata, signed_url=None, progress_callback=None):
         self.publish_called = True
         if self.should_fail or self.current_fails < self.fail_count:
             self.current_fails += 1
-            raise RuntimeError("Insta fail")
+            import requests
+
+            raise requests.exceptions.ConnectionError("timeout")
         return PublishResult(self.platform_name, True, "http://ig", "ig123")
 
     def verify(self, platform_id: str) -> bool:
@@ -84,6 +86,17 @@ def setup_registry():
 
     # Restore original publishers
     PublisherRegistry._publishers = original
+
+
+@pytest.fixture(autouse=True)
+def mock_r2():
+    from unittest.mock import patch
+
+    with patch("shorts_clipper.publishers.manager.R2Storage") as mock:
+        instance = mock.return_value
+        instance.upload.return_value = "mock_key"
+        instance.generate_signed_url.return_value = "http://mock_signed_url"
+        yield mock
 
 
 def test_publisher_registry():
@@ -172,7 +185,7 @@ def test_publishing_engine_configuration_error(tmp_path):
         def authenticate(self) -> None:
             pass
 
-        def publish(self, vp, meta, cb=None):
+        def publish(self, vp, meta, signed_url=None, cb=None):
             raise ConfigurationError("PUBLIC_URL must be set")
 
         def verify(self, pid: str) -> bool:
@@ -219,8 +232,8 @@ class MockNewPublisher(Publisher):
     def authenticate(self) -> None:
         pass
 
-    def publish(self, vp, meta, cb=None):
-        return PublishResult("tiktok", True)
+    def publish(self, vp, meta, signed_url=None, cb=None):
+        return PublishResult("tiktok", True, platform_id="tik123")
 
     def verify(self, pid: str) -> bool:
         return True
